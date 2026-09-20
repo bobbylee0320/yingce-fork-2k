@@ -1,7 +1,7 @@
-import { Popover } from "antd";
 import { Bell, ChevronDown, ChevronRight, CircleUserRound, History as HistoryIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
@@ -64,10 +64,29 @@ function buildNav(features: FeatureAvailability, isAdmin: boolean): { groups: Wo
 function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user: NonNullable<ReturnType<typeof useUserStore.getState>["user"]> | null }) {
     const [failed, setFailed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
     const avatarUrl = /^https?:\/\//i.test(user?.avatarUrl || "") ? user?.avatarUrl : "";
     const profileName = user?.displayName || user?.username || "未登录";
 
     useEffect(() => setFailed(false), [avatarUrl]);
+    useEffect(() => {
+        if (!menuOpen) return;
+        const handlePointerDown = (event: PointerEvent) => {
+            const target = event.target as Node;
+            if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+            setMenuOpen(false);
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setMenuOpen(false);
+        };
+        document.addEventListener("pointerdown", handlePointerDown);
+        document.addEventListener("keydown", handleKeyDown);
+        return () => {
+            document.removeEventListener("pointerdown", handlePointerDown);
+            document.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [menuOpen]);
 
     if (!user) {
         return <Link to="/login" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="登录" title="登录"><CircleUserRound className="size-5" /><span>登录</span></Link>;
@@ -81,12 +100,11 @@ function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user
             <WorkspaceSidebarCheckin collapsed={collapsed} />
             <WorkspaceSidebarStorageMeter collapsed={collapsed} />
             <div className={cn("app-workspace-sidebar-profile-row", collapsed && "is-collapsed")}>
-                <Popover open={menuOpen} onOpenChange={setMenuOpen} trigger="click" placement="topLeft" arrow={false} rootClassName="workspace-account-popover" content={content}>
-                    <button type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="打开账户菜单" title={profileName}>
-                        <span className="app-workspace-sidebar-profile-avatar">{avatar}</span>
-                        {!collapsed ? <span className="app-workspace-sidebar-profile-copy"><strong>{profileName}</strong><span>创作工作台</span></span> : null}
-                    </button>
-                </Popover>
+                <button ref={triggerRef} type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="打开账户菜单" aria-expanded={menuOpen} title={profileName} onClick={() => setMenuOpen((open) => !open)}>
+                    <span className="app-workspace-sidebar-profile-avatar">{avatar}</span>
+                    {!collapsed ? <span className="app-workspace-sidebar-profile-copy"><strong>{profileName}</strong><span>创作工作台</span></span> : null}
+                </button>
+                {menuOpen ? createPortal(<div ref={menuRef} className="workspace-sidebar-account-menu">{content}</div>, document.body) : null}
                 {!collapsed ? <SystemAnnouncementCenter userId={user.id} className="app-workspace-sidebar-notification" /> : <span className="app-workspace-sidebar-notification-spacer" aria-hidden />}
             </div>
         </div>
