@@ -974,6 +974,7 @@
 @media (prefers-reduced-motion: reduce) {
     [data-admin-root] *,
     body.admin-overlays * {
+        transition-property: opacity, transform, background-color, border-color, color, box-shadow !important;
         transition-duration: 0.01ms !important;
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
