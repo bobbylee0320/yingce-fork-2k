@@ -140,7 +140,7 @@ func (s *Service) LinuxDOEnabled() bool {
 	return err == nil && setting.Enabled
 }
 
-func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
+func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool) (string, error) {
 	count, err := s.repo.UserCount()
 	if err != nil {
 		return "", err
@@ -161,7 +161,7 @@ func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
 	challenge := base64.RawURLEncoding.EncodeToString(challengeBytes[:])
 	if err := s.repo.CreateOAuthState(&model.OAuthState{
 		ID: kernel.NewID(), Provider: "linuxdo", StateHash: HashToken(state), CodeVerifier: verifier,
-		NextPath: safeOAuthNext(nextPath), ExpiresAt: time.Now().Add(10 * time.Minute),
+		NextPath: safeOAuthNext(nextPath), AcceptedTerms: acceptedTerms, ExpiresAt: time.Now().Add(10 * time.Minute),
 	}); err != nil {
 		return "", err
 	}
@@ -227,12 +227,22 @@ func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDO
 			return nil, err
 		}
 	} else if errors.Is(err, gorm.ErrRecordNotFound) {
+		policy, policyErr := s.verificationPolicy()
+		if policyErr != nil {
+			return nil, policyErr
+		}
+		if policy.SMSAndEmailRegistration {
+			return nil, kernel.Forbidden("平台要求短信和邮箱验证，请先通过注册页面创建账号；第三方登录不能绕过双重验证")
+		}
 		registrationEnabled, settingErr := s.RegistrationEnabled()
 		if settingErr != nil {
 			return nil, settingErr
 		}
 		if !registrationEnabled {
 			return nil, kernel.Forbidden("管理员未开放新用户注册")
+		}
+		if !state.AcceptedTerms {
+			return nil, kernel.BadAuthRequest("请先同意影策服务协议")
 		}
 		user, identity, err = s.createLinuxDOUser(subject, providerUsername, displayName, profileString(profile, setting.EmailField), avatarURL)
 		if err != nil {

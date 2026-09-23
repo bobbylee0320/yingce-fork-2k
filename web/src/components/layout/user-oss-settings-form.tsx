@@ -15,6 +15,9 @@ type OSSFormValues = {
     region?: string;
     endpoint?: string;
     cdnBaseUrl?: string;
+    cdnAuthMode?: "" | "public" | "qiniu" | string;
+    requireCDN?: boolean;
+    allowPrivateProxy?: boolean;
     bucket?: string;
     accessKeyId?: string;
     accessKeySecret?: string;
@@ -77,6 +80,9 @@ export function UserOSSSettingsForm() {
                 region: values.region?.trim() || "",
                 endpoint: values.endpoint?.trim() || "",
                 cdnBaseUrl: values.cdnBaseUrl?.trim() || "",
+                cdnAuthMode: values.cdnAuthMode || "",
+                requireCDN: values.requireCDN === true,
+                allowPrivateProxy: values.allowPrivateProxy === true,
                 bucket: values.bucket?.trim() || "",
                 accessKeyId: values.accessKeyId?.trim() || "",
                 accessKeySecret: values.accessKeySecret?.trim() || "",
@@ -138,7 +144,7 @@ export function UserOSSSettingsForm() {
                     <Select
                         options={[{ label: "阿里云 OSS", value: "aliyun" }, { label: "腾讯云 COS", value: "tencent" }, { label: "七牛云 Kodo", value: "qiniu" }, { label: "S3 兼容存储", value: "s3", disabled: setting?.allowUserS3 === false }]}
                         onChange={(nextProvider: OSSFormValues["provider"]) => {
-                            if (nextProvider !== provider) form.setFieldsValue({ s3Preset: "custom", region: "", endpoint: "", cdnBaseUrl: "", bucket: "", accessKeyId: "", accessKeySecret: "", sessionToken: "", pathStyle: false });
+                            if (nextProvider !== provider) form.setFieldsValue({ s3Preset: "custom", region: "", endpoint: "", cdnBaseUrl: "", cdnAuthMode: "", requireCDN: false, allowPrivateProxy: false, bucket: "", accessKeyId: "", accessKeySecret: "", sessionToken: "", pathStyle: false });
                         }}
                     />
                 </Form.Item>
@@ -159,12 +165,26 @@ export function UserOSSSettingsForm() {
                     extra={isTencentCOS
                         ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶需开启 CDN 私有存储桶访问。CDN URL 不附带 COS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"
                         : isQiniuKodo
-                            ? "选填。填写后浏览器直连七牛私有下载地址；留空时采用“浏览器 → 当前后端 /api/resources/:id/file → 七牛 S3 Endpoint”的代理链路，后端使用 AK/SK 读取并返回文件，无需绑定域名。"
+                            ? "选填。配置可访问的绑定域名后，浏览器直接从七牛下载与预览；不配置时也必须保证对象源站可由用户浏览器访问，不会由平台中转媒体正文。"
                             : "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源。CDN URL 不附带 OSS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"}
                     rules={[{ type: "url", message: "请填写完整的 http/https CDN 加速域名" }]}
                     className="mb-3"
                 >
                     <Input inputMode="url" spellCheck={false} placeholder="https://media.example.com" />
+                </Form.Item>
+                <Form.Item
+                    name="cdnAuthMode"
+                    label="CDN 访问鉴权"
+                    extra={isQiniuKodo ? "七牛私有 CDN 可选择七牛签名；公开绑定域名选择公开 CDN。阿里云/腾讯云私有 CDN 暂不自动签名。" : "公开 CDN 适合 CDN 自行鉴权；平台目前不会自动签发阿里云/腾讯云私有 CDN URL。"}
+                    className="mb-3"
+                >
+                    <Select options={[{ label: "未配置", value: "" }, { label: "公开 CDN", value: "public" }, { label: "七牛私有下载签名", value: "qiniu", disabled: !isQiniuKodo }]} />
+                </Form.Item>
+                <Form.Item name="requireCDN" label="必须走 CDN" valuePropName="checked" extra="开启后 CDN 鉴权未配置或不支持时直接失败，不会静默回源。" className="mb-3">
+                    <Switch checkedChildren="必须" unCheckedChildren="允许回源" />
+                </Form.Item>
+                <Form.Item name="allowPrivateProxy" label="允许模型输入代理" valuePropName="checked" extra="仅允许服务端向第三方模型提交参考素材时读取私有源站。浏览器展示、复制、下载和本地处理始终直连 OSS/CDN，不会经平台中转媒体正文。" className="mb-3">
+                    <Switch checkedChildren="允许" unCheckedChildren="禁止" />
                 </Form.Item>
                 <Form.Item name="bucket" label="Bucket" className="mb-3">
                     <Input spellCheck={false} placeholder={isTencentCOS ? "my-canvas-assets-1250000000" : isQiniuKodo ? "七牛云存储空间名称" : "my-canvas-assets"} />
@@ -213,6 +233,9 @@ function toFormValues(setting: UserOSSSetting): OSSFormValues {
         region: setting.region,
         endpoint: setting.endpoint,
         cdnBaseUrl: setting.cdnBaseUrl,
+        cdnAuthMode: setting.cdnAuthMode || "",
+        requireCDN: setting.requireCDN === true,
+        allowPrivateProxy: setting.allowPrivateProxy === true,
         bucket: setting.bucket,
         accessKeyId: setting.accessKeyId,
         accessKeySecret: "",

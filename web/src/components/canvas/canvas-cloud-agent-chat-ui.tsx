@@ -11,9 +11,10 @@ import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { WorkingGlow } from "@/components/ai/working-indicator";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
-import type { Skill } from "@/services/api/skills";
+import type { Skill, SkillPreset } from "@/services/api/skills";
 import { buildSkillMentionReferences } from "@/services/skill-runtime";
-import { agentToolCategory, agentToolCategoryLabel, agentToolStatus, friendlyAgentToolSummary } from "@/lib/canvas/agent-tool-presentation";
+import { agentToolCategory, agentToolCategoryLabel, agentToolErrorClassLabel, agentToolStatus, friendlyAgentToolSummary } from "@/lib/canvas/agent-tool-presentation";
+import { agentToolRetry, type AgentToolRetryAttempt } from "@/lib/canvas/agent-tool-retry";
 
 export type CloudAgentChatAttachment = { id: string; name: string; url: string };
 type CloudAgentOperationImpact = {
@@ -76,7 +77,6 @@ function clampAgentPromptHeight(height: number) {
     return Math.min(MAX_AGENT_PROMPT_HEIGHT, Math.max(MIN_AGENT_PROMPT_HEIGHT, Math.ceil(height)));
 }
 
-
 export function AgentChatMessage({
     item,
     theme,
@@ -106,7 +106,9 @@ export function AgentChatMessage({
             <div className="agent-reasoning" style={{ "--agent-reasoning-accent": theme.accent.primary } as CSSProperties}>
                 <details className={`agent-reasoning-card${item.streaming ? " is-streaming" : ""}`} open={item.streaming || undefined}>
                     <summary className="agent-reasoning-summary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/20">
-                        <span className="agent-reasoning-icon" aria-hidden="true"><Sparkles className="size-3.5" /></span>
+                        <span className="agent-reasoning-icon" aria-hidden="true">
+                            <Sparkles className="size-3.5" />
+                        </span>
                         <span className="agent-reasoning-copy">
                             <span className="agent-reasoning-title">{item.streaming ? "模型正在思考" : "模型思考"}</span>
                             <span className="agent-reasoning-subtitle">{item.streaming ? "整理目标与下一步" : "推理摘要"}</span>
@@ -148,9 +150,17 @@ export function AgentChatMessage({
             <div className="flex items-start gap-3">
                 <AgentTimelineMarker theme={theme} tone="error" icon={<CircleAlert className="size-3.5" />} />
                 <div className="min-w-0 flex-1 py-0.5 text-[13px] leading-5">
-                    <div className="font-medium" style={{ color }}>{item.title || "Agent 暂时无法继续"}</div>
-                    <div className="mt-0.5 whitespace-pre-wrap break-words" style={{ color: theme.node.muted }}>{item.text}</div>
-                    {item.meta ? <div className="mt-1 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>{item.meta}</div> : null}
+                    <div className="font-medium" style={{ color }}>
+                        {item.title || "Agent 暂时无法继续"}
+                    </div>
+                    <div className="mt-0.5 whitespace-pre-wrap break-words" style={{ color: theme.node.muted }}>
+                        {item.text}
+                    </div>
+                    {item.meta ? (
+                        <div className="mt-1 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
+                            {item.meta}
+                        </div>
+                    ) : null}
                     {onRetry ? (
                         <Button type="text" size="small" className="mt-1 !h-7 !px-0" icon={retrying ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />} disabled={retrying} onClick={onRetry}>
                             {retrying ? "重试中" : "重试本轮"}
@@ -167,9 +177,7 @@ export function AgentChatMessage({
                 {item.interjection ? (
                     <span
                         className="mb-1 inline-flex items-center rounded-full px-1.5 py-[1px] text-[var(--fs-label)] leading-4"
-                        style={item.interjection === "undelivered"
-                            ? { background: `${theme.accent.danger}22`, color: theme.accent.danger }
-                            : { background: "rgba(255,255,255,0.16)", opacity: 0.72 }}
+                        style={item.interjection === "undelivered" ? { background: `${theme.accent.danger}22`, color: theme.accent.danger } : { background: "rgba(255,255,255,0.16)", opacity: 0.72 }}
                     >
                         {item.interjection === "undelivered" ? "插话未送达" : "插话"}
                     </span>
@@ -192,12 +200,18 @@ function AgentMessageText({ text, references }: { text: string; references: Canv
     const parts = splitAgentMessageMentions(text, references);
     return (
         <div className="whitespace-pre-wrap break-words text-left">
-            {parts.map((part, index) => part.reference ? (
-                <span key={`${part.token}-${index}`} className="agent-message-mention" title={part.reference.title || part.reference.label}>
-                    <span aria-hidden="true" className="agent-message-mention-icon">{part.reference.kind === "skill" ? "✦" : "@"}</span>
-                    <span>{part.reference.label}</span>
-                </span>
-            ) : <span key={`${part.text}-${index}`}>{part.text}</span>)}
+            {parts.map((part, index) =>
+                part.reference ? (
+                    <span key={`${part.token}-${index}`} className="agent-message-mention" title={part.reference.title || part.reference.label}>
+                        <span aria-hidden="true" className="agent-message-mention-icon">
+                            {part.reference.kind === "skill" ? "✦" : "@"}
+                        </span>
+                        <span>{part.reference.label}</span>
+                    </span>
+                ) : (
+                    <span key={`${part.text}-${index}`}>{part.text}</span>
+                ),
+            )}
         </div>
     );
 }
@@ -311,7 +325,21 @@ function agentImpactFromDetail(detail: unknown) {
     } satisfies CloudAgentOperationImpact;
 }
 
-export function AgentToolCard({ title, text, detail, theme, references = [], onFocusNode }: { title: string; text: string; detail?: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; references?: CanvasResourceReference[]; onFocusNode?: (nodeId: string) => void }) {
+export function AgentToolCard({
+    title,
+    text,
+    detail,
+    theme,
+    references = [],
+    onFocusNode,
+}: {
+    title: string;
+    text: string;
+    detail?: unknown;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    references?: CanvasResourceReference[];
+    onFocusNode?: (nodeId: string) => void;
+}) {
     const state = toolCardState(title, text, detail);
     const toolName = agentToolName(title, detail);
     const category = agentToolCategory(toolName, detail);
@@ -325,26 +353,81 @@ export function AgentToolCard({ title, text, detail, theme, references = [], onF
     const isPlain = !actions.length && !state.isError;
     const conciseError = text.length > 180 ? `${text.slice(0, 180)}…` : text;
     const categoryIcon = category === "read" ? <Eye className="size-3.5" /> : category === "create" ? <Plus className="size-3.5" /> : <Pencil className="size-3.5" />;
+    const retry = agentToolRetry(detail);
+    const attempts = objectField(detail, "retryAttempts");
+    if (retry && Array.isArray(attempts)) {
+        const label = retry.status === "recovered" ? "自动纠正后已恢复" : retry.status === "exhausted" ? "自动纠正未完成" : "自动纠正记录";
+        return (
+            <details data-agent-tool-retry className="min-w-0 flex-1 text-xs leading-5" style={{ color: theme.node.muted }}>
+                <summary className="cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2" style={{ outlineColor: theme.node.muted }}>
+                    {label} · {retry.attempt}/{retry.maxAttempts} 次尝试未通过
+                </summary>
+                <ol className="mt-2 space-y-1 pl-4" aria-label="自动纠正详情">
+                    {(attempts as AgentToolRetryAttempt[]).map((attempt, index) => (
+                        <li key={attempt.id} className="whitespace-pre-wrap break-words">
+                            第 {index + 1} 次：{attempt.text}
+                        </li>
+                    ))}
+                </ol>
+            </details>
+        );
+    }
     return (
         <div data-agent-tool-card className={`agent-tool-row agent-tool-row--${category}${isPlain ? " agent-tool-row--plain" : ""} flex min-w-0 flex-1 items-start gap-2.5 text-left`} style={{ color: theme.node.text }}>
-            <span className="agent-tool-status shrink-0" style={{ color: state.color }} aria-hidden="true">{state.icon}</span>
+            <span className="agent-tool-status shrink-0" style={{ color: state.color }} aria-hidden="true">
+                {state.icon}
+            </span>
             <div className="min-w-0 flex-1 break-words text-xs leading-5" style={{ color: state.isError ? state.color : theme.node.muted }}>
                 <div className="agent-tool-header">
-                    <span className="agent-tool-category">{categoryIcon}<span>{categoryLabel}</span></span>
+                    <span className="agent-tool-category">
+                        {categoryIcon}
+                        <span>{categoryLabel}</span>
+                    </span>
                     <span className="agent-tool-summary">{summary}</span>
-                    {state.label !== "已完成" ? <span className="agent-tool-label" style={{ color: state.color }}>{state.label}</span> : null}
-                </div>
-                {actions.length ? <div className="agent-tool-action-list">
-                    {visibleActions.map((action) => <button key={`${action.action}-${action.nodeId}`} type="button" data-agent-node-id={action.nodeId} disabled={!onFocusNode} onClick={() => onFocusNode?.(action.nodeId)} aria-label={`在画布中定位${action.title}`} className="agent-tool-action-link">{agentCanvasActionLabel(action)}</button>)}
-                    {isNodeRead && (collapsedReadNodeCount > 0 || readExpanded) ? (
-                        <button type="button" className="agent-tool-more" aria-expanded={readExpanded} onClick={() => setReadExpanded((current) => !current)}>
-                            {readExpanded ? `收起其余 ${Math.max(0, actions.length - 1)} 个节点` : `已折叠 ${collapsedReadNodeCount} 个节点，展开查看`}
-                        </button>
+                    {state.label !== "已完成" ? (
+                        <span className="agent-tool-label" style={{ color: state.color }}>
+                            {state.label}
+                        </span>
                     ) : null}
-                </div> : null}
-                {state.isError && text && text !== summary ? <span className="mt-1 block whitespace-pre-wrap break-words" style={{ color: theme.node.muted }}>{conciseError}</span> : null}
-                {state.isError && text.length > 180 ? <details className="mt-1" style={{ color: theme.node.muted }}><summary className="cursor-pointer">查看完整错误详情</summary><p className="whitespace-pre-wrap break-words">{text}</p></details> : null}
-                {state.isError && objectField(objectField(detail, "result"), "taskId") ? <span className="mt-1 block break-all" style={{ color: theme.node.muted }}>任务 ID：{String(objectField(objectField(detail, "result"), "taskId"))}</span> : null}
+                </div>
+                {actions.length ? (
+                    <div className="agent-tool-action-list">
+                        {visibleActions.map((action) => (
+                            <button
+                                key={`${action.action}-${action.nodeId}`}
+                                type="button"
+                                data-agent-node-id={action.nodeId}
+                                disabled={!onFocusNode}
+                                onClick={() => onFocusNode?.(action.nodeId)}
+                                aria-label={`在画布中定位${action.title}`}
+                                className="agent-tool-action-link"
+                            >
+                                {agentCanvasActionLabel(action)}
+                            </button>
+                        ))}
+                        {isNodeRead && (collapsedReadNodeCount > 0 || readExpanded) ? (
+                            <button type="button" className="agent-tool-more" aria-expanded={readExpanded} onClick={() => setReadExpanded((current) => !current)}>
+                                {readExpanded ? `收起其余 ${Math.max(0, actions.length - 1)} 个节点` : `已折叠 ${collapsedReadNodeCount} 个节点，展开查看`}
+                            </button>
+                        ) : null}
+                    </div>
+                ) : null}
+                {state.isError && text && text !== summary ? (
+                    <span className="mt-1 block whitespace-pre-wrap break-words" style={{ color: theme.node.muted }}>
+                        {conciseError}
+                    </span>
+                ) : null}
+                {state.isError && text.length > 180 ? (
+                    <details className="mt-1" style={{ color: theme.node.muted }}>
+                        <summary className="cursor-pointer">查看完整错误详情</summary>
+                        <p className="whitespace-pre-wrap break-words">{text}</p>
+                    </details>
+                ) : null}
+                {state.isError && objectField(objectField(detail, "result"), "taskId") ? (
+                    <span className="mt-1 block break-all" style={{ color: theme.node.muted }}>
+                        任务 ID：{String(objectField(objectField(detail, "result"), "taskId"))}
+                    </span>
+                ) : null}
             </div>
             {state.label === "已完成" ? <span className="sr-only">已完成</span> : null}
         </div>
@@ -354,19 +437,16 @@ export function AgentToolCard({ title, text, detail, theme, references = [], onF
 export function AgentWorkingMessage({ theme, label = WORKING_TEXT }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes]; label?: string }) {
     return (
         <div role="status" aria-live="polite" className="agent-working-indicator" style={{ color: theme.node.muted }}>
-            <span className="agent-working-signal" aria-hidden="true"><span /></span>
+            <span className="agent-working-signal" aria-hidden="true">
+                <span />
+            </span>
             <span>{label}</span>
             <span className="agent-working-caption">实时处理中</span>
         </div>
     );
 }
 
-export function AgentPlanBar({ items, theme, minimized, onToggle }: {
-    items: CloudAgentPlanItem[];
-    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
-    minimized: boolean;
-    onToggle: () => void;
-}) {
+export function AgentPlanBar({ items, theme, minimized, onToggle }: { items: CloudAgentPlanItem[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; minimized: boolean; onToggle: () => void }) {
     const doneCount = items.filter((entry) => entry.status === "done").length;
     const allDone = doneCount === items.length;
     return (
@@ -374,7 +454,9 @@ export function AgentPlanBar({ items, theme, minimized, onToggle }: {
             <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left focus-visible:outline focus-visible:outline-2" aria-expanded={!minimized} onClick={onToggle}>
                 <ListChecks className="size-3.5 shrink-0" style={{ color: allDone ? "#429477" : theme.node.muted }} />
                 <span className="text-xs font-semibold">本轮待办</span>
-                <span className="text-[11px] tabular-nums opacity-50">{doneCount}/{items.length}</span>
+                <span className="text-[11px] tabular-nums opacity-50">
+                    {doneCount}/{items.length}
+                </span>
                 <span className="min-w-0 flex-1" />
                 <span className="shrink-0 text-[11px] opacity-50">{minimized ? "展开" : "收起"}</span>
                 {minimized ? <ChevronDown className="size-3.5 shrink-0 opacity-50" /> : <ChevronUp className="size-3.5 shrink-0 opacity-50" />}
@@ -398,12 +480,7 @@ export function AgentPlanBar({ items, theme, minimized, onToggle }: {
     );
 }
 
-export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }: {
-    question: CloudAgentUserQuestion;
-    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
-    onAnswer: (label: string) => void;
-    disabled?: boolean;
-}) {
+export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }: { question: CloudAgentUserQuestion; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onAnswer: (label: string) => void; disabled?: boolean }) {
     return (
         <div className="agent-question-bar mx-3 mb-2 overflow-hidden rounded-xl" style={{ color: theme.node.text }}>
             <div className="flex items-start gap-2 px-3 pt-2.5">
@@ -431,9 +508,144 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                     </button>
                 ))}
             </div>
-            <div className="px-3 pb-2 text-[10px] opacity-50">
-                {question.allowFreeform === false ? "请从上面选一项。" : "点一项即可，也可以在下方输入框里自己说明。"}
+            <div className="px-3 pb-2 text-[10px] opacity-50">{question.allowFreeform === false ? "请从上面选一项。" : "点一项即可，也可以在下方输入框里自己说明。"}</div>
+        </div>
+    );
+}
+
+/**
+ * 场景起步胶囊：把「我大概想做 X」一步翻译成一组技能。
+ * 两组来源，都不限剧典技能：
+ *  1) 配方组——只读消费 GET /skills/presets（随二进制内置的手工策展配方）
+ *  2) 常用组——用户已装（其中可含已收藏）及自建的技能，按常用度排序（含官方种子库与自定义）
+ * 选择只作用于本会话；缺失的技能会持久安装到当前用户的技能库。
+ * 挂上之后具体用哪张卡由 Agent 在任务里检索判断，胶囊只负责"把对的技能送到手边"。
+ */
+export type AgentSceneBucket = {
+    key: string;
+    label: string;
+    presets: SkillPreset[];
+    skills: Skill[];
+};
+
+/** 场景分类：与 presets.json 的 scene 字段、技能的 tag 字段共用同一套 key。 */
+export const AGENT_SCENE_DEFS: Array<{ key: string; label: string }> = [
+    { key: "frequent", label: "我的常用" },
+    { key: "drama", label: "短剧故事" },
+    { key: "ecommerce", label: "广告电商" },
+    { key: "creative", label: "视觉创意" },
+    { key: "social", label: "传播社媒" },
+    { key: "others", label: "其他" },
+];
+
+export function AgentSceneCapsules({ buckets, installedIds, theme, disabled = false, onPick, onPickSkill }: {
+    buckets: AgentSceneBucket[];
+    installedIds: Set<string>;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    disabled?: boolean;
+    onPick: (preset: SkillPreset) => void;
+    onPickSkill: (skill: Skill) => void;
+}) {
+    // 始终只占一排：默认显示场景分类，点某个场景后在同一排内就地切换内容。
+    const [activeKey, setActiveKey] = useState<string | null>(null);
+    const capsuleClass = "agent-scene-capsule shrink-0 rounded-lg px-3 py-1.5 text-left text-xs focus-visible:outline focus-visible:outline-2";
+    const stop = {
+        onMouseDown: (event: { stopPropagation(): void }) => event.stopPropagation(),
+        onPointerDown: (event: { stopPropagation(): void }) => event.stopPropagation(),
+    };
+    const visible = buckets.filter((bucket) => bucket.presets.length + bucket.skills.length > 0);
+    const active = activeKey ? visible.find((bucket) => bucket.key === activeKey) || null : null;
+    if (!visible.length) return null;
+    return (
+        <div className="agent-scene-capsules mx-3 mb-2 overflow-hidden rounded-xl" style={{ color: theme.node.text }}>
+            <div className="flex items-start gap-2 px-3 pt-2.5">
+                <Sparkles className="mt-[1px] size-3.5 shrink-0" style={{ color: theme.accent.primary }} />
+                <span className="min-w-0 flex-1 text-xs font-semibold leading-5">{active ? active.label : "技能组合推荐"}</span>
             </div>
+            <div className="agent-scene-capsules-scroll thin-scrollbar flex gap-2 overflow-x-auto px-3 pb-1 pt-2">
+                {active ? (
+                    <>
+                        <button
+                            type="button"
+                            disabled={disabled}
+                            title="返回全部场景"
+                            className={capsuleClass}
+                            {...stop}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                setActiveKey(null);
+                            }}
+                        >
+                            <span className="block whitespace-nowrap font-medium">← 全部场景</span>
+                            <span className="mt-0.5 block whitespace-nowrap text-[10px] leading-4 opacity-60">返回</span>
+                        </button>
+                        {active.presets.map((preset) => {
+                            const missing = preset.skillIds.filter((id) => !installedIds.has(id)).length;
+                            return (
+                                <button
+                                    key={preset.presetId}
+                                    type="button"
+                                    disabled={disabled}
+                                    title={preset.rationale}
+                                    className={capsuleClass}
+                                    {...stop}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onPick(preset);
+                                    }}
+                                >
+                                    <span className="block whitespace-nowrap font-medium">{preset.name}</span>
+                                    <span className="mt-0.5 block whitespace-nowrap text-[10px] leading-4 opacity-60">
+                                        {missing > 0 ? `${preset.skillIds.length} 个技能 · ${missing} 个待装` : `${preset.skillIds.length} 个技能`}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                        {active.skills.map((skill) => {
+                            const owned = skill.isOwner ? "自建" : skill.isLike ? "已收藏" : installedIds.has(skill.skillId) ? "已装" : "待装";
+                            return (
+                                <button
+                                    key={skill.skillId}
+                                    type="button"
+                                    disabled={disabled}
+                                    title={skill.description}
+                                    className={capsuleClass}
+                                    {...stop}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onPickSkill(skill);
+                                    }}
+                                >
+                                    <span className="block max-w-[10rem] truncate font-medium">{skill.skillName}</span>
+                                    <span className="mt-0.5 block whitespace-nowrap text-[10px] leading-4 opacity-60">{owned}</span>
+                                </button>
+                            );
+                        })}
+                    </>
+                ) : (
+                    visible.map((bucket) => {
+                        const count = bucket.presets.length + bucket.skills.length;
+                        return (
+                            <button
+                                key={bucket.key}
+                                type="button"
+                                disabled={disabled}
+                                title={`查看「${bucket.label}」下的技能组合`}
+                                className={capsuleClass}
+                                {...stop}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    setActiveKey(bucket.key);
+                                }}
+                            >
+                                <span className="block whitespace-nowrap font-medium">{bucket.label}</span>
+                                <span className="mt-0.5 block whitespace-nowrap text-[10px] leading-4 opacity-60">{count} 项</span>
+                            </button>
+                        );
+                    })
+                )}
+            </div>
+            <div className="px-3 pb-2 text-[10px] opacity-50">选择只对当前会话生效；未装的技能会添加到我的技能库。具体用哪张卡由 Agent 按任务检索。</div>
         </div>
     );
 }
@@ -503,7 +715,7 @@ export function AgentChatComposer({
         const nextHeight = clampAgentPromptHeight(naturalHeight);
         // 用户开始拖动后，面板高度由用户掌控；超出部分交给内部滚动区，
         // 避免输入新内容时又把手动缩小的面板强行撑开。
-        setPromptHeight((currentHeight) => manualPromptHeightRef.current === null ? nextHeight : currentHeight);
+        setPromptHeight((currentHeight) => (manualPromptHeightRef.current === null ? nextHeight : currentHeight));
     }, []);
 
     useEffect(() => {
@@ -623,12 +835,7 @@ export function AgentChatComposer({
                                     <img src={item.url} alt={item.name} className="size-full object-cover" />
                                 </button>
                                 <div className="mt-1 flex min-w-0 items-center justify-between gap-1">
-                                    <button
-                                        type="button"
-                                        className="flex min-w-0 items-center gap-0.5 truncate text-[var(--fs-tiny)] opacity-80 hover:opacity-100"
-                                        title={`插入 @图片${index + 1}`}
-                                        onClick={() => insertAttachmentMention(item)}
-                                    >
+                                    <button type="button" className="flex min-w-0 items-center gap-0.5 truncate text-[var(--fs-tiny)] opacity-80 hover:opacity-100" title={`插入 @图片${index + 1}`} onClick={() => insertAttachmentMention(item)}>
                                         <AtSign className="size-2.5 shrink-0" />
                                         <span className="truncate">图片{index + 1}</span>
                                     </button>
@@ -675,7 +882,9 @@ export function AgentChatComposer({
                             sendOnEnter={canSubmit ? "both" : false}
                             disabled={disabled}
                             onChange={handlePromptChange}
-                            onSubmit={() => { if (canSubmit) onSubmit(); }}
+                            onSubmit={() => {
+                                if (canSubmit) onSubmit();
+                            }}
                             onContentSizeChange={handlePromptContentSizeChange}
                             className="w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:opacity-45"
                             containerClassName="min-h-[60px] h-full"
@@ -745,21 +954,23 @@ export function AgentChatComposer({
                                 <span className="agent-composer-send-hint-compact">{canStop ? "运行中可插话" : "Enter 发送"}</span>
                             </span>
                         )}
-                        {canStop ? <motion.button
-                            type="button"
-                            disabled={stopping}
-                            aria-label="停止本轮"
-                            title="停止当前 Agent 运行"
-                            onClick={() => void onStop?.()}
-                            whileHover={!reducedMotion && !stopping ? { scale: 1.06, y: -1 } : undefined}
-                            whileTap={!reducedMotion && !stopping ? { scale: 0.9, y: 1 } : undefined}
-                            animate={stopping && !reducedMotion ? { scale: [1, 0.94, 1] } : { scale: 1 }}
-                            transition={{ type: "spring", stiffness: 420, damping: 24 }}
-                            className="grid size-7 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
-                            style={{ background: theme.accent.danger, color: theme.accent.onPrimary }}
-                        >
-                            {stopping ? <LoaderCircle className="size-4 animate-spin" /> : <Square className="size-3.5" fill="currentColor" />}
-                        </motion.button> : null}
+                        {canStop ? (
+                            <motion.button
+                                type="button"
+                                disabled={stopping}
+                                aria-label="停止本轮"
+                                title="停止当前 Agent 运行"
+                                onClick={() => void onStop?.()}
+                                whileHover={!reducedMotion && !stopping ? { scale: 1.06, y: -1 } : undefined}
+                                whileTap={!reducedMotion && !stopping ? { scale: 0.9, y: 1 } : undefined}
+                                animate={stopping && !reducedMotion ? { scale: [1, 0.94, 1] } : { scale: 1 }}
+                                transition={{ type: "spring", stiffness: 420, damping: 24 }}
+                                className="grid size-7 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
+                                style={{ background: theme.accent.danger, color: theme.accent.onPrimary }}
+                            >
+                                {stopping ? <LoaderCircle className="size-4 animate-spin" /> : <Square className="size-3.5" fill="currentColor" />}
+                            </motion.button>
+                        ) : null}
                         <motion.button
                             type="button"
                             disabled={!canSubmit}
@@ -886,10 +1097,13 @@ function agentAttachmentReferences(attachments: CloudAgentChatAttachment[]): Can
 
 function toolCardState(title: string, text: string, detail?: unknown) {
     const status = agentToolStatus(title, text, detail);
+    // 失败时优先显示稳定归类（"参数不符合契约"/"画布状态已变化"/"模型输出问题"…）：
+    // 它比统一的"执行失败"更能说明下一步该做什么。
+    const errorClassLabel = agentToolErrorClassLabel(detail);
     if (status === "completed") return { label: "已完成", color: "#16a34a", softBg: "rgba(22,163,74,.04)", icon: <CheckCircle2 className="size-4" />, isError: false };
-    if (status === "failed") return { label: "执行失败", color: "#dc2626", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
+    if (status === "failed") return { label: errorClassLabel ?? "执行失败", color: "#dc2626", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
     if (status === "noop") return { label: "未生效", color: "#d97706", softBg: "rgba(217,119,6,.04)", icon: <CircleAlert className="size-4" />, isError: false };
-    if (status === "rejected") return { label: "拒绝执行", color: "#dc2626", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
+    if (status === "rejected") return { label: errorClassLabel ?? "拒绝执行", color: "#dc2626", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
     return { label: "处理中", color: "#64748b", softBg: "rgba(100,116,139,.04)", icon: <CircleDot className="size-4" />, isError: false };
 }
 

@@ -32,6 +32,9 @@ func TestAPICallLogRecordTypeFiltersListAndExport(t *testing.T) {
 		{ID: "poll", Capability: "video", RequestKind: "poll", CreatedAt: now},
 		{ID: "video-download", Capability: "video", RequestKind: "download", CreatedAt: now},
 		{ID: "image-download", Capability: "image", RequestKind: "download", CreatedAt: now},
+		{ID: "upload", Capability: "image", RequestKind: "upload", CreatedAt: now},
+		{ID: "local-save", Capability: "image", RequestKind: "local_save", CreatedAt: now},
+		{ID: "register", Capability: "image", RequestKind: "register", CreatedAt: now},
 	} {
 		if err := db.Create(&item).Error; err != nil {
 			t.Fatal(err)
@@ -41,7 +44,7 @@ func TestAPICallLogRecordTypeFiltersListAndExport(t *testing.T) {
 	for _, tc := range []struct {
 		kind  string
 		count int
-	}{{"", 1}, {"request", 1}, {"download", 2}, {"all", 4}} {
+	}{{"", 1}, {"request", 1}, {"download", 2}, {"all", 7}} {
 		filter := APICallLogFilter{AnalyticsFilter: AnalyticsFilter{From: now.Add(-time.Hour), To: now.Add(time.Hour)}, RecordType: tc.kind}
 		logs, total, err := repo.QueryAPICallLogs(filter)
 		if err != nil {
@@ -185,5 +188,36 @@ func TestQueryAPICallLogsHidesInternalPollStages(t *testing.T) {
 	}
 	if items[0].ID != "video-create" || items[1].ID != "image-create" {
 		t.Fatalf("visible logs = %#v, want video-create and image-create", items)
+	}
+}
+
+func TestLatestProviderRequestIDsForTasksReturnsNewestPerTask(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:latest-provider-ids?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.ApiCallLog{}); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Now().Add(-time.Hour)
+	for _, log := range []model.ApiCallLog{
+		{ID: "old-task-1", TaskID: "task-1", ProviderRequestID: "provider-old", CreatedAt: base},
+		{ID: "new-task-1", TaskID: "task-1", ProviderRequestID: "provider-new", CreatedAt: base.Add(2 * time.Minute)},
+		{ID: "task-2", TaskID: "task-2", ProviderRequestID: "provider-2", CreatedAt: base.Add(time.Minute)},
+		{ID: "empty", TaskID: "task-3", ProviderRequestID: "", CreatedAt: base.Add(3 * time.Minute)},
+	} {
+		if err := db.Create(&log).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids, err := New(db).LatestProviderRequestIDsForTasks([]string{"task-1", "task-2", "task-3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ids["task-1"] != "provider-new" || ids["task-2"] != "provider-2" {
+		t.Fatalf("unexpected provider IDs: %#v", ids)
+	}
+	if _, ok := ids["task-3"]; ok {
+		t.Fatalf("empty provider ID should be omitted: %#v", ids)
 	}
 }

@@ -73,7 +73,7 @@ func (s *Service) prepareArkPrivateAssetReferences(ctx context.Context, userID s
 		return nil
 	}
 	if taskID := taskExecutionID(ctx); taskID != "" {
-		_ = s.repo.UpdateTaskProgress(taskID, "同步方舟可信素材", 36)
+		_ = s.repo.UpdateTaskProgress(taskID, "正在准备参考素材", 0)
 	}
 	for index := range input.ReferenceImages {
 		reference := &input.ReferenceImages[index]
@@ -102,7 +102,7 @@ func (s *Service) prepareArkPrivateAssetReferences(ctx context.Context, userID s
 		reference.DataURL = ""
 	}
 	if taskID := taskExecutionID(ctx); taskID != "" {
-		_ = s.repo.UpdateTaskProgress(taskID, "调用生成模型", 40)
+		_ = s.repo.UpdateTaskProgress(taskID, "作品创作中", 0)
 	}
 	return nil
 }
@@ -230,7 +230,7 @@ func (s *Service) ensureArkPrivateAsset(ctx context.Context, userID string, reso
 		}
 	}
 	binding.AssetGroupID = groupID
-	resourceURL, err := s.directResourceURL(resource, time.Now().Add(time.Hour))
+	resourceURL, err := s.providerResourceURL(resource, time.Now().Add(time.Hour))
 	if err != nil {
 		return "", s.failArkPrivateAssetBinding(binding, fmt.Errorf("生成方舟素材临时地址失败：%w", err))
 	}
