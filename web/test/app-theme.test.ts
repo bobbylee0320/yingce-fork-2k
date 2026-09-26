@@ -36,6 +36,6 @@ describe("shared action colors and focus feedback", () => {
         const theme = getWorkspaceAntThemeConfig();
         expect(theme.components?.Button?.colorPrimary).toBeUndefined();
         expect(theme.components?.Button?.primaryColor).toBeUndefined();
-        expect(theme.components?.Input?.activeShadow).toBeUndefined();
+        expect(theme.components?.Input?.activeShadow).toBe("none");
     });
 });

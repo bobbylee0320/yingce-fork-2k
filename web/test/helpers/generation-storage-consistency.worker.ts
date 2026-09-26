@@ -397,8 +397,18 @@ async function runCanvasBatchCommitRace() {
     const harness = installStorageHarness();
     const previousScope = getActiveUserScope();
     let unregister: (() => void) | undefined;
+    let restoreAPI: (() => void) | undefined;
     try {
         setActiveUserScope("canvas-batch-commit-race");
+        const { apiClient } = await import("../../src/services/api/request");
+        const previousAdapter = apiClient.defaults.adapter;
+        apiClient.defaults.adapter = async (config) => {
+            if (config.url !== "/resources/access") throw new Error(`Unexpected API request: ${config.url}`);
+            const requests = JSON.parse(String(config.data)) as Array<{ resourceId: string; variant: string }>;
+            const items = requests.map(({ resourceId, variant }) => ({ resourceId, access: { resourceId, requestedVariant: variant, actualVariant: variant, url: `https://example.invalid/${resourceId}.png`, delivery: "cdn", issuedAt: "2026-09-21T00:00:00Z", refreshAt: "2099-01-01T00:00:00Z", revision: "1" } }));
+            return { data: { code: 0, data: { items }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+        };
+        restoreAPI = () => { apiClient.defaults.adapter = previousAdapter; };
         const { useCanvasStore, flushCanvasStorePersistence, CANVAS_STORE_KEY } = await import("../../src/stores/canvas/use-canvas-store");
         const { useAssetStore } = await import("../../src/stores/use-asset-store");
         const { applyCanvasGenerationTaskNodeEffect, registerCanvasGenerationLiveProject } = await import("../../src/services/canvas-generation-consumer");
@@ -431,6 +441,7 @@ async function runCanvasBatchCommitRace() {
         return { edited, live: ref.current, restored: stored.state.projects.find((project) => project.id === projectId)?.nodes };
     } finally {
         unregister?.();
+        restoreAPI?.();
         setActiveUserScope(previousScope);
         harness.restore();
     }
@@ -450,6 +461,6 @@ self.onmessage = async (event: MessageEvent<Scenario>) => {
                       : await runMediaCommitRace(event.data === "audio-commit-race" ? "audio" : "video");
         self.postMessage({ ok: true, result });
     } catch (error) {
-        self.postMessage({ ok: false, error: error instanceof Error ? `${error.name}: ${error.message}` : String(error) });
+        self.postMessage({ ok: false, error: error instanceof Error ? error.stack || `${error.name}: ${error.message}` : String(error) });
     }
 };

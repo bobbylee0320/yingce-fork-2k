@@ -133,7 +133,7 @@ func TestPrepareOfficialGeminiAgentCacheCreatesAndReusesStablePrefix(t *testing.
 	stableInstruction := strings.Repeat("stable system instruction ", 1000)
 	spec := protocol.RequestSpec{
 		Method:      http.MethodPost,
-		Path:        "/models/gemini-test:generateContent",
+		Path:        "/v1beta/models/gemini-test:generateContent",
 		ContentType: "application/json",
 		Body: map[string]any{
 			"systemInstruction": map[string]any{"parts": []any{map[string]any{"text": stableInstruction}}},

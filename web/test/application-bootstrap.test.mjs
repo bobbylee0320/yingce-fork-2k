@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 import { runInNewContext } from "node:vm";
+import { fileURLToPath } from "node:url";
 
 import { isIsolatedDirectorRepro } from "../src/lib/dev-repro";
 
 // Execute the real entry point; replace only its font, network and UI side effects.
 async function prepareEntry(dev, pathname) {
     const build = await Bun.build({
-        entrypoints: [new URL("../src/main.tsx", import.meta.url).pathname],
+        entrypoints: [fileURLToPath(new URL("../src/main.tsx", import.meta.url))],
         target: "browser",
         format: "iife",
         define: { "import.meta.env.DEV": JSON.stringify(dev) },
@@ -33,7 +34,7 @@ async function prepareEntry(dev, pathname) {
     let entryLoaded;
     const appearanceReady = new Promise((resolve) => (resolveAppearance = resolve));
     const loaded = new Promise((resolve) => (entryLoaded = resolve));
-    runInNewContext(await build.outputs[0].text(), { window: { location: { pathname } }, events, appearanceReady, entryLoaded });
+    runInNewContext(await build.outputs[0].text(), { window: { location: { pathname }, addEventListener() {} }, events, appearanceReady, entryLoaded });
     return { events, resolveAppearance, loaded };
 }
 
@@ -50,12 +51,11 @@ for (const [dev, pathname] of [
     [true, "/dev/director-repro/"],
     [true, "/dev/director-repro-other"],
 ]) {
-    test(`appearance still blocks normal startup: dev=${dev} path=${pathname}`, async () => {
+    test(`appearance loads without blocking startup: dev=${dev} path=${pathname}`, async () => {
         const entry = await prepareEntry(dev, pathname);
-        expect(entry.events).toEqual(["appearance"]);
-        entry.resolveAppearance();
         await entry.loaded;
         expect(entry.events).toEqual(["appearance", "./application"]);
+        entry.resolveAppearance();
     });
 }
 

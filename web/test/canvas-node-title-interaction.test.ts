@@ -13,12 +13,10 @@ describe("canvas node title interaction", () => {
         expect(liveViewportSource).toContain('if (preview) container.dataset.canvasNodeDragging = "true"');
         expect(liveViewportSource).toContain('else delete container.dataset.canvasNodeDragging');
     });
-    test("exposes a drag handle without bypassing read-only or locked nodes", () => {
-        expect(nodeSource).toContain('onDragStart={readOnly ? undefined : (event) => onMouseDown(event, data.id)}');
-        expect(nodeSource).toContain('disabled={!onDragStart || Boolean(node.metadata?.locked)}');
-        expect(nodeSource).toContain('onDragStart?.(event)');
-        expect(nodeSource).toContain('event.currentTarget.setPointerCapture(event.pointerId)');
-        expect(nodeSource).toContain('拖动此处移动节点；点击名称可重命名');
+    test("keeps the title editor discoverable and disables it for read-only or locked nodes", () => {
+        expect(nodeSource).toContain('onMouseDown={(event) => onMouseDown(event, data.id)}');
+        expect(nodeSource).toContain('editable={!readOnly && !data.metadata?.locked && Boolean(onTitleChange)}');
+        expect(nodeSource).toContain('<Pencil className="size-2.5');
         expect(nodeSource).toContain('onClick={onEdit}');
     });
     test("keeps the toolbar hover bridge from intercepting the external title", () => {

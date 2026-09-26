@@ -19,5 +19,5 @@ test("wallet tabs and preference blocks keep a visible gap from neighboring surf
     expect(css).toContain("margin: 12px 24px 0;");
     expect(css).toContain("margin: 16px 24px 24px;");
     expect(css).toContain(".settings-preference-heading { margin-bottom: var(--space-5); }");
-    expect(css).toContain(".app-user-workspace.settings-page .settings-preference-block {\n    padding: 20px 20px 12px;");
+    expect(css).toMatch(/\.app-user-workspace\.settings-page \.settings-preference-block\s*\{\s*padding: 20px 20px 12px;/);
 });

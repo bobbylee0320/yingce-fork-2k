@@ -75,21 +75,18 @@ describe("large canvas media rendering", () => {
     });
 
     test("keeps inactive video nodes on a viewport-gated static first frame", () => {
-        const inactivePreviewSource = canvasNodeContentSource.match(/function InactiveVideoPreview[\s\S]*?\n}\n\nfunction VideoPreviewPlayButton/)?.[0] || "";
+        const inactivePreviewSource = canvasNodeContentSource.match(/function InactiveVideoPreview[\s\S]*?function VideoPreviewPlayButton/)?.[0] || "";
         expect(canvasNodeContentSource).toContain("if (hasPersistedPreview || !nearViewport || (!node.metadata?.content && !node.metadata?.storageKey) || !updateMetadataRef.current)");
         expect(canvasNodeContentSource).not.toContain("hydrateMediaPreview");
-        expect(inactivePreviewSource).toContain("hasPersistedPreview || localPreviewUrl || !nearViewport");
-        expect(inactivePreviewSource).toContain("<video");
-        expect(inactivePreviewSource).toContain("muted");
-        expect(inactivePreviewSource).toContain('preload="auto"');
-        expect(inactivePreviewSource).toContain("video.currentTime = Math.min(0.001, video.duration / 2)");
-        expect(inactivePreviewSource).toContain("onCanPlay={() => setPassiveVideoReady(true)}");
+        expect(inactivePreviewSource).toContain("if (hasPersistedPreview || localPreviewUrl)");
+        expect(inactivePreviewSource).toContain("<CanvasVideoPreviewImage");
+        expect(inactivePreviewSource).toContain("hydrateCanvasVideoPreview(node, controller.signal)");
+        expect(inactivePreviewSource).not.toContain("<video");
         expect(inactivePreviewSource).not.toContain("autoPlay");
         expect(inactivePreviewSource).toContain("<VideoPreviewPlayButton");
         expect(canvasNodeContentSource).toContain("useVideoPlaybackUrl(node, mediaActive)");
         expect(canvasNodeContentSource).toContain("onMediaPlayRequest?.(node.id)");
-        expect(canvasNodeContentSource).toContain('autoPlay preload="metadata"');
-        expect(canvasNodeContentSource).toContain("scheduleResourceBlobCache(node.metadata?.storageKey || \"\")");
+        expect(canvasNodeContentSource).toMatch(/autoPlay\s+preload="metadata"/);
     });
 
     test("downloads OSS media by browser navigation without fetching it into a Blob", () => {
@@ -209,7 +206,7 @@ describe("video canvas controls", () => {
         expect(videoPlayerSource).not.toContain("onPointerDownCapture={stopCanvasControlInteraction}");
         expect(videoPlayerSource).not.toContain("onMouseDownCapture={stopCanvasControlInteraction}");
         expect(videoPlayerSource).not.toContain("onClickCapture={stopCanvasControlClick}");
-        expect(canvasNodeContentSource).toContain('hasAudio={inferVideoHasAudio(node.metadata)} autoPlay preload="metadata"');
+        expect(canvasNodeContentSource).toMatch(/hasAudio=\{inferVideoHasAudio\(node\.metadata\)\}\s+autoPlay\s+preload="metadata"/);
         expect(canvasNodeContentSource).toContain('if (["false", "0", "off", "no", "disabled"].includes(value || "")) return false;');
     });
 

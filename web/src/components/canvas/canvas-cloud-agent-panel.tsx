@@ -517,7 +517,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             await interject(value);
             return;
         }
-        if (!value || busy || running || (run && connectionStatus !== "connected") || submissionRequestRef.current || !historyHydrated || !pendingHydrated || currentScope.current !== conversationScope) return;
+        if (!value || busy || (run && connectionStatus !== "connected") || submissionRequestRef.current || !historyHydrated || !pendingHydrated || currentScope.current !== conversationScope) return;
         const scope = conversationScope;
         submissionRequestRef.current = true;
         setBusy(true);

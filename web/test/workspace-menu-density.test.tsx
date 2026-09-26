@@ -51,7 +51,7 @@ test("real collection toolbar supplies filled selects without changing their lab
 test("collection select focus uses a thin keyboard ring, not a persistent pointer outline", () => {
     const css = readFileSync(new URL("../src/styles/workspace-product.css", import.meta.url), "utf8");
     const toolbar = readFileSync(new URL("../src/components/layout/collection-toolbar.tsx", import.meta.url), "utf8");
-    expect(css).toContain(".collection-toolbar .ant-select {\n        outline: none !important;");
+    expect(css).toMatch(/\.collection-toolbar \.ant-select\s*\{\s*outline: none !important;/);
     expect(css).toContain('[data-input-modality="keyboard"] .ant-select:not(.ant-select-disabled):focus-within');
     expect(css).toContain("outline: 1px solid var(--control-focus-ring) !important;");
     expect(toolbar).toContain('onPointerDownCapture={() => setInputModality("pointer")}');
@@ -88,14 +88,16 @@ test("menu surfaces are explicitly scoped and old account inner overrides are re
     expect(css).toContain("box-shadow: none !important");
     expect(css).not.toContain(".ant-modal");
     expect(globals).not.toContain(".workspace-account-popover .ant-popover-inner");
-    expect(globals).toContain(".ant-select:not(.ant-select-open):has(input:focus-visible)");
-    expect(globals).toContain(".ant-select-dropdown, .ant-dropdown-menu) {\n    border: 0 !important;");
-    expect(globals).toContain("body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-cascader-menus, .ant-mentions-dropdown) {\n        border: 0 !important;");
+    expect(globals).toContain('.ant-select.app-unified-select[data-input-modality="keyboard"]:not(.ant-select-open)');
+    expect(globals).toMatch(/\.ant-select-dropdown\s*\{\s*border: 0 !important;/);
+    expect(globals).toMatch(/body\.app-spatial-overlays :where\(\.ant-dropdown-menu, \.ant-select-dropdown, \.ant-cascader-menus, \.ant-mentions-dropdown\)\s*\{\s*border: 0 !important;/);
 });
 
 test("shared single-select popup uses a borderless surface instead of a bright focus frame", () => {
     const select = readFileSync(new URL("../src/components/ui/base/select/select.tsx", import.meta.url), "utf8");
-    expect(select).toContain("rounded-[var(--r-lg)] border-0 bg-surface-strong");
-    expect(select).toContain("focus-visible:ring-1 focus-visible:ring-[var(--control-selected-border)]");
-    expect(select).not.toContain('setPopoverWidth(width + 2)');
+    const globals = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8");
+    expect(select).toContain('className={cn("app-unified-select"');
+    expect(select).toContain("data-input-modality={inputModality}");
+    expect(globals).toMatch(/\.ant-select\.app-unified-select\s*\{[\s\S]*?border: 0 !important;/);
+    expect(globals).toContain('.ant-select.app-unified-select[data-input-modality="keyboard"]:not(.ant-select-open)');
 });

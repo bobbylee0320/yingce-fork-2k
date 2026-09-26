@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { runInNewContext } from "node:vm";
+import { fileURLToPath } from "node:url";
 import { clampAgentLauncherPosition, moveAgentLauncher, restoreAgentLauncherPosition } from "../src/lib/canvas/agent-launcher-position";
 
 const viewport = { width: 1280, height: 800 };
@@ -36,7 +37,7 @@ test("small pointer jitter remains a click, but dragging back to the origin rema
 // Execute the production hook with a tiny hook scheduler; only React and browser
 // side effects are substituted, not the pointer/click handlers being tested.
 const build = await Bun.build({
-    entrypoints: [new URL("../src/components/canvas/use-agent-launcher-position.ts", import.meta.url).pathname],
+    entrypoints: [fileURLToPath(new URL("../src/components/canvas/use-agent-launcher-position.ts", import.meta.url))],
     target: "browser",
     format: "cjs",
     plugins: [

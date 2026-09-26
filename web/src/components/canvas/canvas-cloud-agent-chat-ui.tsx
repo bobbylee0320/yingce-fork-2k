@@ -422,6 +422,19 @@ export function AgentToolCard({
     const hasDetails = actions.length > 0 || state.isError;
     const conciseError = text.length > 180 ? `${text.slice(0, 180)}…` : text;
     const categoryIcon = category === "read" ? <Eye className="size-3.5" /> : category === "create" ? <Plus className="size-3.5" /> : <Pencil className="size-3.5" />;
+    const retry = agentToolRetry(detail);
+    if (retry) {
+        const attempts = objectField(detail, "retryAttempts");
+        const retryLabel = retry.status === "recovered" ? "自动纠正后已恢复" : retry.status === "exhausted" ? "自动纠正未完成" : "自动纠正记录";
+        return (
+            <details data-agent-tool-card data-agent-tool-retry className="agent-tool-details" style={{ color: theme.node.muted }}>
+                <summary className="agent-tool-summary-toggle agent-tool-row cursor-pointer text-xs">{retryLabel}</summary>
+                <div className="agent-tool-detail-body break-words text-xs">
+                    {Array.isArray(attempts) && attempts.length ? attempts.map((attempt, index) => <p key={String(objectField(attempt, "id") || index)}>{String(objectField(attempt, "text") || "")}</p>) : <p>{text}</p>}
+                </div>
+            </details>
+        );
+    }
     const header = (
         <div className="agent-tool-header">
             <span className="agent-tool-category">
