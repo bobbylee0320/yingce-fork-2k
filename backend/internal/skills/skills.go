@@ -83,6 +83,22 @@ type SkillItem struct {
 	IsOwner         bool                 `json:"isOwner"`
 }
 
+// AddedSkillReference is the small contract used by the runtime catalog.
+// The full SkillItem contains editor, sync, author and showcase fields that
+// are only needed by the skill detail/market pages, not when selecting an
+// installed skill for a generation request.
+type AddedSkillReference struct {
+	SkillID     string `json:"skillId"`
+	SkillName   string `json:"skillName"`
+	Description string `json:"description"`
+	VersionID   string `json:"versionId"`
+	Version     string `json:"version"`
+	Tag         string `json:"tag"`
+	IsLike      bool   `json:"isLike"`
+	IsAdded     bool   `json:"isAdded"`
+	IsOwner     bool   `json:"isOwner"`
+}
+
 type SkillCategory struct {
 	Value string `json:"value"`
 	Label string `json:"label"`
@@ -151,12 +167,24 @@ func (s *Service) Skills(userID string, req SkillListRequest) (*SkillList, error
 	}, nil
 }
 
-func (s *Service) AddedSkills(userID string) ([]SkillItem, error) {
+func (s *Service) AddedSkills(userID string) ([]AddedSkillReference, error) {
 	rows, _, err := s.repo.Skills(repository.SkillListFilter{UserID: userID, Scope: "mine", Sort: "updated", Limit: -1})
 	if err != nil {
 		return nil, err
 	}
-	return s.skillItems(userID, rows, false)
+	items, err := s.skillItems(userID, rows, false)
+	if err != nil {
+		return nil, err
+	}
+	references := make([]AddedSkillReference, 0, len(items))
+	for _, item := range items {
+		references = append(references, AddedSkillReference{
+			SkillID: item.SkillID, SkillName: item.SkillName, Description: item.Description,
+			VersionID: item.VersionID, Version: item.Version, Tag: item.Tag,
+			IsLike: item.IsLike, IsAdded: item.IsAdded, IsOwner: item.IsOwner,
+		})
+	}
+	return references, nil
 }
 
 func (s *Service) SkillDetail(userID string, id string) (*SkillItem, error) {

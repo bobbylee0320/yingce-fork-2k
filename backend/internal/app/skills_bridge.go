@@ -13,6 +13,7 @@ type (
 	SkillShowcaseMedia        = skills.SkillShowcaseMedia
 	SkillEffectiveUser        = skills.SkillEffectiveUser
 	SkillItem                 = skills.SkillItem
+	AddedSkillReference       = skills.AddedSkillReference
 	SkillCategory             = skills.SkillCategory
 	SkillListRequest          = skills.SkillListRequest
 	SkillList                 = skills.SkillList
@@ -41,7 +42,7 @@ func (s *Service) Skills(userID string, req SkillListRequest) (*SkillList, error
 	return s.skillDomain().Skills(userID, req)
 }
 
-func (s *Service) AddedSkills(userID string) ([]SkillItem, error) {
+func (s *Service) AddedSkills(userID string) ([]AddedSkillReference, error) {
 	return s.skillDomain().AddedSkills(userID)
 }
 

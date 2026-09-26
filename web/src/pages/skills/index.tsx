@@ -1,5 +1,5 @@
 import { CollectionToolbar } from "@/components/layout/collection-toolbar";
-import { App, Button, Dropdown, Input, Select } from "antd";
+import { App, Button, Dropdown, Input } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 
 import { Boxes, Check, Clapperboard, Heart, Library, LoaderCircle, Megaphone, MoreHorizontal, Palette, Plus, Puzzle, Search, ShoppingBag, Sparkles, UserRound } from "lucide-react";
@@ -14,6 +14,7 @@ import { SkillDetailModal } from "@/pages/skills/skill-detail-drawer";
 import { SkillEditorDrawer } from "@/pages/skills/skill-editor-drawer";
 import { SkillInstallModal } from "@/pages/skills/skill-install-modal";
 import { addSkill, deleteSkill, getSkill, likeSkill, listSkills, removeSkill, syncSkill, unlikeSkill, type Skill, type SkillCategory, type SkillScope, type SkillSort } from "@/services/api/skills";
+import { Select } from "@/components/ui/base/select";
 
 const scopeOptions = [
     { label: "技能广场", value: "public", icon: Sparkles },

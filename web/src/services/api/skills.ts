@@ -57,6 +57,9 @@ export type Skill = {
     isOwner: boolean;
 };
 
+/** /skills/added 只返回运行时目录需要的引用字段，不携带编辑器和同步详情。 */
+export type AddedSkillReference = Pick<Skill, "skillId" | "skillName" | "description" | "versionId" | "version" | "tag" | "isLike" | "isAdded" | "isOwner">;
+
 export type SkillCategory = { value: string; label: string };
 
 /**
@@ -186,12 +189,55 @@ async function readAddedSkillsWithRetry() {
     const retryDelays = [300, 900, 1800];
     for (let attempt = 0; ; attempt += 1) {
         try {
-            return await http.get<{ skills: Skill[] }>("/skills/added");
+            const response = await http.get<{ skills: AddedSkillReference[] }>("/skills/added");
+            return { skills: response.skills.map(normalizeAddedSkillReference) };
         } catch (cause) {
             if (!(cause instanceof ApiError) || !cause.retryable || attempt >= retryDelays.length) throw cause;
             await new Promise<void>((resolve) => globalThis.setTimeout(resolve, retryDelays[attempt]));
         }
     }
+}
+
+function normalizeAddedSkillReference(skill: AddedSkillReference): Skill {
+    // 兼容旧后端/测试桩返回的最小关系对象；正式接口返回完整的轻量引用时
+    // 才补齐宽 Skill 类型的展示默认值。
+    if (!skill.skillName && !skill.versionId) return skill as unknown as Skill;
+    return {
+        skillId: skill.skillId,
+        skillName: skill.skillName,
+        description: skill.description,
+        versionId: skill.versionId,
+        version: skill.version,
+        contentHash: "",
+        fileCount: 0,
+        totalBytes: 0,
+        sourceType: "",
+        sourceUrl: "",
+        sourceRef: "",
+        sourceSubdir: "",
+        sourceCommit: "",
+        syncStatus: "synced",
+        autoUpdate: false,
+        status: 1,
+        markdownUrl: "",
+        createdAt: "",
+        updatedAt: "",
+        source: 0,
+        tag: skill.tag,
+        sortWeight: 0,
+        isPrivate: false,
+        likeCount: 0,
+        isLike: skill.isLike,
+        ownerUid: "",
+        effectiveUser: { name: "", avatarUrl: "", uid: "" },
+        originalSkillId: null,
+        showcaseMedia: [],
+        addedCount: 0,
+        isTest: false,
+        extraInfo: "",
+        isAdded: skill.isAdded,
+        isOwner: skill.isOwner,
+    };
 }
 
 function invalidateAddedSkillsCache() {

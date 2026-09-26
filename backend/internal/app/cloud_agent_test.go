@@ -266,6 +266,23 @@ func TestCloudAgentValidation(t *testing.T) {
 	}
 }
 
+func TestCloudAgentValidationNormalizesFocusNodeIDs(t *testing.T) {
+	req := agentTestRequest()
+	req.FocusNodeIDs = []string{" node-1 ", "node-2"}
+	if err := validateCloudAgentRequest(&req); err != nil {
+		t.Fatalf("trimmed focus node IDs should be normalized consistently: %v", err)
+	}
+	if req.FocusNodeIDs[0] != "node-1" {
+		t.Fatalf("focus node ID was validated but not normalized: %#v", req.FocusNodeIDs)
+	}
+
+	req = agentTestRequest()
+	req.FocusNodeIDs = []string{"node-1", " node-1 "}
+	if err := validateCloudAgentRequest(&req); err == nil {
+		t.Fatal("focus node IDs that normalize to the same node must be rejected")
+	}
+}
+
 func TestCloudAgentAdmissionAndContinuation(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
 	canvas := model.CanvasProject{ID: "agent-canvas", UserID: "user", Title: "test", PayloadJSON: `{"nodes":[{"id":"n","type":"text","metadata":{"content":"剧情片段","secret":"do-not-send"}}]}`}
@@ -362,8 +379,12 @@ func TestCloudAgentAdmissionAcceptsTokenPricingWithQuotedChargeLimit(t *testing.
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
-
-	run, err := s.CreateCloudAgentRun("user", agentTestRequest(), "")
+	if err := db.Model(&model.CreditAccount{}).Where("user_id = ?", "user").Update("available_microcredits", int64(1_000_000_000)).Error; err != nil {
+		t.Fatal(err)
+	}
+	request := agentTestRequest()
+	request.Budget.MaxCredits = 100_000
+	run, err := s.CreateCloudAgentRun("user", request, "")
 	if err != nil {
 		t.Fatalf("token-priced Agent request was rejected: %v", err)
 	}
