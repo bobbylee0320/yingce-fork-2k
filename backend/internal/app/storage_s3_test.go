@@ -2,13 +2,17 @@ package app
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"infinite-canvas/backend/internal/model"
 )
 
 func TestS3ObjectOperationsUsePathStyleSessionTokenAndNoManagedHeaders(t *testing.T) {
@@ -67,6 +71,86 @@ func TestS3ObjectOperationsUsePathStyleSessionTokenAndNoManagedHeaders(t *testin
 	}
 	if strings.Join(methods, ",") != "PUT,GET,DELETE" {
 		t.Fatalf("methods = %v", methods)
+	}
+}
+
+func TestDirectS3ImageUploadLifecycle(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	var uploaded []byte
+	var objectPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			objectPath = r.URL.Path
+			if !strings.Contains(objectPath, "/users/user-1/image/") || !strings.HasSuffix(objectPath, ".png") {
+				t.Errorf("object path = %q", objectPath)
+			}
+			if r.URL.Query().Get("X-Amz-Signature") == "" {
+				t.Error("direct PUT is missing its presigned signature")
+			}
+			if r.Header.Get("Content-Type") != "image/png" {
+				t.Errorf("PUT Content-Type = %q", r.Header.Get("Content-Type"))
+			}
+			uploaded, _ = io.ReadAll(r.Body)
+			w.Header().Set("ETag", `"direct-etag"`)
+		case http.MethodHead:
+			if r.URL.Path != objectPath {
+				t.Errorf("HEAD path = %q, want %q", r.URL.Path, objectPath)
+			}
+			w.Header().Set("Content-Length", strconv.Itoa(len(uploaded)))
+			w.Header().Set("Content-Type", "image/png")
+			w.Header().Set("ETag", `"direct-etag"`)
+		default:
+			t.Errorf("unexpected method %s", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	defer server.Close()
+
+	svc := newResourceTestService(t)
+	settingJSON, err := json.Marshal(ossSettingValue{
+		Enabled: true, Provider: s3Provider, Region: "us-east-1", Endpoint: server.URL,
+		Bucket: "bucket", AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
+		t.Fatal(err)
+	}
+
+	started, err := svc.BeginDirectImageUpload("user-1", "direct.png", 7, "image/png", 1, 1, "direct-upload-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.Resource.Status != model.ResourceStatusPending || started.UploadURL == "" || strings.Contains(started.UploadURL, "secret-value") {
+		t.Fatalf("BeginDirectImageUpload() = %#v", started)
+	}
+	request, err := http.NewRequest(http.MethodPut, started.UploadURL, bytes.NewReader([]byte("payload")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, value := range started.Headers {
+		request.Header.Set(name, value)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		t.Fatalf("presigned PUT status = %d", response.StatusCode)
+	}
+	completed, err := svc.CompleteDirectImageUpload("user-1", started.Resource.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed.Status != model.ResourceStatusReady || completed.ETag != "direct-etag" || string(uploaded) != "payload" {
+		t.Fatalf("completed upload = %#v, payload = %q", completed, uploaded)
+	}
+	ready, err := svc.BeginDirectImageUpload("user-1", "direct.png", 7, "image/png", 1, 1, "direct-upload-1")
+	if err != nil || ready.Resource.ID != completed.ID || ready.UploadURL != "" {
+		t.Fatalf("idempotent BeginDirectImageUpload() = %#v, %v", ready, err)
 	}
 }
 

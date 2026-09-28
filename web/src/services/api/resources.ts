@@ -185,6 +185,55 @@ export async function uploadResourceFile(file: Blob, kind: "image" | "video" | "
             resourceCache.set(resourceCacheKey(resource.id), resource);
             return resource;
         }
+        if (kind === "image") {
+            let direct: DirectImageUpload | undefined;
+            try {
+                direct = await http.post<DirectImageUpload>("/resources/direct-upload", {
+                    fileName: name,
+                    size: file.size,
+                    mimeType: file.type || "image/png",
+                    width: meta?.width,
+                    height: meta?.height,
+                    idempotencyKey: meta?.idempotencyKey,
+                });
+            } catch (error) {
+                if (!(error instanceof ApiError) || error.status !== 501) throw error;
+            }
+            if (direct) {
+                if (!direct.uploadUrl) {
+                    resourceCache.set(resourceCacheKey(direct.resource.id), direct.resource);
+                    return direct.resource;
+                }
+                try {
+                    await putPresignedImage(direct.uploadUrl, direct.headers || {}, file, onProgress);
+                } catch (uploadError) {
+                    if (uploadError instanceof DOMException && uploadError.name === "AbortError") {
+                        const reconciled = await http.post<{ resource: RemoteResource }>(`/resources/${encodeURIComponent(direct.resource.id)}/direct-upload/fail`, {}).catch(() => undefined);
+                        if (reconciled?.resource.status === "ready") {
+                            resourceCache.set(resourceCacheKey(reconciled.resource.id), reconciled.resource);
+                            return reconciled.resource;
+                        }
+                        throw uploadError;
+                    }
+                    try {
+                        const completed = await completeDirectImageUpload(direct.resource.id);
+                        resourceCache.set(resourceCacheKey(completed.id), completed);
+                        return completed;
+                    } catch {
+                        const failed = await http.post<{ resource: RemoteResource }>(`/resources/${encodeURIComponent(direct.resource.id)}/direct-upload/fail`, {});
+                        if (failed.resource.status === "ready") {
+                            resourceCache.set(resourceCacheKey(failed.resource.id), failed.resource);
+                            return failed.resource;
+                        }
+                        if (failed.resource.status !== "failed") throw uploadError;
+                        // A failed direct PUT is retried through the established backend path with the same idempotency key.
+                    }
+                }
+                const resource = await completeDirectImageUpload(direct.resource.id);
+                resourceCache.set(resourceCacheKey(resource.id), resource);
+                return resource;
+            }
+        }
         const formData = new FormData();
         formData.append("kind", kind);
         formData.append("file", file, name);
@@ -204,6 +253,40 @@ export async function uploadResourceFile(file: Blob, kind: "image" | "video" | "
     } catch (error) {
         throw normalizeUploadError(error);
     }
+}
+
+type DirectImageUpload = {
+    resource: RemoteResource;
+    uploadUrl?: string;
+    headers?: Record<string, string>;
+};
+
+async function completeDirectImageUpload(resourceId: string) {
+    const data = await http.post<{ resource: RemoteResource }>(`/resources/${encodeURIComponent(resourceId)}/direct-upload/complete`, {});
+    return data.resource;
+}
+
+function putPresignedImage(url: string, headers: Record<string, string>, file: Blob, onProgress?: (uploadedBytes: number, totalBytes: number) => void) {
+    return new Promise<void>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("PUT", url);
+        request.withCredentials = false;
+        Object.entries(headers).forEach(([name, value]) => request.setRequestHeader(name, value));
+        request.upload.onprogress = (event) => {
+            if (event.lengthComputable) onProgress?.(Math.min(event.loaded, file.size), file.size);
+        };
+        request.onload = () => {
+            if (request.status >= 200 && request.status < 300) {
+                onProgress?.(file.size, file.size);
+                resolve();
+            } else {
+                reject(new Error(`S3 直传失败（HTTP ${request.status}）`));
+            }
+        };
+        request.onerror = () => reject(new Error("S3 直传网络失败，请检查对象存储跨域设置或网络后重试"));
+        request.onabort = () => reject(new DOMException("The operation was aborted", "AbortError"));
+        request.send(file);
+    });
 }
 
 // 分片上传：POST 开始会话 → 逐片 PUT 原始二进制（每片 8MB）→ POST 合并落库。

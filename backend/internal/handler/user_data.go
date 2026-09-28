@@ -253,6 +253,62 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"resource": resource})
 	})
+	r.POST("/resources/direct-upload", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "resources-upload:"+user.ID, policy.Request.ResourceUploadPerMinute, time.Minute) {
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req struct {
+			FileName       string `json:"fileName"`
+			Size           int64  `json:"size"`
+			MimeType       string `json:"mimeType"`
+			Width          int    `json:"width"`
+			Height         int    `json:"height"`
+			IdempotencyKey string `json:"idempotencyKey"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.BeginDirectImageUpload(user.ID, req.FileName, req.Size, req.MimeType, req.Width, req.Height, req.IdempotencyKey)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+	r.POST("/resources/:id/direct-upload/complete", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		resource, err := svc.CompleteDirectImageUpload(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"resource": resource})
+	})
+	r.POST("/resources/:id/direct-upload/fail", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		resource, err := svc.FailDirectImageUpload(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"resource": resource})
+	})
 	r.POST("/resources/import", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

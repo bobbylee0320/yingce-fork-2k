@@ -39,6 +39,8 @@ var (
 	publicHTTPSStorageEndpoint  = storage.PublicHTTPSStorageEndpoint
 	newS3Client                 = storage.NewS3Client
 	putS3Object                 = storage.PutS3Object
+	presignS3PutObject          = storage.PresignS3PutObject
+	headS3Object                = storage.HeadS3Object
 	getS3ObjectRange            = storage.GetS3ObjectRange
 	signedS3ObjectURL           = storage.SignedS3ObjectURL
 	deleteS3Object              = storage.DeleteS3Object

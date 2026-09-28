@@ -111,6 +111,52 @@ func PutS3Object(setting Settings, objectKey string, mimeType string, size int64
 	return strings.Trim(aws.StringValue(output.ETag), `"`), nil
 }
 
+type S3ObjectMetadata struct {
+	ETag        string
+	Size        int64
+	ContentType string
+}
+
+func PresignS3PutObject(setting Settings, objectKey string, mimeType string, expiresAt time.Time) (string, error) {
+	client, err := NewS3Client(setting, 2*time.Minute)
+	if err != nil {
+		return "", err
+	}
+	duration := time.Until(expiresAt)
+	if duration <= 0 {
+		return "", errors.New("S3 上传地址有效期必须晚于当前时间")
+	}
+	input := &awss3.PutObjectInput{Bucket: aws.String(setting.Bucket), Key: aws.String(strings.TrimLeft(objectKey, "/"))}
+	if mimeType != "" {
+		input.ContentType = aws.String(mimeType)
+	}
+	req, _ := client.PutObjectRequest(input)
+	value, err := req.Presign(duration)
+	if err != nil {
+		return "", fmt.Errorf("S3 上传地址签名失败：%w", err)
+	}
+	return value, nil
+}
+
+func HeadS3Object(setting Settings, objectKey string) (S3ObjectMetadata, error) {
+	client, err := NewS3Client(setting, 2*time.Minute)
+	if err != nil {
+		return S3ObjectMetadata{}, err
+	}
+	output, err := client.HeadObjectWithContext(context.Background(), &awss3.HeadObjectInput{
+		Bucket: aws.String(setting.Bucket),
+		Key:    aws.String(strings.TrimLeft(objectKey, "/")),
+	})
+	if err != nil {
+		return S3ObjectMetadata{}, fmt.Errorf("核对 S3 上传对象失败：%w", err)
+	}
+	return S3ObjectMetadata{
+		ETag:        strings.Trim(aws.StringValue(output.ETag), `"`),
+		Size:        aws.Int64Value(output.ContentLength),
+		ContentType: aws.StringValue(output.ContentType),
+	}, nil
+}
+
 func GetS3ObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
 	client, err := NewS3Client(setting, 2*time.Minute)
 	if err != nil {

@@ -1074,6 +1074,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /resources/direct-upload:
+    post:
+      tags: [resources]
+      summary: 为 S3 图片签发浏览器直传地址
+      description: 仅为当前用户的 S3 图片资源签发短时 PUT 地址；其他存储方式返回 501，客户端可回退到常规上传。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, size, mimeType]
+              properties:
+                fileName: {type: string, maxLength: 255}
+                size: {type: integer, minimum: 1}
+                mimeType: {type: string}
+                width: {type: integer, minimum: 0}
+                height: {type: integer, minimum: 0}
+                idempotencyKey: {type: string}
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "501":
+          description: 当前存储方式不支持浏览器直传
+  /resources/{id}/direct-upload/complete:
+    post:
+      tags: [resources]
+      summary: 核验 S3 图片并完成资源登记
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /resources/{id}/direct-upload/fail:
+    post:
+      tags: [resources]
+      summary: 核验直传结果并准备常规上传回退
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
   /resources/access:
     post:
       tags: [resources]
