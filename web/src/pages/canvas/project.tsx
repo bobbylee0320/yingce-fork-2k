@@ -1511,7 +1511,7 @@ function InfiniteCanvasPage() {
     const canCreateDrawingFromConnection = !pendingConnectionCreate?.batchSourceNodeIds?.length && pendingConnectionSourceNode?.type === CanvasNodeType.Image && Boolean(pendingConnectionSourceNode.metadata?.content);
 
     const openTextNodeEditor = useCallback((node: CanvasNodeData) => {
-        if (node.type !== CanvasNodeType.Text) return;
+        if (node.type !== CanvasNodeType.Text && node.type !== CanvasNodeType.Markdown) return;
         setSelectedNodeIds(new Set([node.id]));
         setSelectedConnectionId(null);
         setContextMenu(null);
@@ -2828,7 +2828,17 @@ function InfiniteCanvasPage() {
 
                             <div className={versions.open ? "hidden" : "contents"}>
                             <CanvasCloudAgentPanel canvasId={projectId} domainProjectId={currentProject?.projectId} nodeCount={nodes.length} selectedNodeIds={Array.from(selectedNodeIds)} references={agentMentionReferences} prefillPrompt={agentPrefillPrompt} open={assistantOpen} onOpen={openAgent} onCollapse={closeAgent} onFocusNode={(nodeId) => {
-                                if (!nodesRef.current.some((node) => node.id === nodeId)) { message.info("该节点已删除或尚未同步到画布"); return; }
+                                const currentNodes = nodesRef.current;
+                                const target = currentNodes.find((node) => node.id === nodeId);
+                                if (!target) { message.info("该节点已删除或尚未同步到画布"); return; }
+
+                                const parent = target.parentId ? currentNodes.find((node) => node.id === target.parentId) : null;
+                                if (parent?.metadata?.frame?.collapsed) toggleFrameCollapsed(parent.id);
+
+                                const batchRootId = target.metadata?.batchRootId;
+                                const batchRoot = batchRootId ? currentNodes.find((node) => node.id === batchRootId) : null;
+                                if (batchRoot && isHiddenBatchChild(target, currentNodes) && !batchRoot.metadata?.imageBatchExpanded) toggleBatchExpanded(batchRoot.id);
+
                                 focusCanvasNode(nodeId);
                             }} />
                             </div>

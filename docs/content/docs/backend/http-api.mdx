@@ -169,7 +169,7 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 
 | 接口 | 行为 |
 | --- | --- |
-| `GET /canvas-projects/:id` | 返回当前内容及权威版本号 |
+| `GET /canvas-projects/:id` | 返回当前内容及权威版本号；响应包含基于数据库 `revision` 的弱 `ETag` 和 `Cache-Control: private, no-cache`。请求可用 `If-None-Match` 做条件读取，版本未变化时返回无正文的 `304`。 |
 | `GET /canvas-projects/:id/history` | 返回 `snapshots` 摘要与 `currentRevision`，不批量读取历史正文 |
 | `GET /canvas-projects/:id/history/:snapshotId` | 按需返回 `snapshot` 摘要和 `project` 历史正文 |
 | `POST /canvas-projects/:id/history/:snapshotId/restore` | 请求 `{ revision }` 为当前画布版本，成功返回新版本摘要；恢复前强制备份当前内容 |
@@ -177,6 +177,8 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 历史接口先验证画布归属；无权访问、已删除画布或不存在的快照返回 404。恢复沿用画布写入限流和素材校验，在同一事务完成版本校验、备份、内容写入及历史资源保护。恢复保留当前画布 ID 和项目归属，生成新版本，不倒退版本号。升级前的内容无法补建历史。
 
 平移和缩放只持久化浏览器视口，内容 PUT 忽略客户端 `viewport` 和 `remoteContentHash`。前端遇到 409/428 会保留账号隔离的本地草稿、暂停该画布自动提交，并提供加载最新版和下载草稿入口；载入最新版前草稿写入失败时停止替换。其他画布仍可保存。
+
+单画布读取会先查询归属用户的版本元数据，再判断 `If-None-Match`；命中时不会读取大型画布正文。未命中时返回完整项目 JSON。正文达到 1 KiB 且客户端声明接受 gzip 时响应使用 gzip 压缩，并带 `Vary: Accept-Encoding`；因此客户端应以 HTTP 状态码区分 `200` 正文和 `304` 未变化，不要把 `304` 当作业务错误。
 
 云端 Agent 与创作任务的写入共用版本和历史事务；Agent `canvasPatch` 携带 `baseRevision`、`revision`，客户端只接受连续增量，跳过重复事件，缺口或同字段冲突时保留草稿并重新核对。删除、重排或顶层内容变化无法由增量完整表示时，事件携带 `requiresRefresh: true` 且不附 `canvasPatch`，客户端完整核对后才推进基线；撤销事件同样触发核对。保存日志仅记录请求/链路 ID、画布/用户 ID、版本、节点数量变化及 HTTP 状态，不记录正文、提示词或媒体 URL。
 
@@ -340,6 +342,21 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 模型错误把已有字符串码放进 `reason`（如 `model_capability_not_supported`），`code` 仍为 400。
 
 常量：后端 `service/error_codes.go`，前端 `web/src/services/api/error-codes.ts`。
+
+## 技能库分类 API
+
+以下接口需要登录。技能库分类与技能广场共享分类分离：`skills.tag` 仍表示共享市场分类；用户技能库分类记录在用户自己的技能状态中，只影响该用户技能库和画布 Agent。
+
+| 方法 | 路径 | 行为 |
+| --- | --- | --- |
+| GET | `/api/skills/library-categories?scope=mine\|created` | 返回当前用户可见的个人分类和平台分类，以及所选视图下每类数量、全部技能数和未分类数量。`mine` 包含自己创建及已加入的公开技能；`created` 只统计自己创建的技能。 |
+| POST | `/api/skills/library-categories` | 请求 `{ "name": "分镜", "scope": "personal" }`。`scope` 可省略并默认为 `personal`；管理员可指定 `platform`，该分类对所有用户可见、可分配和筛选。同一用户可见范围内分类名唯一。 |
+| DELETE | `/api/skills/library-categories/:id` | 删除个人分类（仅分类所有者）或平台分类（仅管理员），只解除该分类与技能的关联，不删除技能。 |
+| PATCH | `/api/skills/:id/library-category` | 请求 `{ "categoryId": "分类 ID" }` 设置分类；空字符串清除分类。仅允许对自己创建或已加入的技能操作，并且只能使用当前用户的个人分类或平台分类。 |
+
+`GET /api/skills` 可带 `libraryCategoryId` 或 `libraryUncategorized=true`，仅用于 `scope=mine` / `scope=created`，且两者不能同时使用。它们可与共享分类筛选 `tag` 同时提供，结果需同时满足两个筛选条件。分类列表的数量不受搜索词影响，表示对应技能库范围内的完整数量。
+
+技能列表响应中的 `categories` 是技能广场共享分类，包含 `value`、`label` 和 `count`；`count` 统计已启用且公开的技能，不受当前搜索词、分页和视图筛选影响。它与技能库个人/平台分类是两套独立分类。
 
 ## 画布工具 API
 

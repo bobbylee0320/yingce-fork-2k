@@ -51,6 +51,7 @@ type CloudAgentRequest struct {
 }
 
 const cloudAgentMaxStepsLimit = 9999
+const cloudAgentMaxConfirmationRounds = 2
 
 func cloudAgentStepLimit(req CloudAgentRequest) int {
 	if req.Budget.MaxSteps > 0 {
@@ -60,15 +61,18 @@ func cloudAgentStepLimit(req CloudAgentRequest) int {
 }
 
 type cloudAgentState struct {
-	Version        int                       `json:"version"`
-	Request        CloudAgentRequest         `json:"request"`
-	ParentID       string                    `json:"parentId"`
-	Fingerprint    string                    `json:"fingerprint"`
-	CreativeAnchor cloudAgentCreativeAnchor  `json:"creativeAnchor,omitempty"`
-	Plan           []cloudAgentPlanItem      `json:"plan,omitempty"`
-	Skills         []cloudAgentSkill         `json:"skills,omitempty"`
-	Profile        cloudAgentProfileSnapshot `json:"profile"`
-	Policy         cloudAgentPolicySnapshot  `json:"policy"`
+	Version                        int                       `json:"version"`
+	Request                        CloudAgentRequest         `json:"request"`
+	ParentID                       string                    `json:"parentId"`
+	Fingerprint                    string                    `json:"fingerprint"`
+	CreativeAnchor                 cloudAgentCreativeAnchor  `json:"creativeAnchor,omitempty"`
+	Plan                           []cloudAgentPlanItem      `json:"plan,omitempty"`
+	ConfirmationRounds             int                       `json:"confirmationRounds,omitempty"`
+	ConfirmationFingerprints       []string                  `json:"confirmationFingerprints,omitempty"`
+	PendingConfirmationFingerprint string                    `json:"pendingConfirmationFingerprint,omitempty"`
+	Skills                         []cloudAgentSkill         `json:"skills,omitempty"`
+	Profile                        cloudAgentProfileSnapshot `json:"profile"`
+	Policy                         cloudAgentPolicySnapshot  `json:"policy"`
 }
 
 type CloudAgentRun struct {
@@ -283,7 +287,7 @@ func (s *Service) cloudAgentTask(userID, id string) (*model.Task, cloudAgentStat
 	if task.ID != cloudAgentID(userID, state.Request.IdempotencyKey) || task.ProjectID != state.Request.CanvasID {
 		return nil, input.Agent, kernel.NotFound("Agent 运行不存在")
 	}
-	input.Agent = cloudAgentState{Version: 1, Request: state.Request, ParentID: state.ParentID, Fingerprint: state.Fingerprint, CreativeAnchor: state.CreativeAnchor, Skills: state.Skills, Profile: state.Profile, Policy: state.Policy}
+	input.Agent = cloudAgentState{Version: 1, Request: state.Request, ParentID: state.ParentID, Fingerprint: state.Fingerprint, CreativeAnchor: state.CreativeAnchor, ConfirmationRounds: state.ConfirmationRounds, ConfirmationFingerprints: append([]string(nil), state.ConfirmationFingerprints...), PendingConfirmationFingerprint: state.PendingConfirmationFingerprint, Skills: state.Skills, Profile: state.Profile, Policy: state.Policy}
 	return task, input.Agent, nil
 }
 
@@ -367,7 +371,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if state.Fingerprint == "" || state.Fingerprint != fingerprint {
 			return nil, kernel.NewAppError(409, "幂等键已用于不同请求，请使用新的幂等键")
 		}
-		return s.CloudAgentRun(userID, existing.ID)
+		run, runErr := s.CloudAgentRun(userID, existing.ID)
+		if runErr == nil && !cloudAgentRunTerminal(run.Status) {
+			s.startCloudAgentPi(userID, existing.ID)
+		}
+		return run, runErr
 	} else {
 		var appErr *AppError
 		if !errors.As(lookupErr, &appErr) || appErr.Status != 404 {
@@ -377,6 +385,8 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	var history []providerTextMessage
 	var creativeAnchor cloudAgentCreativeAnchor
 	var inheritedPlan []cloudAgentPlanItem
+	inheritedConfirmationRounds := 0
+	var inheritedConfirmationFingerprints []string
 	if parentID != "" {
 		parent, _, parentErr := s.cloudAgentTask(userID, parentID)
 		if parentErr != nil {
@@ -385,13 +395,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if parent.ProjectID != req.CanvasID {
 			return nil, kernel.Forbidden("不能跨画布追加 Agent 消息")
 		}
-		if parent.Status == model.TaskStatusQueued || parent.Status == model.TaskStatusRunning {
-			return nil, kernel.NewAppError(409, "上一轮仍在执行，请等待结束")
-		}
 		superseded := s.cloudAgentParentCanBeSuperseded(userID, parentID)
-		if err := s.advanceCloudAgentByID(userID, parentID); err != nil {
-			return nil, err
-		}
 		// 续轮收束要读上一轮**全部**事件（运行详情默认只返回尾部一窗）：长会话一旦被截断，
 		// 新轮就看不到上一轮改过哪些节点、提交过哪些任务，表现为"忘了自己做过什么"。
 		parentRun, err := s.CloudAgentRun(userID, parentID, CloudAgentRunViewOptions{EventLimit: cloudAgentContinuationEventLimit})
@@ -407,11 +411,18 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if err != nil {
 			return nil, err
 		}
+		if !cloudAgentRunTerminal(parentExecution.Status) || parentExecution.CleanupPending {
+			return nil, kernel.NewAppError(409, "上一轮仍在执行，请等待结束")
+		}
 		parentState, err := cloudAgentDecode(parentExecution)
 		if err != nil {
 			return nil, WrapAppError(409, "上一轮 Agent 历史记录不完整，无法继续对话；请新建对话", err)
 		}
 		inheritedPlan = parentState.Plan
+		if parentRun.Status == "completed" && parentState.PendingConfirmationFingerprint != "" {
+			inheritedConfirmationRounds = parentState.ConfirmationRounds
+			inheritedConfirmationFingerprints = append([]string(nil), parentState.ConfirmationFingerprints...)
+		}
 		// 视觉事实跨轮继承：这一轮已经看过的画面与模型自己写下的观察随锚点带过来，
 		// 否则新轮会把看过的图重新标成"没有视觉识别证据"并再花一次视觉 token。
 		creativeAnchor = parentState.CreativeAnchor
@@ -468,7 +479,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	if err != nil {
 		return nil, err
 	}
-	state := cloudAgentState{Version: 1, Request: req, ParentID: parentID, Fingerprint: fingerprint, CreativeAnchor: creativeAnchor, Plan: inheritedPlan, Skills: skillSnapshots, Profile: profile, Policy: policy}
+	state := cloudAgentState{Version: 1, Request: req, ParentID: parentID, Fingerprint: fingerprint, CreativeAnchor: creativeAnchor, Plan: inheritedPlan, ConfirmationRounds: inheritedConfirmationRounds, ConfirmationFingerprints: inheritedConfirmationFingerprints, Skills: skillSnapshots, Profile: profile, Policy: policy}
 	canonical := cloudAgentCanonicalFor(system, history, req.Prompt, req, len(profile.Layers) > 0)
 	// Keep the catalog out of TextHistory (which defines conversation turns),
 	// while exposing it as a fresh data message for this run immediately before
@@ -492,8 +503,14 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	input := map[string]any{"mode": "text", "prompt": req.Prompt, "textHistory": history, "textOptions": map[string]any{"stream": true, "thinking": cloudAgentReasoningEnabled(policy.ReasoningMode)}, "cloudAgent": state,
 		"agentRequests": map[string]any{"canonical": canonical},
 		"config":        map[string]any{"channelId": req.ChannelID, "channelModelKey": req.ChannelModelKey, "model": firstNonEmpty(req.ChannelModelKey, req.Model), "systemPrompt": system}}
+	input["piSessionJSONL"] = ""
+	if parentID != "" {
+		if session, sessionErr := s.repo.CloudAgentPiSession(userID, parentID); sessionErr == nil {
+			input["piSessionJSONL"] = session.SessionJSONL
+		}
+	}
 	task, err := s.CreateTask(userID, CreateTaskRequest{ProjectID: req.CanvasID, Type: "canvas_text", Operation: cloudAgentOperation, Prompt: req.Prompt, Model: req.Model, LogicalModelID: req.LogicalModelID, Input: input,
-		admission: &taskAdmission{ID: id, MaxCharge: int64(math.Floor(req.Budget.MaxCredits * float64(CreditScale)))}})
+		admission: &taskAdmission{ID: id, MaxCharge: int64(math.Floor(req.Budget.MaxCredits * float64(CreditScale))), NonBillable: true}})
 	if err != nil {
 		// A concurrent identical request may have won the transaction. Never
 		// replace its result or reserve credits a second time.
@@ -501,11 +518,20 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			if stored.Fingerprint == "" || stored.Fingerprint != fingerprint {
 				return nil, kernel.NewAppError(409, "幂等键已用于不同请求")
 			}
-			return s.CloudAgentRun(userID, existing.ID)
+			run, runErr := s.CloudAgentRun(userID, existing.ID)
+			if runErr == nil && !cloudAgentRunTerminal(run.Status) {
+				s.startCloudAgentPi(userID, existing.ID)
+			}
+			return run, runErr
 		}
 		return nil, err
 	}
-	return s.CloudAgentRun(userID, task.ID)
+	run, err := s.CloudAgentRun(userID, task.ID)
+	if err != nil {
+		return nil, err
+	}
+	s.startCloudAgentPi(userID, task.ID)
+	return run, nil
 }
 
 // 旧运行记录没有单独保存历史；只从模型请求中当前用户消息之前的严格交替前缀恢复。

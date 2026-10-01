@@ -17,6 +17,7 @@ import (
 func Models() []any {
 	return []any{
 		&model.CloudAgentExecution{},
+		&model.CloudAgentPiSession{},
 		&model.CloudAgentEventRecord{},
 		&model.CloudAgentMessageRecord{},
 		&model.CloudAgentCanvasMutation{},
@@ -65,9 +66,11 @@ func Models() []any {
 		&model.StorageLocation{},
 		&model.UserDailyUploadUsage{},
 		&model.Skill{},
+		&model.SkillLibraryCategory{},
 		&model.SkillVersion{},
 		&model.SkillFile{},
 		&model.UserSkillState{},
+		&model.BuiltinSkillTombstone{},
 		&model.Tool{},
 		&model.ToolFavorite{},
 		&model.Resource{},

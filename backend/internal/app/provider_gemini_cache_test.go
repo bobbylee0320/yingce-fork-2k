@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -141,6 +143,24 @@ func TestPrepareOfficialGeminiAgentCacheCreatesAndReusesStablePrefix(t *testing.
 			"toolConfig":        map[string]any{"functionCallingConfig": map[string]any{"mode": "AUTO"}},
 			"contents":          []any{map[string]any{"role": "user", "parts": []any{map[string]any{"text": "hello"}}}},
 		},
+	}
+	// Build the request through the shipped plugin, so the fixture cannot
+	// silently diverge from its versioned endpoint or body mapping.
+	manifest, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "google-gemini-generate-content", "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := protocol.LoadManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentAdapter, ok := adapter.(protocol.AgentAdapter)
+	if !ok {
+		t.Fatal("official Gemini plugin does not support Agent requests")
+	}
+	spec, err = agentAdapter.BuildAgent(ctx, protocol.AgentRequestContext{BaseURL: server.URL, Model: input.Config.Model, Request: map[string]any{"gemini": spec.Body}})
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	prepared, used, err := prepareOfficialGeminiAgentCache(ctx, input, spec)
