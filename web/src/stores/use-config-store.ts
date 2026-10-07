@@ -129,7 +129,19 @@ export type AiConfig = {
     audioVoice: string;
     audioFormat: string;
     audioSpeed: string;
+    audioLanguage: string;
+    audioDialect: string;
     audioInstructions: string;
+    audioEmotionControlMethod: string;
+    audioEmotionRandom: string;
+    audioEmotionHappy: string;
+    audioEmotionAngry: string;
+    audioEmotionSad: string;
+    audioEmotionAfraid: string;
+    audioEmotionDisgusted: string;
+    audioEmotionMelancholic: string;
+    audioEmotionSurprised: string;
+    audioEmotionCalm: string;
     videoSeconds: string;
     vquality: string;
     videoGenerateAudio: string;
@@ -171,7 +183,19 @@ export const defaultConfig: AiConfig = {
     audioVoice: "alloy",
     audioFormat: "mp3",
     audioSpeed: "1",
+    audioLanguage: "",
+    audioDialect: "",
     audioInstructions: "",
+    audioEmotionControlMethod: "与音色参考音频相同",
+    audioEmotionRandom: "false",
+    audioEmotionHappy: "0",
+    audioEmotionAngry: "0",
+    audioEmotionSad: "0",
+    audioEmotionAfraid: "0",
+    audioEmotionDisgusted: "0",
+    audioEmotionMelancholic: "0",
+    audioEmotionSurprised: "0",
+    audioEmotionCalm: "0",
     videoSeconds: "6",
     vquality: "720",
     videoGenerateAudio: "true",
@@ -418,7 +442,19 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot | undefine
             audioVoice: config.audioVoice || defaultConfig.audioVoice,
             audioFormat: config.audioFormat || defaultConfig.audioFormat,
             audioSpeed: config.audioSpeed || defaultConfig.audioSpeed,
+            audioLanguage: config.audioLanguage || "",
+            audioDialect: config.audioDialect || "",
             audioInstructions: config.audioInstructions || "",
+            audioEmotionControlMethod: config.audioEmotionControlMethod || defaultConfig.audioEmotionControlMethod,
+            audioEmotionRandom: config.audioEmotionRandom || defaultConfig.audioEmotionRandom,
+            audioEmotionHappy: config.audioEmotionHappy || defaultConfig.audioEmotionHappy,
+            audioEmotionAngry: config.audioEmotionAngry || defaultConfig.audioEmotionAngry,
+            audioEmotionSad: config.audioEmotionSad || defaultConfig.audioEmotionSad,
+            audioEmotionAfraid: config.audioEmotionAfraid || defaultConfig.audioEmotionAfraid,
+            audioEmotionDisgusted: config.audioEmotionDisgusted || defaultConfig.audioEmotionDisgusted,
+            audioEmotionMelancholic: config.audioEmotionMelancholic || defaultConfig.audioEmotionMelancholic,
+            audioEmotionSurprised: config.audioEmotionSurprised || defaultConfig.audioEmotionSurprised,
+            audioEmotionCalm: config.audioEmotionCalm || defaultConfig.audioEmotionCalm,
             // 旧版全局 systemPrompt 会跨任务污染请求；提示词定制现已按 operation 由服务端编译。
             systemPrompt: "",
             videoSeconds: normalizeVideoDuration(config.videoSeconds),

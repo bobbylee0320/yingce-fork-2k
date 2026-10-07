@@ -696,7 +696,7 @@ func cloudAgentCanvasSummary(canvas *model.CanvasProject, focusNodeIDs ...string
 		if node.Type == "text" && node.Metadata.WorkflowKind == "character" {
 			item["kind"] = "character"
 		}
-		if _, known := cloudAgentNodeCapabilityForType(node.Type); !known {
+		if _, known := canvasCapabilityRegistry.ResolveNode(node.Type, node.Metadata.WorkflowKind); !known {
 			item["agentSupported"] = false
 		}
 		nodes = append(nodes, item)

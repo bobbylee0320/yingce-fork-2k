@@ -248,7 +248,7 @@ func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID
 		if status, ok := meta["status"].(string); ok {
 			item["status"] = truncateRunes(status, 40)
 		}
-		capability, known := cloudAgentNodeCapabilityForType(stringValue(node["type"]))
+		capability, known := cloudAgentNodeCapabilityForNode(node)
 		if !known {
 			// Read visibility is not permission to mutate or use a node as a media reference.
 			item["agentSupported"] = false
@@ -262,6 +262,10 @@ func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID
 			nodes = append(nodes, item)
 			included[id] = true
 			continue
+		}
+		if capability.Variant != nil {
+			// 变体节点（如角色卡）底层 type 仍是 text，用 kind 标明真实能力，避免当普通文本处理。
+			item["kind"] = capability.Type
 		}
 		fields := capability.SummaryFields
 		if precise {
@@ -333,7 +337,8 @@ func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID
 			}
 			item["generationDraft"] = draft
 		}
-		if capability.Connection.CanReference {
+		// 角色卡的引用可用性在 character.imageReference/audioReference 中给出。
+		if capability.Connection.CanReference && !cloudAgentCharacterNode(node) {
 			ref, _, err := cloudAgentReference(repo, userID, node)
 			outputReference := map[string]any{"ready": err == nil}
 			item["outputReference"] = outputReference

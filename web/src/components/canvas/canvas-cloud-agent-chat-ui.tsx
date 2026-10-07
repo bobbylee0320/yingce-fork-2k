@@ -238,6 +238,8 @@ function escapeAgentNodePattern(value: string) {
 }
 
 function agentNodeTypeLabel(nodeId: string, reference?: CanvasResourceReference) {
+    // 角色卡底层是 text 节点，sourceType 会是 text；按资源 kind 先识别，避免报成"文本节点"。
+    if (reference?.kind === "character") return "角色卡";
     const sourceType = String(reference?.sourceType || "");
     if (sourceType && AGENT_NODE_TYPE_LABELS[sourceType]) return AGENT_NODE_TYPE_LABELS[sourceType];
     const prefix = AGENT_NODE_TYPE_PREFIXES.find((candidate) => nodeId.startsWith(`${candidate}-`));

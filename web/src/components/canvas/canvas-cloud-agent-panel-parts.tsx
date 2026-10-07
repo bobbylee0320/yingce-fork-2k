@@ -32,7 +32,9 @@ import { CanvasAgentImageApprovalSettings } from "./canvas-agent-image-approval-
 import { markdownPlainText } from "@/lib/markdown-plain-text";
 import type { ApprovalState } from "./canvas-cloud-agent-events";
 
-export function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, onOpen }: { theme: CanvasTheme; statusColor: string; approvalPending: boolean; reducedMotion: boolean; onOpen: () => void }) {
+// hidden 为 true 时入口保持挂载但不显示：Live2D 模型加载开销大，面板开合不能卸载它，
+// 否则每次重新挂载都要重新下载模型并重建渲染上下文，期间只能显示默认形象。
+export function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, hidden = false, onOpen }: { theme: CanvasTheme; statusColor: string; approvalPending: boolean; reducedMotion: boolean; hidden?: boolean; onOpen: () => void }) {
     const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
     const live = appearance.avatarType === "live2d" && Boolean(appearance.live2dResourceId && appearance.live2dEntry);
     const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
@@ -50,7 +52,9 @@ export function AgentLauncher({ theme, statusColor, approvalPending, reducedMoti
             aria-label={`打开${appearance.agentName}`}
             title={`${approvalPending ? "Agent 等待你的审批" : "打开 Agent 助手"} · 拖动可调整位置，聚焦后可用方向键移动`}
             className={cn("canvas-agent-launcher fixed z-[calc(var(--z-toast)+1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/35", dragging && "is-dragging", live && "canvas-agent-launcher-live2d")}
-            style={{ ...position, width, height, color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow } as CSSProperties}
+            style={{ ...position, width, height, color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow, ...(hidden ? { display: "none" } : null) } as CSSProperties}
+            aria-hidden={hidden || undefined}
+            tabIndex={hidden ? -1 : undefined}
             data-canvas-no-zoom
             {...handlers}
             whileHover={reducedMotion || dragging ? undefined : { scale: 1.035 }}
@@ -606,9 +610,11 @@ export function ApprovalPreviewItemView({ item, theme, onFocusNode }: { item: Re
                     ? "创建分镜"
                     : item.operation === "edit_storyboard"
                       ? "修改分镜"
-                      : item.operation === "plan_step"
-                        ? "计划"
-                        : "生成";
+                      : item.operation === "create_character"
+                        ? "创建角色卡"
+                        : item.operation === "plan_step"
+                          ? "计划"
+                          : "生成";
     const renderNode = (title: string | undefined, id: string | undefined, typeLabel: string | undefined, role: "source" | "target" | "node") => {
         if (!title) return null;
         const content = (

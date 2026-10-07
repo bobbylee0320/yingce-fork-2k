@@ -1,7 +1,7 @@
 import { rmSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { Agent, setGlobalDispatcher } from "undici";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
@@ -82,13 +82,20 @@ async function run() {
 
   // 每次运行使用独立的空配置目录：SDK 的 auth.json / models.json / 锁文件都落在这里，
   // 不读取宿主 ~/.pi，也不会执行预置 auth.json 里的 !command。运行结束即删除。
+  // 会话文件和工作目录同样放在这里：它们只是本轮的工作副本，真实来源是服务端
+  // 数据库里的会话快照（请求带 sessionJSONL，运行中回传）。不使用服务端的路径：
+  // 独立容器里没有服务端的数据目录；空工作目录也不会被发现任何项目级配置或技能。
   const isolatedDir = await mkdtemp(join(tmpdir(), "agent-runtime-"));
   process.env.HOME = isolatedDir;
   process.env.PI_CODING_AGENT_DIR = isolatedDir;
   process.on("exit", () => {
     try { rmSync(isolatedDir, { recursive: true, force: true }); } catch {}
   });
-  request.agentDir = isolatedDir;
+  const agentDir = isolatedDir;
+  const workDir = join(isolatedDir, "work");
+  const sessionDir = join(isolatedDir, "sessions");
+  await mkdir(workDir, { mode: 0o700 });
+  await mkdir(sessionDir, { mode: 0o700 });
   const modelRuntime = await ModelRuntime.create({
     authPath: join(isolatedDir, "auth.json"),
     modelsPath: join(isolatedDir, "models.json"),
@@ -132,7 +139,7 @@ async function run() {
               description: tool.description,
               parameters: tool.parameters,
             })),
-            thinkingLevel: options?.reasoning,
+            thinkingLevel: options?.reasoning ?? "off",
           }, options?.signal);
           for (const text of result.steeringMessages ?? []) {
             await session.steer(text);
@@ -210,32 +217,36 @@ async function run() {
 
   let sessionManager;
   if (request.sessionJSONL) {
-    if (!request.sessionFile) throw new Error("Agent session restore requires a session file path");
-    await mkdir(dirname(request.sessionFile), { recursive: true, mode: 0o700 });
-    await writeFile(request.sessionFile, request.sessionJSONL, { mode: 0o600, flag: "w" });
-    sessionManager = SessionManager.open(request.sessionFile, undefined, request.cwd);
+    const sessionFile = join(sessionDir, "session.jsonl");
+    await writeFile(sessionFile, request.sessionJSONL, { mode: 0o600, flag: "wx" });
+    sessionManager = SessionManager.open(sessionFile, sessionDir, workDir);
   } else {
-    sessionManager = SessionManager.create(request.cwd, request.sessionDir);
+    sessionManager = SessionManager.create(workDir, sessionDir);
   }
-  // 严格隔离：不探索文件系统的 packages/skills/extensions
+  // 严格隔离：不探索文件系统的 packages/skills/extensions/项目配置。
+  // 技能由服务端的读取工具提供，这里不再按路径加载；projectTrusted=false 让 SDK
+  // 不读取 <cwd>/.pi 设置，也不向上层目录收集 .agents/skills。
+  // 同一个设置管理器也交给 createAgentSession，否则 SDK 会另建一个读文件的实例。
+  const settingsManager = SettingsManager.inMemory({}, { projectTrusted: false });
   const resourceLoader = new DefaultResourceLoader({
-    cwd: request.cwd,
-    agentDir: request.agentDir,
+    cwd: workDir,
+    agentDir,
     noExtensions: true,
     noSkills: true,
     noPromptTemplates: true,
     noThemes: true,
     noContextFiles: true,
-    additionalSkillPaths: request.skillPaths ?? [],
+    additionalSkillPaths: [],
     systemPrompt: request.systemPrompt,
-    settingsManager: SettingsManager.inMemory({}),
+    settingsManager,
   });
   await resourceLoader.reload();
 
   const contextWindow = Math.max(1, Number(request.model?.contextWindow || 128000));
   const sessionConfig = {
-    cwd: request.cwd,
-    agentDir: request.agentDir,
+    cwd: workDir,
+    agentDir,
+    settingsManager,
     modelRuntime,
     model,
     resourceLoader,
@@ -299,6 +310,9 @@ async function run() {
 
   const eventChain = { current: Promise.resolve() };
   let runtimeError = null;
+  // 事件链串行执行。已有一次快照在排队时，它执行时读到的已是最新文件，
+  // 不必为每条新条目再整份上传一次。
+  let snapshotQueued = false;
   const enqueueEvent = (payload) => {
     eventChain.current = eventChain.current.then(() => bridge(request, "/event", payload));
   };
@@ -404,7 +418,10 @@ async function run() {
         approvalId: event.approvalId,
       });
     } else if (event.type === "entry_appended") {
+      if (snapshotQueued) return;
+      snapshotQueued = true;
       eventChain.current = eventChain.current.then(async () => {
+        snapshotQueued = false;
         const sessionFile = sessionManager.getSessionFile();
         if (!sessionFile) return;
         let sessionJSONL;

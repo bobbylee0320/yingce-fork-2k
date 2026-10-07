@@ -483,7 +483,7 @@ func TestCloudAgentModelListFiltersActualReferences(t *testing.T) {
 			t.Fatalf("intent = %+v", intent)
 		}
 	}
-	for _, args := range []string{`{"mode":"video","referenceNodeIds":["hero","hero"]}`, `{"mode":"video","referenceNodeIds":["missing"]}`, `{"referenceNodeIds":["hero"]}`, `{"mode":"audio","referenceNodeIds":["hero"]}`} {
+	for _, args := range []string{`{"mode":"video","referenceNodeIds":["hero","hero"]}`, `{"mode":"video","referenceNodeIds":["missing"]}`, `{"referenceNodeIds":["hero"]}`, `{"mode":"audio","referenceNodeIds":["hero","cat"]}`} {
 		if _, err := s.cloudAgentModelIntent("user", "agent-canvas", args); err == nil {
 			t.Fatalf("accepted %s", args)
 		}

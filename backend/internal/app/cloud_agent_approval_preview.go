@@ -167,8 +167,8 @@ func applyCloudAgentCanvasPlan(doc map[string]any, ops []agentCanvasOp) ([]cloud
 					return nil, BadAuthRequest("连线重复")
 				}
 			}
-			fromCapability, _ := cloudAgentNodeCapabilityForType(stringValue(nodes[fromIndex]["type"]))
-			toCapability, _ := cloudAgentNodeCapabilityForType(stringValue(nodes[toIndex]["type"]))
+			fromCapability, _ := cloudAgentNodeCapabilityForNode(nodes[fromIndex])
+			toCapability, _ := cloudAgentNodeCapabilityForNode(nodes[toIndex])
 			fromTitle := cloudAgentApprovalNodeTitle(nodes[fromIndex], fromCapability.Label)
 			toTitle := cloudAgentApprovalNodeTitle(nodes[toIndex], toCapability.Label)
 			edges = append(edges, map[string]any{"id": op.ID, "fromNodeId": op.FromNodeID, "toNodeId": op.ToNodeID})
@@ -188,7 +188,7 @@ func applyCloudAgentCanvasPlan(doc map[string]any, ops []agentCanvasOp) ([]cloud
 			if index < 0 {
 				return nil, BadAuthRequest("只能更新现有且受 Agent 支持的节点")
 			}
-			capability, ok := cloudAgentNodeCapabilityForType(stringValue(nodes[index]["type"]))
+			capability, ok := cloudAgentNodeCapabilityForNode(nodes[index])
 			if !ok || !capability.CanUpdate {
 				return nil, BadAuthRequest("该节点类型不支持 Agent 更新")
 			}

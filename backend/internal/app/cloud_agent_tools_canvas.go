@@ -106,8 +106,8 @@ func validateCloudAgentConnection(nodes []map[string]any, fromID, toID string, e
 	if from == nil || to == nil {
 		return BadAuthRequest("连线端点不存在")
 	}
-	fromCapability, fromKnown := cloudAgentNodeCapabilityForType(stringValue(from["type"]))
-	toCapability, toKnown := cloudAgentNodeCapabilityForType(stringValue(to["type"]))
+	fromCapability, fromKnown := cloudAgentNodeCapabilityForNode(from)
+	toCapability, toKnown := cloudAgentNodeCapabilityForNode(to)
 	if !fromKnown || !toKnown {
 		return BadAuthRequest("连线包含当前 Agent 不支持的节点类型")
 	}
@@ -184,6 +184,10 @@ func cloudAgentNodeTypes() map[string]any {
 			"purpose":     capability.Purpose,
 			"defaultSize": map[string]any{"width": capability.DefaultWidth, "height": capability.DefaultHeight},
 			"canUpdate":   capability.CanUpdate,
+		}
+		if variant := capability.Variant; variant != nil {
+			// 变体不能 add_node；画布里按 type+metadata.workflowKind 识别，读取结果以 kind 标出。
+			item["canvasNodeType"], item["workflowKind"], item["creatable"] = variant.BaseType, variant.WorkflowKind, false
 		}
 		if len(capability.GoodFor) > 0 {
 			item["goodFor"] = capability.GoodFor

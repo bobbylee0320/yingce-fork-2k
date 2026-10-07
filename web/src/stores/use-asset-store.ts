@@ -23,7 +23,18 @@ export type ImageAsset = AssetBase<"image"> & { data: { dataUrl: string; storage
 export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?: string; width: number; height: number; durationMs?: number; hasAudio?: boolean; bytes: number; mimeType: string } };
 export type AudioAsset = AssetBase<"audio"> & { data: { url: string; storageKey?: string; durationMs?: number; bytes: number; mimeType: string } };
 export type ModelAsset = AssetBase<"model"> & { data: { url: string; storageKey?: string; bytes: number; mimeType: string; fileName: string } };
-export type EntityAsset = AssetBase<"entity"> & { data: { definition: Record<string, unknown> } };
+/** 角色卡：设定来自版本；列表接口会补上当前版本的形象/声音存储键与状态（只读展示字段）。 */
+export type EntityAsset = AssetBase<"entity"> & {
+    data: {
+        definition: Record<string, unknown>;
+        version?: number;
+        coverStorageKey?: string;
+        voiceName?: string;
+        voiceSampleStorageKey?: string;
+        visualStatus?: string;
+        voiceStatus?: string;
+    };
+};
 export type Asset = TextAsset | ImageAsset | VideoAsset | AudioAsset | ModelAsset | EntityAsset;
 export type NewAsset =
     | Omit<TextAsset, "id" | "createdAt" | "updatedAt">

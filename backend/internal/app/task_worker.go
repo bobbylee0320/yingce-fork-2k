@@ -317,7 +317,11 @@ func taskFailureMessage(err error) string {
 	if err == nil {
 		return "任务处理失败"
 	}
-	return truncateRunes(err.Error(), 2_000)
+	message := err.Error()
+	if denied := speechResourceDeniedUserMessage(message); denied != "" {
+		return denied
+	}
+	return truncateRunes(message, 2_000)
 }
 
 // taskLeaseRenewContext 给续租单独一份"不继承父 context 取消/时限"的上下文（仅 5 秒上限）。

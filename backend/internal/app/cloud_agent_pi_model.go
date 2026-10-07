@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 )
@@ -106,6 +107,19 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 			}
 			continue
 		}
+		// 重启恢复：上一个运行时进程已为这一步建好模型任务（可能已经出结果），
+		// 只是没来得及把结果交回就退出了。运行时对 /model 串行调用，此时仍挂着的
+		// 步骤任务只可能是这种遗留任务：接手等待它的结果，不再建新任务和订单。
+		adopt, released, err := s.adoptCloudAgentPiModelStep(userID, runID, state.ActiveTaskID)
+		if err != nil {
+			return nil, false, err
+		}
+		if adopt {
+			break
+		}
+		if released {
+			continue
+		}
 
 		canonical := canonicalFromRuntimeMessages(messages, state.Canonical.Tools, state.Canonical.SystemPrompt)
 		// A continuation starts a fresh Pi process. If its session snapshot was
@@ -135,7 +149,7 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 			},
 			"textOptions": map[string]any{
 				"stream":          true,
-				"thinking":        thinkingLevel != "off",
+				"thinking":        cloudAgentPiThinkingEnabled(thinkingLevel),
 				"maxOutputTokens": cloudAgentStepOutputBudget(state.StepLimits, state.BoostStepOutputBudget),
 			},
 		}
@@ -196,6 +210,39 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		return nil, false, err
 	}
 	return map[string]any{"text": result.Text, "reasoning": result.Reasoning, "toolCalls": runtimeToolCalls(result.ToolCalls)}, false, nil
+}
+
+// adoptCloudAgentPiModelStep 判断挂着的活动任务能否作为本步结果直接接手。
+// 排队、运行中或已成功的模型步骤直接接手；失败或已取消的先释放，由调用方重新调度。
+// 其它活动任务（运行根任务、上下文压缩）保持原有流程。
+func (s *Service) adoptCloudAgentPiModelStep(userID, runID, taskID string) (adopt, released bool, err error) {
+	task, err := s.repo.TaskForUser(userID, taskID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+	if task.Operation != cloudAgentStepOperation {
+		return false, false, nil
+	}
+	switch task.Status {
+	case model.TaskStatusQueued, model.TaskStatusRunning, model.TaskStatusSucceeded:
+		return true, false, nil
+	case model.TaskStatusFailed, model.TaskStatusCancelled:
+		if err := s.finishCloudAgentPiModelStep(userID, runID, taskID, "", ""); err != nil {
+			return false, false, err
+		}
+		return false, true, nil
+	}
+	return false, false, nil
+}
+
+// cloudAgentPiThinkingEnabled treats an omitted thinking level the same as Pi's
+// explicit "off" value. Pi omits the field when thinking is disabled, and the
+// Go JSON decoder represents that omitted field as an empty string.
+func cloudAgentPiThinkingEnabled(thinkingLevel string) bool {
+	return thinkingLevel != "" && thinkingLevel != "off"
 }
 
 // cloudAgentModelTaskRetryable 按上游真实 HTTP 状态判断失败是否是临时性的：

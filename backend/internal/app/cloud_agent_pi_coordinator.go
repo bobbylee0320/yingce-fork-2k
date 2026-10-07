@@ -14,8 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -292,17 +291,25 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 
 	// 4. 准备会话文件
 	sessionJSONL, _ := input["piSessionJSONL"].(string)
+	// ownSession 表示快照是本轮自己落库的，而不是续轮沿用的上一轮会话。
+	ownSession := false
 	if saved, sessionErr := s.repo.CloudAgentPiSession(userID, runID); sessionErr == nil && saved != nil && saved.SessionJSONL != "" {
 		sessionJSONL = saved.SessionJSONL
+		ownSession = true
 	} else if sessionErr != nil && !errors.Is(sessionErr, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("load session: %w", sessionErr)
 	}
 
-	sessionDir := filepath.Join(s.dataDir, "pi-sessions")
-	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
-		return fmt.Errorf("create session dir: %w", err)
+	// 崩溃恢复：最后答案已写进会话快照、运行却没来得及标记完成。这一回合已经结束，
+	// 直接收尾；再启动运行时会对同一提示词再调用一次模型、多扣一次费。
+	if ownSession && cloudAgentPiTurnSettled(sessionJSONL, &runtimeState) {
+		if runtimeState.PiResumePrompt != "" {
+			if err := s.saveCloudAgentPiResumePrompt(userID, runID, ""); err != nil {
+				return err
+			}
+		}
+		return s.completeCloudAgentPiRun(userID, runID)
 	}
-	sessionFile := filepath.Join(sessionDir, runID+".jsonl")
 
 	// 5. 构建完整的 Pi 请求（核心重构）
 	request, err := s.buildEnhancedPiRequest(ctx, EnhancedPiRequestParams{
@@ -315,9 +322,7 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 		ModelID:      modelID,
 		RuntimeState: &runtimeState,
 		Canonical:    &canonical,
-		SessionFile:  sessionFile,
 		SessionJSONL: sessionJSONL,
-		SessionDir:   sessionDir,
 	})
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
@@ -364,6 +369,49 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 
 	// 9. 完成运行
 	return s.completeCloudAgentPiRun(userID, runID)
+}
+
+// cloudAgentPiTurnSettled 判断本轮是否已在会话里完整结束：本轮已有成功的助手回复，
+// 没有挂着的任务或审批，且会话最后一条消息是不带工具调用的正常结束回复。
+// 只能用于本轮自己落库的快照：运行时的事件按顺序提交，助手回复计数增长之前，
+// 含本轮用户提示的快照已经落库，所以最后一条完成回复一定属于本轮。
+// 续轮沿用的上一轮会话最后一条也是完成回复，不能据此收尾。
+func cloudAgentPiTurnSettled(sessionJSONL string, state *cloudAgentRuntime) bool {
+	if sessionJSONL == "" || state == nil || state.PiAssistantResponses == 0 {
+		return false
+	}
+	if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil {
+		return false
+	}
+	lines := strings.Split(strings.TrimRight(sessionJSONL, "\n"), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		var entry struct {
+			Type    string `json:"type"`
+			Message struct {
+				Role       string `json:"role"`
+				StopReason string `json:"stopReason"`
+				Content    []struct {
+					Type string `json:"type"`
+				} `json:"content"`
+			} `json:"message"`
+		}
+		if err := json.Unmarshal([]byte(lines[i]), &entry); err != nil {
+			return false
+		}
+		if entry.Type != "message" {
+			continue
+		}
+		if entry.Message.Role != "assistant" || entry.Message.StopReason != "stop" {
+			return false
+		}
+		for _, block := range entry.Message.Content {
+			if block.Type == "toolCall" {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // completeCloudAgentPiRun 完成运行

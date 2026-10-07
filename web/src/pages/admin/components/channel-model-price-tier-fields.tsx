@@ -41,6 +41,8 @@ export function PriceTierFields({
     const resolutionOptions = video?.resolutions || [];
     const tokenEnabled = modelProtocolSupportsTokenBilling(capability, protocol);
     const isVideo = capability === "video";
+    const isAudio = capability === "audio";
+    const isDurationPriced = isVideo || isAudio;
     const isImage = capability === "image";
     return (
         <article className="admin-price-tier-card">
@@ -149,7 +151,7 @@ export function PriceTierFields({
                                     className="w-full"
                                     options={[
                                         { label: "按次", value: "fixed_request" },
-                                        { label: "按秒", value: "per_second", disabled: !isVideo },
+                                        { label: "按秒", value: "per_second", disabled: !isDurationPriced },
                                         { label: isVideo ? "视频 Token" : "Token", value: "token", disabled: !tokenEnabled },
                                     ]}
                                 />

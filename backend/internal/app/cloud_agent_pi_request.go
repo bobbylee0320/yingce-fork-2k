@@ -24,9 +24,7 @@ type EnhancedPiRequestParams struct {
 	ModelID      string
 	RuntimeState *cloudAgentRuntime
 	Canonical    *canonicalAgentRequest
-	SessionFile  string
 	SessionJSONL string
-	SessionDir   string
 }
 
 // buildEnhancedPiRequest 构建增强的 Pi 请求（核心方法）
@@ -36,8 +34,8 @@ func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiR
 	// 1. 构建工具列表（包括画布工具）
 	tools := s.buildCompletePiTools(params.Canonical.Tools)
 
-	// 2. 构建 Skills 配置
-	skillPaths := s.buildSkillPaths(params.RuntimeState.Skills)
+	// 2. 构建 Skills 配置。技能内容只经服务端读取工具提供，不交给运行时按路径加载：
+	// 技能路径是相对路径，运行时按自己的工作目录解析，会读到无关文件。
 	enabledSkills := s.buildSkillManifests(params.RuntimeState.Skills)
 
 	slog.Debug("agent enabled skills", "count", len(enabledSkills))
@@ -80,12 +78,9 @@ func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiR
 
 	// 10. 组装完整请求
 	request := cloudAgentPiProcessRequest{
-		// 会话信息
-		SessionFile:  params.SessionFile,
+		// 会话信息：只传数据库里的快照。会话文件与工作目录由运行时在自己的
+		// 临时目录里创建，独立容器里没有服务端的数据目录。
 		SessionJSONL: params.SessionJSONL,
-		SessionDir:   params.SessionDir,
-		Cwd:          s.dataDir,
-		AgentDir:     params.SessionDir,
 
 		// 标识信息
 		SessionId: params.RunID,
@@ -98,7 +93,6 @@ func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiR
 		SystemPrompt: params.SystemPrompt,
 
 		// 核心增强：完整的上下文传递
-		SkillPaths:    skillPaths,
 		EnabledSkills: enabledSkills,
 		Profile:       profile,
 		Memory:        memory,

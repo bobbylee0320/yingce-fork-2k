@@ -6,6 +6,7 @@ import { defaultPriceTier } from "../src/pages/admin/components/channel-model-pr
 
 const definition = (value: string, capability: ModelProtocolDefinition["capability"], enabled = true): ModelProtocolDefinition => ({ value, capability, enabled, label: value, create: "POST /test", contentType: "application/json", media: "url" });
 const protocols = [definition("disabled-text", "text", false), definition("text", "text"), definition("image", "image"), definition("video", "video")];
+const protocolsWithAudio = [...protocols, definition("audio", "audio")];
 
 describe("channel model editor drafts", () => {
     test("new drafts select an enabled protocol and never share price state", () => {
@@ -52,6 +53,15 @@ describe("channel model editor drafts", () => {
 describe("pricing write validation", () => {
     const draft = initialChannelModelValues(null, protocols);
     test("accepts an explicit free/default price", () => expect(() => validateChannelModelPrices(draft)).not.toThrow());
+    test("accepts audio per-second pricing", () => {
+        const audioDraft = {
+            ...initialChannelModelValues(null, protocolsWithAudio),
+            capability: "audio" as const,
+            protocol: "audio",
+            priceTiers: [{ ...defaultPriceTier(), billingMode: "per_second" as const, unitPrice: 1 }],
+        };
+        expect(() => validateChannelModelPrices(audioDraft)).not.toThrow();
+    });
     test("requires prices and exactly one or zero fallback tiers", () => {
         expect(() => validateChannelModelPrices({ ...draft, priceTiers: [] })).toThrow("至少");
         expect(() => validateChannelModelPrices({ ...draft, priceTiers: [defaultPriceTier(), defaultPriceTier()] })).toThrow("只能");

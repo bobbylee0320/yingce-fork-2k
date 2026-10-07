@@ -33,14 +33,15 @@ func BuiltinRegistry() *Registry {
 			PatchFields: editableNodeFields("metadata.content", "Markdown 正文", "Markdown 正文"),
 		},
 		generatedMediaDescriptor("image", "2", "图片", 720, 405, "image", ConnectionPolicy{
-			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image"},
+			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image", "character"},
 		}),
 		generatedMediaDescriptor("video", "2", "视频", 720, 405, "video", ConnectionPolicy{
-			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image", "video", "audio"},
+			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image", "video", "audio", "character"},
 		}),
 		generatedMediaDescriptor("audio", "2", "音频", 340, 120, "audio", ConnectionPolicy{
-			CanSource: true, CanTarget: true, CanReference: true, MaxInputCount: 1, AcceptedInputKinds: []string{"text"},
+			CanSource: true, CanTarget: true, CanReference: true, MaxInputCount: 1, AcceptedInputKinds: []string{"text", "character"},
 		}),
+		characterDescriptor(),
 		{
 			Type: "frame", Version: "1", Label: "背板", DefaultWidth: 760, DefaultHeight: 520,
 			Purpose:       "在画布上建立可移动、可折叠的视觉分区，用来归组相关节点；背板本身不承载创作正文或生成结果。",
@@ -103,6 +104,25 @@ func BuiltinRegistry() *Registry {
 		panic(err)
 	}
 	return registry
+}
+
+// characterDescriptor 是角色卡能力：画布上是 text + metadata.workflowKind=character 的节点，
+// 设定、三视图与声音都来自账号内的角色资产而非节点正文。它可以被发现、精读、连线和引用，
+// 但不能用 add_node 凭空创建：必须经 canvas_create_character 用真实图片/音频建角色资产，名称和设定只随角色资产更新。
+func characterDescriptor() Descriptor {
+	return Descriptor{
+		Type: "character", Version: "1", Label: "角色卡", DefaultWidth: 264, DefaultHeight: 352,
+		Purpose:     "引用账号角色库中的角色资产，统一提供角色设定、三视图/形象图和绑定声音，用来保持人物在多次生成中的一致性。",
+		GoodFor:     []string{"图片或视频生成时锁定人物外观", "多镜头保持同一角色一致", "角色配音时使用绑定声音", "只取角色文字设定作为提示词来源"},
+		NotIdealFor: []string{"临时一次性的人物描述（直接写进提示词或文本节点）", "用 add_node 新建（应使用 canvas_create_character 打包形象图片与声音）", "承载普通正文（节点正文不是角色设定）"},
+		Tradeoffs:   []string{"设定与媒体随角色资产版本变化，提交时会校验版本", "未绑定形象或声音时对应引用不可用，需先读取 character.imageReference/audioReference"},
+		Actions:     []string{"read_character", "use_as_reference", "use_as_text_source"},
+		InputKind:   "character",
+		Connection:  ConnectionPolicy{CanSource: true, CanReference: true},
+		CanUpdate:   true,
+		PatchFields: positionPatchFields(),
+		Variant:     &NodeVariant{BaseType: "text", WorkflowKind: "character"},
+	}
 }
 
 func generatedMediaDescriptor(nodeType, version, label string, width, height float64, generationMode string, connection ConnectionPolicy) Descriptor {

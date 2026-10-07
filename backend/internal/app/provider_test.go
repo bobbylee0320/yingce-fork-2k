@@ -968,6 +968,19 @@ func TestProviderUserFacingErrorMessageClassifiesRejectedRequestBodies(t *testin
 	}
 }
 
+func TestProviderUserFacingErrorMessageExplainsDoubaoResourceDenial(t *testing.T) {
+	message := providerUserFacingErrorMessage(providerHTTPError{
+		StatusCode: http.StatusForbidden,
+		Body:       `{"header":{"code":45000030,"message":"[resource_id=volc.seedtts.default] requested resource not granted"}}`,
+	})
+	if !strings.Contains(message, "语音合成服务未开通") {
+		t.Fatalf("providerUserFacingErrorMessage() = %q", message)
+	}
+	if strings.Contains(message, "API Key") {
+		t.Fatalf("resource denial was reported as an API key failure: %q", message)
+	}
+}
+
 func TestProviderUserFacingErrorMessageOnlyClassifiesValidationStatuses(t *testing.T) {
 	// 鉴权失败与网关错误的正文可能是密钥诊断或代理 HTML，不参与归类。
 	for _, statusCode := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusBadGateway} {

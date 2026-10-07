@@ -11,19 +11,6 @@ import (
 
 // Skills Configuration Builders
 
-// buildSkillPaths 构建 Skills 路径列表
-func (s *Service) buildSkillPaths(skills []cloudAgentSkill) []string {
-	if len(skills) == 0 {
-		return []string{}
-	}
-
-	paths := make([]string, 0, len(skills))
-	for _, skill := range skills {
-		paths = append(paths, cloudAgentSkillPaths(skill)...)
-	}
-	return paths
-}
-
 // buildSkillManifests 构建 Skills 清单（传递给 Pi）
 func (s *Service) buildSkillManifests(skills []cloudAgentSkill) []map[string]any {
 	if len(skills) == 0 {

@@ -101,6 +101,9 @@ func cloudAgentCapabilityGuide() string {
 		b.WriteString(descriptor.Type)
 		b.WriteString("）：")
 		b.WriteString(descriptor.Purpose)
+		if variant := descriptor.Variant; variant != nil {
+			fmt.Fprintf(&b, " 画布识别：type=%s 且 workflowKind=%s，读取结果 kind=%s；不能用 add_node 新建。", variant.BaseType, variant.WorkflowKind, descriptor.Type)
+		}
 		if len(descriptor.GoodFor) > 0 {
 			b.WriteString(" 适合：")
 			b.WriteString(strings.Join(descriptor.GoodFor, "、"))

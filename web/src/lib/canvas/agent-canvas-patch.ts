@@ -83,14 +83,15 @@ export function applyAgentCanvasPatch(project: CanvasProject, patch: AgentCanvas
     return { ...project, nodes, connections, updatedAt: patch.updatedAt || project.updatedAt };
 }
 
-export function mergeAgentCanvasEditor(previous: CanvasProject, incoming: CanvasProject, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+export function mergeAgentCanvasEditor(previous: CanvasProject, incoming: CanvasProject, nodes: CanvasNodeData[], connections: CanvasConnection[], editorProject?: CanvasProject) {
     const changes = <T extends { id: string }>(before: T[], after: T[]): Change<T>[] => {
         const byId = new Map(before.map((item) => [item.id, item]));
         const afterIds = new Set(after.map((item) => item.id));
         return [...after.filter((item) => !equal(item, byId.get(item.id))).map((item) => ({ before: byId.get(item.id) ?? null, after: item })), ...before.filter((item) => !afterIds.has(item.id)).map((item) => ({ before: item, after: null }))];
     };
+    const editorState = editorProject || { ...previous, nodes, connections };
     const projected = applyAgentCanvasPatch(
-        { ...previous, nodes, connections },
+        { ...previous, nodes: editorState.nodes, connections: editorState.connections },
         {
             canvasId: previous.id,
             updatedAt: incoming.updatedAt,
@@ -101,12 +102,12 @@ export function mergeAgentCanvasEditor(previous: CanvasProject, incoming: Canvas
     const merged = { ...projected } as CanvasProject & Record<string, unknown>;
     const before = previous as CanvasProject & Record<string, unknown>;
     const after = incoming as CanvasProject & Record<string, unknown>;
-    const editor = { ...previous, nodes, connections } as CanvasProject & Record<string, unknown>;
+    const editor = editorState as CanvasProject & Record<string, unknown>;
     for (const key of new Set([...Object.keys(before), ...Object.keys(after), ...Object.keys(editor)])) {
         if (["id", "revision", "updatedAt", "remoteContentHash", "viewport", "nodes", "connections"].includes(key)) continue;
         const value = mergeValue(editor[key], before[key], after[key]);
         if (value === undefined) delete merged[key];
         else merged[key] = value;
     }
-    return { ...merged, revision: incoming.revision, updatedAt: incoming.updatedAt, viewport: editor.viewport } as CanvasProject;
+    return { ...merged, revision: incoming.revision, updatedAt: incoming.updatedAt, viewport: editorState.viewport } as CanvasProject;
 }

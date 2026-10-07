@@ -194,7 +194,7 @@ func (s *Service) cloudAgentMediaModelName(a cloudAgentMediaArgs) (string, error
 }
 
 func cloudAgentReferenceDescriptor(node map[string]any) (cloudAgentNodeCapability, cloudAgentReferenceAdapter, error) {
-	descriptor, known := cloudAgentNodeCapabilityForType(stringValue(node["type"]))
+	descriptor, known := cloudAgentNodeCapabilityForNode(node)
 	if !known || !descriptor.Connection.CanReference || descriptor.InputKind == "" {
 		return cloudAgentNodeCapability{}, cloudAgentReferenceAdapter{}, BadAuthRequest("该节点不能作为媒体参考资产")
 	}
@@ -343,8 +343,9 @@ func cloudAgentMediaDocument(repo *repository.Repository, userID, canvasID strin
 		return nil, nil, nil, BadAuthRequest("来源镜头节点不在当前画布")
 	}
 	if source := nodes[args.SourceNodeID]; source != nil {
-		descriptor, known := cloudAgentNodeCapabilityForType(stringValue(source["type"]))
-		if !known || !descriptor.Connection.CanSource || descriptor.InputKind != "text" {
+		descriptor, known := cloudAgentNodeCapabilityForNode(source)
+		// 角色卡作为文本来源时只取其角色设定（由 cloudAgentMediaCharacters 校验非空）。
+		if !known || !descriptor.Connection.CanSource || (descriptor.InputKind != "text" && descriptor.InputKind != "character") {
 			return nil, nil, nil, BadAuthRequest("sourceNodeId 仅接受可作为文本输入的节点；媒体资产请放入 referenceNodeIds，并将 sourceNodeId 留空，不要重复传入")
 		}
 	}
@@ -519,8 +520,17 @@ func validateCloudAgentMediaReferences(mode string, refs map[string]any) error {
 			return BadAuthRequest("图片生成仅支持图片参考资产")
 		}
 	case "audio":
-		if imageCount > 0 || videoCount > 0 || audioCount > 0 {
-			return BadAuthRequest("当前音频生成只支持文本输入，暂不支持媒体参考资产")
+		if videoCount > 0 {
+			return BadAuthRequest("音频生成不能使用参考视频")
+		}
+		if imageCount > 0 && audioCount > 0 {
+			return BadAuthRequest("参考图片和参考音频不能同时使用")
+		}
+		if imageCount > 1 {
+			return BadAuthRequest("音频生成最多使用 1 张参考图片")
+		}
+		if audioCount > 3 {
+			return BadAuthRequest("音频生成最多使用 3 段参考音频")
 		}
 	case "video":
 		// Video reference admission is completed against the selected model's
