@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -81,8 +82,10 @@ type Service struct {
 	piRunnerMu               sync.Mutex
 	piRunnerWg               sync.WaitGroup
 	piRunners                map[string]context.CancelFunc
-	piRunnersClosed          bool
-	disablePiRuntime         bool
+	// piRunnerRestarts 记录审批恢复时旧会话仍在收尾的运行，旧会话退出后再启动一次。
+	piRunnerRestarts map[string]struct{}
+	piRunnersClosed  bool
+	disablePiRuntime bool
 	// legacyCloudAgentRootTask is enabled only by tests that exercise the pre-Pi
 	// model-worker path. Runtime availability must not change root task semantics.
 	legacyCloudAgentRootTask bool
@@ -164,6 +167,7 @@ func (s *Service) StartWorker() {
 	s.startResourceDeletionWorker(ctx)
 	s.startSkillSyncWorker(ctx)
 	s.startPaymentWorker(ctx)
+	go s.syncAgentSessionLimit()
 	s.runWorkerLoop(func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Second)
 		defer ticker.Stop()
@@ -176,6 +180,19 @@ func (s *Service) StartWorker() {
 			}
 		}
 	})
+}
+
+func (s *Service) syncAgentSessionLimit() {
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		slog.Warn("agent session limit load failed", "error", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := s.applyAgentSessionLimit(ctx, policy.Task.AgentMaxSessions); err != nil {
+		slog.Warn("agent session limit apply failed", "error", err)
+	}
 }
 
 func (s *Service) BeginDrain() { s.backgroundWorkers().BeginDrain() }
