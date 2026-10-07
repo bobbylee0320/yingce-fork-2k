@@ -1,12 +1,14 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 )
 
 const directS3UploadTTL = 5 * time.Minute
@@ -133,6 +135,10 @@ func (s *Service) CompleteDirectImageUpload(userID string, resourceID string) (*
 	if metadata.Size != resource.Size || (metadata.ContentType != "" && !strings.EqualFold(metadata.ContentType, resource.MimeType)) {
 		return nil, BadAuthRequest("S3 图片内容与上传声明不一致")
 	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
 	day, err := s.reserveUserUploadQuota(userID, resource.Size)
 	if err != nil {
 		_ = deleteS3Object(setting, resource.ObjectKey)
@@ -140,10 +146,14 @@ func (s *Service) CompleteDirectImageUpload(userID string, resourceID string) (*
 		return nil, err
 	}
 	completedAt := time.Now()
-	claimed, err := s.repo.CompletePendingResourceUpload(userID, resource.ID, metadata.ETag, completedAt)
+	claimed, err := s.repo.CompletePendingResourceUploadWithinStorageLimit(userID, resource.ID, metadata.ETag, completedAt, gigabytes(policy.Resource.StoredFileGB))
 	if err != nil {
 		s.releaseUserUploadQuota(userID, day, resource.Size)
-		return nil, err
+		if errors.Is(err, repository.ErrUploadStorageLimit) {
+			_ = deleteS3Object(setting, resource.ObjectKey)
+			_, _ = s.repo.FailPendingResourceUpload(userID, resource.ID, "对象已上传，但账号存储额度不足", time.Now())
+		}
+		return nil, uploadReservationError(err)
 	}
 	if !claimed {
 		s.releaseUserUploadQuota(userID, day, resource.Size)

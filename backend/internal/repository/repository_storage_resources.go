@@ -162,13 +162,6 @@ func (r *Repository) UpdateResourceThumbnail(userID string, id string, values ma
 	return result.RowsAffected == 1, result.Error
 }
 
-func (r *Repository) CompletePendingResourceUpload(userID string, id string, etag string, updatedAt time.Time) (bool, error) {
-	result := r.db.Model(&model.Resource{}).
-		Where("id = ? AND user_id = ? AND status = ?", id, userID, model.ResourceStatusPending).
-		Updates(map[string]any{"status": model.ResourceStatusReady, "e_tag": etag, "error": "", "updated_at": updatedAt})
-	return result.RowsAffected == 1, result.Error
-}
-
 func (r *Repository) FailPendingResourceUpload(userID string, id string, reason string, updatedAt time.Time) (bool, error) {
 	result := r.db.Model(&model.Resource{}).
 		Where("id = ? AND user_id = ? AND status = ?", id, userID, model.ResourceStatusPending).
