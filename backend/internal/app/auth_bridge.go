@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"infinite-canvas/backend/internal/auth"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/auth"
+	"yingce/backend/internal/model"
 )
 
 const SessionCookieName = auth.SessionCookieName

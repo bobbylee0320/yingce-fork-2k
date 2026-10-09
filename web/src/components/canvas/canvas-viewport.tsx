@@ -7,7 +7,7 @@ import { applyCanvasLiveViewport, subscribeCanvasViewportPreview } from "@/lib/c
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { ViewportTransform } from "@/types/canvas";
 
-type InfiniteCanvasProps = {
+type CanvasViewportProps = {
     interactive?: boolean;
     containerRef: React.RefObject<HTMLDivElement | null>;
     viewport: ViewportTransform;
@@ -45,7 +45,26 @@ type PinchState = {
     initialScale: number;
 };
 
-export function InfiniteCanvas({ interactive = true, containerRef, viewport, appearance, backgroundMode = "lines", onViewportChange, onViewportPreviewChange, onCanvasMouseDown, boxSelectEnabled = false, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, onFileDragEnter, onFileDragLeave, onFileDragOver, graphicsLayer, children }: InfiniteCanvasProps) {
+export function CanvasViewport({
+    interactive = true,
+    containerRef,
+    viewport,
+    appearance,
+    backgroundMode = "lines",
+    onViewportChange,
+    onViewportPreviewChange,
+    onCanvasMouseDown,
+    boxSelectEnabled = false,
+    onCanvasDoubleClick,
+    onCanvasDeselect,
+    onContextMenu,
+    onDrop,
+    onFileDragEnter,
+    onFileDragLeave,
+    onFileDragOver,
+    graphicsLayer,
+    children,
+}: CanvasViewportProps) {
     const colorTheme = useActiveTheme();
     const resolvedAppearance = resolveCanvasAppearance(appearance, colorTheme);
     const panState = useRef({
@@ -118,7 +137,9 @@ export function InfiniteCanvas({ interactive = true, containerRef, viewport, app
         [containerRef],
     );
 
-    const syncViewport = useCallback(() => { if (interactive) onViewportChange(viewportRef.current); }, [interactive, onViewportChange]);
+    const syncViewport = useCallback(() => {
+        if (interactive) onViewportChange(viewportRef.current);
+    }, [interactive, onViewportChange]);
 
     const scheduleViewportChange = useCallback(
         (next: ViewportTransform, commitAfterIdle = false) => {
@@ -128,14 +149,15 @@ export function InfiniteCanvas({ interactive = true, containerRef, viewport, app
             const container = containerRef.current;
             if (container) container.dataset.canvasViewportInteracting = "true";
             nextViewportRef.current = next;
-            if (!frameRef.current) frameRef.current = requestAnimationFrame((now) => {
-                frameRef.current = null;
-                const pending = nextViewportRef.current;
-                if (!pending) return;
-                const notify = now - lastPreviewNotifyRef.current >= 32;
-                applyCanvasLiveViewport(containerRef.current, pending, notify);
-                if (notify) lastPreviewNotifyRef.current = now;
-            });
+            if (!frameRef.current)
+                frameRef.current = requestAnimationFrame((now) => {
+                    frameRef.current = null;
+                    const pending = nextViewportRef.current;
+                    if (!pending) return;
+                    const notify = now - lastPreviewNotifyRef.current >= 32;
+                    applyCanvasLiveViewport(containerRef.current, pending, notify);
+                    if (notify) lastPreviewNotifyRef.current = now;
+                });
             if (!commitAfterIdle) return;
             if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
             syncTimerRef.current = setTimeout(() => {
@@ -203,11 +225,14 @@ export function InfiniteCanvas({ interactive = true, containerRef, viewport, app
 
             if (looksLikeTrackpadPan) {
                 const panX = event.shiftKey && absX < 1 ? deltaY : deltaX;
-                scheduleViewportChange({
-                    x: current.x - panX,
-                    y: current.y - (event.shiftKey && absX < 1 ? 0 : deltaY),
-                    k: current.k,
-                }, true);
+                scheduleViewportChange(
+                    {
+                        x: current.x - panX,
+                        y: current.y - (event.shiftKey && absX < 1 ? 0 : deltaY),
+                        k: current.k,
+                    },
+                    true,
+                );
                 return;
             }
 
@@ -221,11 +246,14 @@ export function InfiniteCanvas({ interactive = true, containerRef, viewport, app
             const worldX = (mouseX - current.x) / current.k;
             const worldY = (mouseY - current.y) / current.k;
 
-            scheduleViewportChange({
-                x: mouseX - worldX * newScale,
-                y: mouseY - worldY * newScale,
-                k: newScale,
-            }, true);
+            scheduleViewportChange(
+                {
+                    x: mouseX - worldX * newScale,
+                    y: mouseY - worldY * newScale,
+                    k: newScale,
+                },
+                true,
+            );
         },
         [containerRef, scheduleViewportChange],
     );
@@ -317,7 +345,6 @@ export function InfiniteCanvas({ interactive = true, containerRef, viewport, app
             setIsPanning(true);
             document.body.style.cursor = "grabbing";
         }
-
     };
 
     useEffect(() => {
@@ -425,16 +452,18 @@ export function InfiniteCanvas({ interactive = true, containerRef, viewport, app
             data-canvas-viewport
             data-canvas-pan-state={isPanning ? "grabbing" : isSpacePressed || !boxSelectEnabled ? "grab" : undefined}
             className={`relative h-full w-full select-none overflow-hidden touch-none ${isPanning ? "cursor-grabbing" : isSpacePressed || !boxSelectEnabled ? "cursor-grab" : "canvas-cursor-select"}`}
-            style={{
-                background: resolvedAppearance.background,
-                overscrollBehavior: "none",
-                "--canvas-live-x": `${viewport.x}px`,
-                "--canvas-live-y": `${viewport.y}px`,
-                "--canvas-live-scale": viewport.k,
-                "--canvas-live-inverse-scale": 1 / Math.max(viewport.k, 0.05),
-                "--canvas-committed-scale": viewport.k,
-                "--canvas-live-scale-ratio": 1,
-            } as React.CSSProperties}
+            style={
+                {
+                    background: resolvedAppearance.background,
+                    overscrollBehavior: "none",
+                    "--canvas-live-x": `${viewport.x}px`,
+                    "--canvas-live-y": `${viewport.y}px`,
+                    "--canvas-live-scale": viewport.k,
+                    "--canvas-live-inverse-scale": 1 / Math.max(viewport.k, 0.05),
+                    "--canvas-committed-scale": viewport.k,
+                    "--canvas-live-scale-ratio": 1,
+                } as React.CSSProperties
+            }
             onPointerDown={handlePointerDown}
             onDoubleClick={(event) => {
                 const target = event.target instanceof Element ? event.target : null;
@@ -476,10 +505,7 @@ export function InfiniteCanvas({ interactive = true, containerRef, viewport, app
         >
             <CanvasGrid appearance={appearance} mode={backgroundMode} />
             {graphicsLayer}
-            <div
-                data-canvas-world-layer
-                className="canvas-world-layer absolute origin-top-left"
-            >
+            <div data-canvas-world-layer className="canvas-world-layer absolute origin-top-left">
                 <div data-canvas-world-raster-layer className="canvas-world-raster-layer absolute origin-top-left">
                     {children}
                 </div>

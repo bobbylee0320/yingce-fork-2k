@@ -5,15 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/repository"
 	"log"
 	"net/mail"
 	"regexp"
 	"strings"
 	"time"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/repository"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"

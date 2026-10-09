@@ -7,16 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"infinite-canvas/backend/internal/kernel"
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+	"yingce/backend/internal/kernel"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/outbound"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/outbound"
 
 	"gorm.io/gorm"
 )

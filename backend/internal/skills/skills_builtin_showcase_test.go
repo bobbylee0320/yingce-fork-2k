@@ -10,7 +10,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"infinite-canvas/backend/builtin"
+	"yingce/backend/builtin"
 )
 
 func TestBuiltinShowcasePreservesSnakeCaseURL(t *testing.T) {

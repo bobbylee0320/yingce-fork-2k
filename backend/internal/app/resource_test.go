@@ -18,11 +18,11 @@ import (
 	"testing/iotest"
 	"time"
 
-	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/outbound/outboundtest"
-	"infinite-canvas/backend/internal/repository"
-	"infinite-canvas/backend/internal/storage"
+	"yingce/backend/internal/assets"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/outbound/outboundtest"
+	"yingce/backend/internal/repository"
+	"yingce/backend/internal/storage"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

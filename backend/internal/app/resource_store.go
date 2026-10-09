@@ -21,8 +21,8 @@ import (
 
 	"github.com/gabriel-vasile/mimetype"
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/assets"
+	"yingce/backend/internal/model"
 )
 
 func (s *Service) UploadResource(userID string, header *multipart.FileHeader, kind string, width int, height int, durationMs int64, uploadIdentity ...string) (*model.Resource, error) {

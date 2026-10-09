@@ -47,7 +47,7 @@ type CanvasStore = {
 };
 
 const initialViewport: ViewportTransform = { x: 0, y: 0, k: 1 };
-export const CANVAS_STORE_KEY = "infinite-canvas:canvas_store";
+export const CANVAS_STORE_KEY = "yingce:canvas_store";
 type PersistedCanvasState = Pick<CanvasStore, "projects">;
 type QueuedCanvasPersist = {
     name: string;
@@ -85,7 +85,7 @@ type CanvasStorageLockOptions = {
     requireCrossRealmLock?: boolean;
 };
 
-const CANVAS_STORAGE_LOCK_PREFIX = "infinite-canvas:canvas-generation-storage-lock:";
+const CANVAS_STORAGE_LOCK_PREFIX = "yingce:canvas-generation-storage-lock:";
 const canvasStorageTails = new Map<string, Promise<void>>();
 
 function runWithBrowserCanvasStorageLock<T>(scope: string, operation: () => Promise<T>, options: CanvasStorageLockOptions) {

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // A deleted canvas/project must not be resurrected by an old download worker.

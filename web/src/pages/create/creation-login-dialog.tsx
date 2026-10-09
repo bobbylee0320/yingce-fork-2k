@@ -66,7 +66,12 @@ export function CreationLoginDialog({ open, onClose }: { open: boolean; onClose:
                         登录并继续
                     </Button>
                 </form>
-                <p className="text-center text-xs text-foreground/55">还没有账号？ <Link className="text-primary hover:underline" to="/register?next=%2F" onClick={onClose}>注册</Link></p>
+                <p className="text-center text-xs text-foreground/55">
+                    还没有账号？{" "}
+                    <Link className="text-primary hover:underline" to="/register?next=%2F" onClick={onClose}>
+                        注册
+                    </Link>
+                </p>
             </div>
         </AppModal>
     );

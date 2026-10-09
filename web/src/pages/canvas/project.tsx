@@ -59,7 +59,7 @@ import { CanvasPrevisTemplateModal } from "@/components/canvas/previs/canvas-pre
 import { CanvasFileDropOverlay } from "@/components/canvas/canvas-file-drop-overlay";
 import { CanvasUploadModal } from "@/components/canvas/canvas-upload-modal";
 import { CanvasPanoramaConfigModal } from "@/components/canvas/canvas-panorama-config-modal";
-import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
+import { CanvasViewport } from "@/components/canvas/canvas-viewport";
 import { Minimap } from "@/components/canvas/canvas-mini-map";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { handleListGenerate } from "./list-mode-generator";
@@ -196,10 +196,10 @@ export default function CanvasPage() {
 
     if (!mounted) return <CanvasRefreshShell />;
 
-    return <InfiniteCanvasPage />;
+    return <CanvasViewportPage />;
 }
 
-function InfiniteCanvasPage() {
+function CanvasViewportPage() {
     // 命令式确认必须走 App.useApp().modal；静态 Modal.confirm 拿不到主题和 App 上下文。
     const { message, modal } = App.useApp();
     const queryClient = useQueryClient();
@@ -2609,7 +2609,7 @@ function InfiniteCanvasPage() {
 
                         <div className="relative flex min-h-0 min-w-0 flex-1">
                             <div className="relative min-w-0 flex-1 overflow-hidden">
-                                <InfiniteCanvas
+                                <CanvasViewport
                                     interactive={!versions.preview}
                                     containerRef={containerRef}
                                     viewport={viewport}
@@ -2725,7 +2725,7 @@ function InfiniteCanvasPage() {
                                             />
                                         </CanvasNodeGraphContext.Provider>
                                     </CanvasNodeActionContext.Provider>
-                                </InfiniteCanvas>
+                                </CanvasViewport>
 
                                 <CanvasActiveTaskPanel tasks={activeTasks} onCancelTask={cancelCanvasTask} topInset={focusMode ? "var(--space-3)" : "var(--canvas-topbar-offset)"} />
 

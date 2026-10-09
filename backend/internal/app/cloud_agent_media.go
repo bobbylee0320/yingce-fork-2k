@@ -11,8 +11,8 @@ import (
 	"unicode/utf8"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // The Agent uses the same public catalog as the composer, never a second routing policy.

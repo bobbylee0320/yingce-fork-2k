@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"infinite-canvas/backend/internal/kernel"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -12,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"unicode/utf8"
+	"yingce/backend/internal/kernel"
 )
 
 const maxAPICallPayloadBytes = 128 << 10

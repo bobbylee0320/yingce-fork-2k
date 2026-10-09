@@ -51,15 +51,25 @@ export function applyActorReferenceMaterial(root: Object3D, baseColor: string) {
             uMetalness: { value: 0.05 },
         },
         vertexShader: `
+            #include <common>
+            #include <skinning_pars_vertex>
+
             varying vec3 vNormal;
             varying vec3 vViewPosition;
             varying float vHeight;
 
             void main() {
-                vNormal = normalize(normalMatrix * normal);
-                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                #include <beginnormal_vertex>
+                #include <skinbase_vertex>
+                #include <skinnormal_vertex>
+                #include <defaultnormal_vertex>
+                #include <begin_vertex>
+                #include <skinning_vertex>
+
+                vNormal = normalize(transformedNormal);
+                vec4 mvPosition = modelViewMatrix * vec4(transformed, 1.0);
                 vViewPosition = -mvPosition.xyz;
-                vHeight = position.y;
+                vHeight = transformed.y;
                 gl_Position = projectionMatrix * mvPosition;
             }
         `,

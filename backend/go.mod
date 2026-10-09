@@ -1,4 +1,4 @@
-module infinite-canvas/backend
+module yingce/backend
 
 go 1.25.0
 

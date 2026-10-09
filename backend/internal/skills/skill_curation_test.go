@@ -3,9 +3,9 @@ package skills
 import (
 	"encoding/json"
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
 	"reflect"
 	"testing"
+	"yingce/backend/internal/model"
 )
 
 func TestSkillCurationManagementAvailable(t *testing.T) {

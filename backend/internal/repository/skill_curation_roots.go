@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 const UnassignedSkillRoot = "__unassigned__"

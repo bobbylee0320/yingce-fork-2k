@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/platform"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
 )
 
 const newAPIChannel2TaskSyncMaxAge = 5 * time.Minute

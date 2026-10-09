@@ -3,7 +3,7 @@ package database
 import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func migrateSkillCurationRoots(tx *gorm.DB) error {

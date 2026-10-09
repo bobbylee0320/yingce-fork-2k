@@ -11,11 +11,19 @@ import (
 	"fmt"
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgentCall, result any, err error) bool {
+	if state != nil && err == nil {
+		if cloudAgentLessonToolEligible(call.Function.Name) {
+			state.LessonEligibleToolSuccesses++
+		}
+		if call.Function.Name == "remember_lesson" {
+			state.RememberLessonSuccesses++
+		}
+	}
 	payload := map[string]any{"toolName": call.Function.Name, "callId": call.ID, "arguments": call.Function.Arguments}
 	if call.Function.Name == "skill_read_file" {
 		var args struct {

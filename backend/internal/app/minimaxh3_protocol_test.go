@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/protocol"
 )
 
 func TestMinimaxH3OfficialRuntimeDownloadsHDResult(t *testing.T) {

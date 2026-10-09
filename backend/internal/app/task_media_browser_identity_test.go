@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // 可选的 Node runner 只替换浏览器 API/存储边界；任务完成和素材落库使用真实实现。

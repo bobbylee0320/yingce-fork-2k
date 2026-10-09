@@ -13,11 +13,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/auth"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/platform"
-	"infinite-canvas/backend/internal/repository"
-	"infinite-canvas/backend/internal/service"
+	"yingce/backend/internal/auth"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
+	"yingce/backend/internal/repository"
+	"yingce/backend/internal/service"
 )
 
 func TestChunkAdmissionReservesBeforeBody(t *testing.T) {

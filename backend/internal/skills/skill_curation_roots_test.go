@@ -2,10 +2,10 @@ package skills
 
 import (
 	"encoding/json"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
 	"reflect"
 	"testing"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 func TestSkillCurationRootManagementAvailable(t *testing.T) {

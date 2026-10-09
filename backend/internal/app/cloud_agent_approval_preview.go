@@ -9,10 +9,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"infinite-canvas/backend/internal/canvas/capability"
-	"infinite-canvas/backend/internal/canvas/layout"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/canvas/capability"
+	"yingce/backend/internal/canvas/layout"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // cloudAgentApprovalPreview is server-authored explanatory data. It never

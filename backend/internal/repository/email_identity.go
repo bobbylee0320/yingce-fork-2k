@@ -1,9 +1,9 @@
 package repository
 
 import (
-	"infinite-canvas/backend/internal/emailidentity"
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/emailidentity"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
 )

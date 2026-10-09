@@ -8,13 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/kernel"
 	"io"
 	"strings"
 	"time"
+	"yingce/backend/internal/assets"
+	"yingce/backend/internal/kernel"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
 )

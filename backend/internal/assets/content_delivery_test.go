@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/storage"
+	"yingce/backend/internal/storage"
 )
 
 func TestNonMediaDeliveryUsesPlatform(t *testing.T) {

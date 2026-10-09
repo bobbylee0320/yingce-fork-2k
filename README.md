@@ -61,7 +61,7 @@ GitHub 用户：[@TripsCoder](https://github.com/TripsCoder) · [@sugtex](https:
 | Alpha-M·Break | 15739564793@qq.com |
 | 不吃鸭梨 | elio02519@gmail.com |
 | 九月 | 563641352@qq.com |
-| A | jaiboxuan1205@gmail.com |
+| A | jiaboxuan1205@gmail.com |
 
 ## 核心能力
 
@@ -206,7 +206,7 @@ curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/script
 - [画布操作手册](docs/content/docs/canvas/canvas-node-manual.mdx)
 - [插件系统](docs/content/docs/plugins/plugin-system.mdx)
 - [待办与待测试](docs/content/docs/progress/todo.mdx) · [待测试清单](docs/content/docs/progress/pending-test.mdx)
-- [更新日志](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md) · [上游声明](NOTICE)
+- [更新日志](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md)
 
 ### 验证命令
 
@@ -223,9 +223,9 @@ cd backend && go test ./...
 cd docs && bun run types:check
 ```
 
-## 许可证和上游
+## 许可证
 
-本项目采用 [MIT](LICENSE) 协议。影策基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) 的早期版本进行二次开发，上游作者和贡献者保留其对应代码的权利与署名。
+本项目采用 [MIT](LICENSE) 协议。项目特定代码的版权归 Open AI Canvas 贡献者所有；第三方组件按各自附带的许可证和版权声明使用。
 
 ---
 

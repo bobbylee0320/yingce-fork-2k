@@ -38,6 +38,8 @@ describe("workspace route loading", () => {
         expect(router).toContain('<RequireAuth allowAnonymous={isGuestWorkspacePath(pathname)}>');
         expect(router).toContain('{ path: "/", element: deferred(<CreatePage />) }');
         expect(router).toContain('{ path: "/create", element: deferred(<CreatePage />) }');
+        expect(router).toContain('{ path: "/assets", element: <RequireAuth>{deferred(<AssetsPage />)}</RequireAuth> }');
+        expect(router).toContain('{ path: "/canvas/:id", element: <RequireAuth><CanvasProjectPage /></RequireAuth> }');
         expect(router).not.toContain('path: "/home"');
         expect(router).not.toContain("HomePage");
         expect(navigation).toContain('{ ...toolItem("create", "/"), id: "home", title: "创作" }');

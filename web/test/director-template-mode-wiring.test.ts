@@ -84,7 +84,9 @@ describe("模式接线", () => {
     });
 
     test("时间轴只在 capabilities.timeline 为真时渲染", () => {
-        expect(workbench).toContain("{capabilities.timeline ? <PrevisSequencer");
+        const timeline = slice(workbench, "{capabilities.timeline ?", ") : null}");
+        expect(timeline).toContain("<PrevisSequencer");
+        expect(workbench.match(/<PrevisSequencer\b/g)).toHaveLength(1);
     });
 
     test("动画模式把 Transform 轨迹接入视口，隐藏演员和零长度轨迹不显示", () => {
@@ -151,12 +153,11 @@ describe("模式接线", () => {
         expect(workbench).not.toContain("keyframes: [{ id: nanoid(), time: 0, transform: start }");
     });
 
-    test("小屏把属性检查器放到下方而不是隐藏，姿态与骨骼入口仍可达", () => {
-        // 窄屏下检查器改为可开合的侧滑面板，dock 提供开关入口，而不是直接隐藏。
+    test("小屏通过 dock 开合属性检查器，姿态与骨骼入口仍可达", () => {
         const workbenchCss = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/canvas-previs-workbench.css"), "utf8");
         expect(workbench).toContain('className={`pv-panel pv-panel--right thin-scrollbar ${inspectorOpen ? "is-open" : ""}`}');
-        expect(workbench).toContain("onToggleInspector={() => compactLayout ? setInspectorOpen((value) => !value) : setInspectorDocked((value) => !value)}");
-        expect(workbenchCss).toContain(".pv-panel--right.is-open { transform: translateX(0); }");
+        expect(workbench).toMatch(/onToggleInspector=\{\(\) =>\s*\(?\s*compactLayout\s*\?\s*setInspectorOpen\(\(value\) => !value\)\s*:\s*setInspectorDocked\(\(value\) => !value\)\s*\)?\s*\}/);
+        expect(workbenchCss).toMatch(/\.pv-panel--right\.is-open\s*\{\s*transform:\s*translateX\(0\);\s*\}/);
         expect(workbench).not.toContain("border-l max-lg:hidden");
     });
 
@@ -178,12 +179,15 @@ describe("模式接线", () => {
     });
 
     test("draft/history/save 的生命周期 effect 一律不依赖 mode", () => {
-        // 逐个锁住依赖数组：任一处混入 mode，切模式就会掉草稿或掉历史。
-        expect(workbench).toContain("}, [message, modal, open, scene, writeDraft]);");
-        expect(workbench).toContain("}, [mirrorDraft, stagedTransaction]);");
-        expect(workbench).toContain("}, [mirrorDraft]);");
-        // 快捷键监听只随 open 装卸，不随 mode 反复重挂。
-        expect(workbench).toContain("}, [open]);");
+        const recovery = slice(workbench, "// 打开会话时检查合法本地恢复候选", "const activeShot =");
+        const pageHide = slice(workbench, "// 离开页面：", "// 卸载兜底：");
+        const unmount = slice(workbench, "// 卸载兜底：", "const undo =");
+        const shortcuts = slice(workbench, "// 预演台是全屏浮层", "/** 对象 transform 编辑的唯一入口");
+        // 锁住各自的依赖数组，同时允许格式器换行和尾逗号。
+        expect(recovery).toMatch(/\},\s*\[message,\s*modal,\s*open,\s*scene,\s*writeDraft\],?\s*\);/);
+        expect(pageHide).toMatch(/\},\s*\[mirrorDraft,\s*stagedTransaction\],?\s*\);/);
+        expect(unmount).toMatch(/\},\s*\[mirrorDraft\],?\s*\);/);
+        expect(shortcuts).toMatch(/\},\s*\[open\],?\s*\);/);
     });
 });
 

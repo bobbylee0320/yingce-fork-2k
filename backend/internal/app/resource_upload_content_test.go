@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func contentUploadHeader(t *testing.T, data []byte) *multipart.FileHeader {

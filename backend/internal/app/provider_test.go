@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/prompts"
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/prompts"
+	"yingce/backend/internal/protocol"
 )
 
 const testReferenceImageDataURL = "data:image/png;base64,aGVsbG8="

@@ -11,9 +11,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	builtinAssets "infinite-canvas/backend/builtin"
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
+	builtinAssets "yingce/backend/builtin"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
 )
 
 var builtinSkillFiles = builtinAssets.FS

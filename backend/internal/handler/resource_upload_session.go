@@ -15,7 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"infinite-canvas/backend/internal/service"
+	"yingce/backend/internal/service"
 )
 
 // 分片上传会话：把“导入本地媒体”拆成 开始→逐片→合并 三段，单片上限 8MB，

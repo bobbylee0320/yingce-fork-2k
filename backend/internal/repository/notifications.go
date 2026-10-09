@@ -4,8 +4,8 @@ import (
 	"errors"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"infinite-canvas/backend/internal/model"
 	"time"
+	"yingce/backend/internal/model"
 )
 
 var ErrNotificationLimit = errors.New("通知发送次数已达上限，请稍后再试")

@@ -1,6 +1,6 @@
 package capability
 
-import "infinite-canvas/backend/internal/canvas/contract"
+import "yingce/backend/internal/canvas/contract"
 
 const (
 	maxAgentNodeTitleRunes   = 240
