@@ -81,6 +81,8 @@ COPY --from=backend-build /out/yingce-backend /usr/local/bin/yingce-backend
 COPY --from=backend-build /out/migrate-schema /usr/local/bin/migrate-schema
 COPY --from=backend-build /out/migrate-sqlite-postgres /usr/local/bin/migrate-sqlite-postgres
 COPY --from=payment-package-smoke /app/plugin-packages /app/plugin-packages
+# A restrictive checkout umask can make newly added public plugin archives unreadable by app.
+RUN chmod a+r /app/plugin-packages/*.yingce-plugin
 COPY --from=pi-runtime-deps /app/backend/agent-runtime/pi/node_modules /app/backend/agent-runtime/pi/node_modules
 COPY backend/agent-runtime/pi/package.json backend/agent-runtime/pi/package-lock.json /app/backend/agent-runtime/pi/
 COPY backend/agent-runtime/pi/agent-runtime.mjs /app/backend/agent-runtime/pi/agent-runtime.mjs
