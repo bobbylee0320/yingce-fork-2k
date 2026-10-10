@@ -1,4 +1,4 @@
-import { App, Button, DatePicker, Form, Input, Modal, Popconfirm, Switch } from "antd";
+import { App, Button, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Trash2, Edit3, Search } from "lucide-react";
 import dayjs, { type Dayjs } from "dayjs";
@@ -29,6 +29,7 @@ type FormValues = {
     noticeType: BannerNoticeType;
     link?: string;
     status: boolean;
+    sortOrder?: number;
     dateRange?: [Dayjs | null, Dayjs | null] | null;
 };
 
@@ -90,6 +91,7 @@ export default function AdminBannerAnnouncementsPanel({
         form.setFieldsValue({
             noticeType: BANNER_NOTICE_DEFAULT_TYPE,
             status: true,
+            sortOrder: 0,
         });
         setDialog({ mode: "create" });
     }, [form]);
@@ -112,6 +114,7 @@ export default function AdminBannerAnnouncementsPanel({
             noticeType: type,
             link: banner.link || undefined,
             status: banner.status === "active",
+            sortOrder: banner.sortOrder ?? 0,
             dateRange: banner.startsAt || banner.endsAt ? [banner.startsAt ? dayjs(banner.startsAt) : null, banner.endsAt ? dayjs(banner.endsAt) : null] : null,
         });
         setDialog({ mode: "edit", banner });
@@ -187,6 +190,7 @@ export default function AdminBannerAnnouncementsPanel({
                 noticeType: selectedNoticeType,
                 link: values.link?.trim() || undefined,
                 status: (values.status ? "active" : "disabled") as "active" | "disabled",
+                sortOrder: values.sortOrder || 0,
                 startsAt,
                 endsAt,
             };
@@ -427,6 +431,9 @@ export default function AdminBannerAnnouncementsPanel({
 
                     <Form.Item name="status" label="发布状态" valuePropName="checked">
                         <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                    </Form.Item>
+                    <Form.Item name="sortOrder" label="展示顺序" extra="数字越小越靠前；相同顺序按创建时间倒序">
+                        <InputNumber min={0} max={999999} precision={0} className="w-full" />
                     </Form.Item>
 
                     <Form.Item name="dateRange" label="有效期（可选）" extra="留空表示长期有效；设置时间段后仅在有效期内于前台展示">

@@ -210,6 +210,7 @@ export function buildImageGenerationMetadata(type: CanvasImageGenerationType, co
 }
 
 export function nodeReferenceImage(node: CanvasNodeData): ReferenceImage | null {
+    if (node.metadata?.imageLayerGroup?.compositeStatus && node.metadata.imageLayerGroup.compositeStatus !== "ready") return null;
     if (node.type === CanvasNodeType.MediaConversion) {
         // 转换结果只在成功物化后作为生成参考；运行中、跳过和失败状态都不能透传旧结果。
         const conversion = node.metadata?.mediaConversion;

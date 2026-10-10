@@ -78,6 +78,7 @@ type providerAnalyticsContext struct {
 	Capability        string
 	Operation         string
 	ChannelID         string
+	ProxyURL          string
 	Model             string
 	VideoSeconds      int
 	RequestKind       string
@@ -106,6 +107,11 @@ func withProviderAnalytics(ctx context.Context, service *Service, task model.Tas
 		metadata.VideoSeconds, _ = strconv.Atoi(input.Config.VideoSeconds)
 		if normalized := normalizeCapability(input.Mode); normalized != "" {
 			metadata.Capability = normalized
+		}
+		if metadata.ChannelID != "" && service != nil {
+			if ch, err := service.repo.SystemChannel(metadata.ChannelID); err == nil {
+				metadata.ProxyURL = ch.ProxyURL
+			}
 		}
 	}
 	return context.WithValue(ctx, providerAnalyticsKey{}, metadata)

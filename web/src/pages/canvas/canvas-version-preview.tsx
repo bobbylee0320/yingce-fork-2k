@@ -40,7 +40,7 @@ export function CanvasVersionPreview({ preview, onReturn, onShowVersions }: { pr
                 if (active) setLocalMedia((current) => ({ ...current, [node.id]: url }));
             })
             .catch(() => {
-                if (active) setMediaError("本机媒体读取失败，可下载草稿后检查素材");
+                if (active) setMediaError("媒体暂时无法读取，请重新打开此版本重试");
             });
         return () => {
             active = false;

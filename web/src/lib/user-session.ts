@@ -37,27 +37,26 @@ export async function applyUserSession(payload: AuthSessionPayload) {
     const previousUserId = useUserStore.getState().user?.id || "";
     const nextUserId = payload.user?.id || "";
     useUserStore.getState().setHydrated(false);
+    // Query key 不携带用户 ID；身份变化时必须取消并清空旧账号请求，避免跨账号复用内存数据。
+    if (previousUserId !== nextUserId) appQueryClient.clear();
+    await switchUserStorageScope(payload.user?.id);
+    // 切换存储 scope 时 user store 仍保留旧身份；此处只能先检查 generation。
+    if (!isCurrentGeneration(generation)) return;
+    withCanvasStorePersistenceSuppressed(() => withAssetStorePersistenceSuppressed(() => withUserScopedPersistenceSuppressed(() => {
+        resetUserScopedMemory();
+    })));
+    useUserStore.getState().setUser(payload.user);
+    useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);
+    useUserStore.getState().setDrawingEngine(payload.drawingEngine);
+    useUserStore.getState().setFeatures(payload.features);
+    installRemoteUserDataAutoSync();
     try {
-        // Query key 不携带用户 ID；身份变化时必须取消并清空旧账号请求，避免跨账号复用内存数据。
-        if (previousUserId !== nextUserId) appQueryClient.clear();
-        await switchUserStorageScope(payload.user?.id);
-        // 切换存储 scope 时 user store 仍保留旧身份；此处只能先检查 generation，
-        // 否则登录后的新用户会被误判为过期会话，hydrated 永远无法解除。
-        if (!isCurrentGeneration(generation)) return;
-        withCanvasStorePersistenceSuppressed(() => withAssetStorePersistenceSuppressed(() => withUserScopedPersistenceSuppressed(() => {
-            resetUserScopedMemory();
-        })));
-        useUserStore.getState().setUser(payload.user);
-        useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);
-        useUserStore.getState().setDrawingEngine(payload.drawingEngine);
-        useUserStore.getState().setFeatures(payload.features);
-        installRemoteUserDataAutoSync();
-        useUserStore.getState().setHydrated(true);
-        void hydrateUserSessionData(payload, generation).catch((error) => {
-            if (isCurrentSession(generation, nextUserId)) console.warn("用户工作区后台初始化失败，基础页面仍可继续", error);
-        });
+        // 缓存恢复和同步基线必须先于工作区开放，防止生成/编辑抢跑，或被初始化误记为已同步。
+        await hydrateUserSessionData(payload, generation);
+    } catch (error) {
+        if (isCurrentSession(generation, nextUserId)) console.warn("用户工作区后台初始化失败，基础页面仍可继续", error);
     } finally {
-        if (useUserStore.getState().hydrated === false && isCurrentGeneration(generation)) useUserStore.getState().setHydrated(true);
+        if (isCurrentSession(generation, nextUserId)) useUserStore.getState().setHydrated(true);
     }
 }
 
@@ -98,36 +97,34 @@ async function hydrateUserSessionData(payload: AuthSessionPayload, generation: n
     if (!hasPersistedValue(plugins)) usePluginStore.setState({ installations: [], runtimeStatuses: {}, pluginStates: {} });
     if (!persistedCreationPreferences) useCreationPreferencesStore.setState({ preferences: {} });
 
-    try {
-        const catalog = await getModelCatalog();
-        if (!isCurrentSession(generation, userId)) return;
-        if (!persistedConfig) {
-            // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
-            const initialSystemConfig = {
-                ...defaultConfig,
-                channels: modelCatalogChannels(catalog),
-                imageModels: undefined,
-                videoModels: undefined,
-                textModels: undefined,
-                audioModels: undefined,
-            };
-            useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: initialSystemConfig }).config);
-        } else {
-            useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
-        }
-    } catch (error) {
-        if (isCurrentSession(generation, userId)) console.warn("模型目录后台刷新失败，保留本地配置", error);
-    }
-
     if (userId) {
-        try {
-            await initializeRemoteUserDataSession(userId);
-        } catch (error) {
-            if (isCurrentSession(generation, userId)) console.warn("远端用户数据后台同步初始化失败", error);
-        }
+        await initializeRemoteUserDataSession(userId);
     } else {
         resetRemoteUserDataSync();
     }
+
+    void (async () => {
+        try {
+            const catalog = await getModelCatalog();
+            if (!isCurrentSession(generation, userId)) return;
+            if (!persistedConfig) {
+                // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
+                const initialSystemConfig = {
+                    ...defaultConfig,
+                    channels: modelCatalogChannels(catalog),
+                    imageModels: undefined,
+                    videoModels: undefined,
+                    textModels: undefined,
+                    audioModels: undefined,
+                };
+                useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: initialSystemConfig }).config);
+            } else {
+                useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
+            }
+        } catch (error) {
+            if (isCurrentSession(generation, userId)) console.warn("模型目录后台刷新失败，保留本地配置", error);
+        }
+    })();
     if (isCurrentSession(generation, userId)) {
         recordDiagnosticEvent({
             category: "navigation",

@@ -468,6 +468,7 @@ export function sameNodeSemanticData(left: CanvasNodeData, right: CanvasNodeData
 }
 
 export function applyBatchPrimaryImage(root: CanvasNodeData, primary: CanvasNodeData): CanvasNodeData {
+    if (root.metadata?.imageLayerGroup || root.metadata?.experimentalLayerPlan) return root;
     // 主图是根节点对媒体的完整代理；可选字段也必须显式覆盖，避免残留上一张图的存储身份。
     return {
         ...root,
@@ -496,6 +497,7 @@ export function removeCanvasNodes(nodes: CanvasNodeData[], requestedIds: Set<str
     const removedIds = new Set(requestedIds);
     nodes.forEach((node) => {
         if (requestedIds.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => removedIds.add(childId));
+        if (requestedIds.has(node.id)) node.metadata?.experimentalLayerPlan?.requests.forEach((request) => removedIds.add(request.nodeId));
     });
     const remainingNodes = nodes.filter((node) => !removedIds.has(node.id));
     const cleanedNodes = remainingNodes.map((node) => {
@@ -523,7 +525,18 @@ export function removeCanvasNodes(nodes: CanvasNodeData[], requestedIds: Set<str
         if (!cleaned.metadata?.isBatchRoot || childIds?.length === cleaned.metadata.batchChildIds?.length) return cleaned;
         const primaryImageId = childIds?.includes(cleaned.metadata.primaryImageId || "") ? cleaned.metadata.primaryImageId : childIds?.[0];
         const primaryNode = remainingNodes.find((item) => item.id === primaryImageId);
-        const batchRoot = { ...cleaned, metadata: { ...cleaned.metadata, batchChildIds: childIds, primaryImageId } };
+        const plan = cleaned.metadata.experimentalLayerPlan;
+        const requests = plan?.requests.filter((request) => !removedIds.has(request.nodeId));
+        const batchRoot = { ...cleaned, metadata: { ...cleaned.metadata, batchChildIds: childIds, primaryImageId, ...(plan ? { experimentalLayerPlan: requests?.length ? { ...plan, requests, composedSignature: undefined, errorSignature: undefined } : undefined } : {}) } };
+        if (cleaned.metadata.imageLayerGroup)
+            return {
+                ...batchRoot,
+                metadata: {
+                    ...batchRoot.metadata,
+                    primaryImageId: undefined,
+                    imageLayerGroup: { ...cleaned.metadata.imageLayerGroup, compositeStatus: "updating" as const, layers: cleaned.metadata.imageLayerGroup.layers.filter((layer) => !removedIds.has(layer.nodeId)) },
+                },
+            };
         return primaryNode ? applyBatchPrimaryImage(batchRoot, primaryNode) : batchRoot;
     });
     const nextNodes = cleanedNodes.map((node) => reconcileImageBatchRoot(node, cleanedNodes));

@@ -17,7 +17,7 @@ const blobStore = localforage.createInstance({ name: "yingce", storeName: "resou
 const metaStore = localforage.createInstance({ name: "yingce", storeName: "resource_blob_meta" });
 const objectUrls = new Map<string, string>();
 const sessionBlobs = new Map<string, Blob>();
-const inFlight = new Map<string, Promise<string>>();
+const blobInFlight = new Map<string, Promise<Blob | null>>();
 const cacheMetaTouchWarnings = new Set<string>();
 const metaTouchedAt = new Map<string, number>();
 const downloadQueue: Array<() => void> = [];
@@ -39,7 +39,7 @@ export function clearResourceBlobCache() {
     objectUrls.forEach((url) => URL.revokeObjectURL(url));
     objectUrls.clear();
     sessionBlobs.clear();
-    inFlight.clear();
+    blobInFlight.clear();
     metaTouchedAt.clear();
     cacheMetaTouchWarnings.clear();
     cacheStats = null;
@@ -65,16 +65,9 @@ export async function cacheResourceObjectUrl(storageKey: string) {
     if (!target) return "";
     const cached = await readCachedObjectUrl(target);
     if (cached) return cached;
-    const pending = inFlight.get(target.key);
-    if (pending) return pending;
 
-    const generation = cacheGeneration;
-    let task: Promise<string>;
-    task = withDownloadSlot(() => downloadAndCacheResource(storageKey, target, generation)).finally(() => {
-        if (inFlight.get(target.key) === task) inFlight.delete(target.key);
-    });
-    inFlight.set(target.key, task);
-    return task;
+    const blob = await getOrDownloadResourceBlob(storageKey, target);
+    return blob ? objectUrl(target.key, blob) : "";
 }
 
 function withDownloadSlot<T>(task: () => Promise<T>) {
@@ -108,41 +101,36 @@ export async function primeResourceBlobCache(storageKey: string, blob: Blob) {
 export async function getCachedResourceBlob(storageKey: string) {
     const target = await cacheTarget(storageKey);
     if (!target) return null;
+    const sessionBlob = sessionBlobs.get(target.key);
+    if (sessionBlob) return sessionBlob;
     const cached = await blobStore.getItem<Blob>(target.key);
     if (cached) {
+        sessionBlobs.set(target.key, cached);
         touchCacheMetaSafely(target);
         return cached;
     }
-    const sessionBlob = sessionBlobs.get(target.key);
-    if (sessionBlob) return sessionBlob;
-    const pending = inFlight.get(target.key);
-    if (pending) {
-        await pending.catch(() => "");
-        const downloaded = sessionBlobs.get(target.key) || (await blobStore.getItem<Blob>(target.key));
-        if (downloaded) return downloaded;
-        return loadAndPersistResource(storageKey);
-    }
-    await cacheResourceObjectUrl(storageKey).catch(() => "");
-    const downloaded = sessionBlobs.get(target.key) || (await blobStore.getItem<Blob>(target.key));
-    if (downloaded) return downloaded;
-    return loadAndPersistResource(storageKey);
-}
-
-async function loadAndPersistResource(storageKey: string) {
-    const blob = await getResourceBlob(storageKey);
-    if (blob) await primeResourceBlobCache(storageKey, blob).catch(() => "");
+    const blob = await getOrDownloadResourceBlob(storageKey, target);
+    if (blob) objectUrl(target.key, blob);
     return blob;
 }
 
-async function downloadAndCacheResource(storageKey: string, target: ResourceCacheMeta, generation: number) {
-    const blob = await downloadResourceBlob(storageKey, target);
-    if (!blob || generation !== cacheGeneration) return "";
-    return objectUrl(target.key, blob);
+async function getOrDownloadResourceBlob(storageKey: string, target: ResourceCacheMeta) {
+    const sessionBlob = sessionBlobs.get(target.key);
+    if (sessionBlob) return sessionBlob;
+    const pending = blobInFlight.get(target.key);
+    if (pending) return pending;
+
+    const generation = cacheGeneration;
+    const task = withDownloadSlot(() => downloadResourceBlob(storageKey, target, generation)).finally(() => {
+        if (blobInFlight.get(target.key) === task) blobInFlight.delete(target.key);
+    });
+    blobInFlight.set(target.key, task);
+    return task;
 }
 
-async function downloadResourceBlob(storageKey: string, target: ResourceCacheMeta) {
+async function downloadResourceBlob(storageKey: string, target: ResourceCacheMeta, generation: number) {
     const blob = await getResourceBlob(storageKey);
-    if (!blob) return null;
+    if (!blob || generation !== cacheGeneration) return null;
     sessionBlobs.set(target.key, blob);
     if (blob.size <= MAX_CACHE_BYTES) await enqueuePersist(target, blob);
     return blob;
@@ -209,8 +197,14 @@ async function readCachedObjectUrl(target: ResourceCacheMeta) {
         touchCacheMetaSafely(target);
         return existing;
     }
+    const sessionBlob = sessionBlobs.get(target.key);
+    if (sessionBlob) {
+        touchCacheMetaSafely(target);
+        return objectUrl(target.key, sessionBlob);
+    }
     const blob = await blobStore.getItem<Blob>(target.key);
     if (!blob) return "";
+    sessionBlobs.set(target.key, blob);
     touchCacheMetaSafely(target);
     return objectUrl(target.key, blob);
 }

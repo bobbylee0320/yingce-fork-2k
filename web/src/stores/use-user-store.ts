@@ -33,6 +33,7 @@ export type FeatureAvailability = {
     frontendModelsEnabled: boolean;
     pluginCenterEnabled: boolean;
     systemPluginsVisibleToUsers: boolean;
+    inspirationSourcesVisible: boolean;
     configured?: boolean;
     updatedBy?: string;
     updatedAt?: string;
@@ -47,6 +48,7 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     frontendModelsEnabled: false,
     pluginCenterEnabled: true,
     systemPluginsVisibleToUsers: true,
+    inspirationSourcesVisible: true,
 };
 
 type UserStore = {

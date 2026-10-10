@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { buildCanvasSpatialIndex, canvasNodeBounds } from "@/lib/canvas/canvas-spatial-index";
+import { buildCanvasConnectionIndex } from "@/lib/canvas/canvas-connection-index";
+import { visibleCanvasMinimapNodes } from "@/lib/canvas/canvas-frame";
+import { retainCanvasLayoutNodes } from "@/lib/canvas/canvas-layout-snapshot";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 describe("canvas spatial index", () => {
@@ -47,6 +50,30 @@ describe("canvas spatial index", () => {
         })));
 
         expect(index.query({ left: 0, top: 0, right: 100, bottom: 100 }, 3)).toEqual([0, 1, 2]);
+    });
+
+    test("filters collapsed frame children with one parent index", () => {
+        const frame: CanvasNodeData = { id: "frame", type: CanvasNodeType.Frame, title: "框", position: { x: 0, y: 0 }, width: 400, height: 300, metadata: { frame: { collapsed: true } } };
+        const child: CanvasNodeData = { id: "child", type: CanvasNodeType.Image, title: "子节点", parentId: frame.id, position: { x: 20, y: 20 }, width: 120, height: 80, metadata: {} };
+        const visible = visibleCanvasMinimapNodes([frame, child]);
+        expect(visible.map((node) => node.id)).toEqual([frame.id]);
+    });
+
+    test("reuses the layout snapshot for metadata-only updates", () => {
+        const original: CanvasNodeData = { id: "node", type: CanvasNodeType.Image, title: "图", position: { x: 0, y: 0 }, width: 120, height: 80, metadata: {} };
+        const metadataUpdate = { ...original, metadata: { status: "success" as const } };
+        const geometryUpdate = { ...metadataUpdate, position: { x: 40, y: 0 } };
+        const previous = [original];
+        expect(retainCanvasLayoutNodes(previous, [metadataUpdate])).toBe(previous);
+        expect(retainCanvasLayoutNodes(previous, [geometryUpdate])).not.toBe(previous);
+    });
+
+    test("keeps connection index geometry independent from node metadata", () => {
+        const from: CanvasNodeData = { id: "from", type: CanvasNodeType.Text, title: "起点", position: { x: 0, y: 0 }, width: 100, height: 80, metadata: {} };
+        const to: CanvasNodeData = { id: "to", type: CanvasNodeType.Text, title: "终点", position: { x: 300, y: 0 }, width: 100, height: 80, metadata: {} };
+        const index = buildCanvasConnectionIndex([from, to], [{ id: "edge", fromNodeId: from.id, toNodeId: to.id }]);
+        expect(index.index.query({ left: -1, top: -1, right: 500, bottom: 100 }).map((item) => item.connection.id)).toEqual(["edge"]);
+        expect(index.entriesById.get("edge")).toMatchObject({ fromId: "from", toId: "to" });
     });
 
     test("keeps the target 50k canvas mix query-bounded", () => {

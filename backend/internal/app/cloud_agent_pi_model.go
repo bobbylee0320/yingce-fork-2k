@@ -125,7 +125,13 @@ func (s *Service) cloudAgentPiModel(ctx context.Context, userID, runID string, p
 		if !retryable {
 			return nil, err
 		}
-		if errors.Is(err, errCloudAgentTruncatedToolArguments) && correction == nil {
+		var outputLimitErr *cloudAgentPiOutputLimitError
+		if errors.As(err, &outputLimitErr) {
+			correction = []map[string]any{cloudAgentRuntimeMessage(cloudAgentRuntimeContext{
+				Kind: cloudAgentContextInvalidOutput, Detail: outputLimitErr.Detail,
+				MaxToolCalls: cloudAgentMaxToolCalls, MaxOutputBytes: cloudAgentMaxOutputBytes,
+			})}
+		} else if errors.Is(err, errCloudAgentTruncatedToolArguments) {
 			correction = []map[string]any{cloudAgentRuntimeMessage(cloudAgentRuntimeContext{Kind: cloudAgentContextTruncatedArguments})}
 		}
 	}
@@ -167,6 +173,15 @@ var errCloudAgentAwaitingApproval = errors.New("run is waiting for approval")
 // errCloudAgentTruncatedToolArguments 标记"模型返回的工具参数不是完整 JSON"：
 // 调用未执行，可以带纠偏上下文重做同一步。
 var errCloudAgentTruncatedToolArguments = errors.New("truncated tool arguments")
+
+// cloudAgentPiOutputLimitError 标记整批未执行的输出超限，向有限重试提供具体纠正原因。
+type cloudAgentPiOutputLimitError struct {
+	Detail string
+}
+
+func (e *cloudAgentPiOutputLimitError) Error() string {
+	return "模型输出超出限制：" + e.Detail
+}
 
 // runCloudAgentModelStep 调度并等待一次模型步骤；第二个返回值表示失败是否值得重试。
 func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID string, messages []map[string]any, thinkingLevel string, correction ...map[string]any) (any, bool, error) {
@@ -325,6 +340,16 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 	}
 	if err := json.Unmarshal([]byte(task.ResultJSON), &result); err != nil {
 		return nil, false, fmt.Errorf("decode model result: %w", err)
+	}
+	if !compactionSummary {
+		if violation := cloudAgentOutputViolation(result.Text, len(result.ToolCalls)); violation != "" {
+			// 在保存 Calls 或交给运行时执行前整批拒绝；不能截取前几项造成半批写入。
+			// 释放本步任务后沿用现有重试上限，模型调用仍正常计费，不执行任何工具。
+			if err := s.finishCloudAgentPiModelStep(userID, runID, task.ID, "", ""); err != nil {
+				return nil, false, err
+			}
+			return nil, true, &cloudAgentPiOutputLimitError{Detail: violation}
+		}
 	}
 	finishText, finishReasoning := result.Text, result.Reasoning
 	if compactionSummary {

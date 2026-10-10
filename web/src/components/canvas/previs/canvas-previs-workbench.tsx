@@ -538,10 +538,13 @@ export function CanvasPrevisWorkbench({
                 closable: false,
                 mask: { closable: false },
                 keyboard: false,
+                // 预演视口持续占用主线程时，zoom 离场要等 rAF 和 transitionend。
+                // 动画停在可见态后，点「留在预演台」确认框也不会消失。
+                transitionName: "",
+                maskTransitionName: "",
                 onOk: () => onClose(),
-                onCancel: (close) => {
+                onCancel: () => {
                     closingRef.current = false;
-                    close();
                 },
             });
         })();

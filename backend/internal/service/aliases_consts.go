@@ -42,6 +42,7 @@ const (
 	FeaturePluginCenter                = app.FeaturePluginCenter
 	FeatureShortDrama                  = app.FeatureShortDrama
 	FeatureSystemPlugins               = app.FeatureSystemPlugins
+	FeatureInspirationSources          = app.FeatureInspirationSources
 	FeatureTaskCenter                  = app.FeatureTaskCenter
 	FeatureTimelineTranscription       = app.FeatureTimelineTranscription
 	ModelCatalogSourceSystem           = app.ModelCatalogSourceSystem

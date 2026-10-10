@@ -495,6 +495,24 @@ func TestCloudAgentPrevisPatchLimitsAndClosedArguments(t *testing.T) {
 	}
 }
 
+func TestCloudAgentPrevisOrdinaryActorNameDoesNotRequireCharacterBinding(t *testing.T) {
+	scene, err := cloudAgentPrevisSceneCreateTemplate(cloudAgentPrevisSceneCreateArgs{SceneID: "image-scene", Title: "图片复现", TemplateID: "empty"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = cloudAgentPrevisApplyPatchOperation(scene, cloudAgentPrevisPatchOperation{
+		Type: "object_add", ID: "image-actor", Kind: "actor", Primitive: "character",
+		Name: previsStringPtr("道姑"), CharacterName: previsStringPtr("道姑"), Pose: "stand",
+	}, 0)
+	if err != nil {
+		t.Fatalf("ordinary image actor was treated as a character binding: %v", err)
+	}
+	actor := cloudAgentPrevisFindByID(creationMaps(scene["objects"]), "image-actor")
+	if actor == nil || actor["characterBinding"] != nil {
+		t.Fatalf("ordinary actor unexpectedly has character binding: %#v", actor)
+	}
+}
+
 func TestCloudAgentPrevisCharacterBindingAndAnimationPatch(t *testing.T) {
 	s, canvas := previsMutationFixture(t)
 	canvas.PayloadJSON = `{"nodes":[{"id":"hero-card","type":"text","metadata":{"workflowKind":"character","characterAssetId":"hero-asset","characterVersionId":"hero-v1"}}],"connections":[],"previsScenes":[]}`

@@ -1,69 +1,39 @@
-# 阶段状态机与门禁
+# 制作阶段与门禁
 
-## 状态
+完整改编按一条主线推进：
 
 ```text
 INTAKE
-STYLE_DRAFT
-SOURCE_DRAFT
-SOURCE_APPROVED
-EVENTS_EXTRACTED
-BIBLE_DRAFT
-BIBLE_APPROVED
-SKELETON_READY
-EPISODES_READY
-SCRIPT_DRAFT
-SCRIPT_VALIDATED
-ASSETS_REGISTERED
-ASSETS_REVIEW
-ASSETS_LOCKED
-STORYBOARD_DRAFT
-STORYBOARD_VALIDATED
-SHOTLIST_READY
-MEDIA_READY
-POST_READY
+→ SOURCE_READ
+→ STORY_ANALYZED
+→ SCRIPT_DRAFT
+→ SCRIPT_VALIDATED
+→ SHOT_BREAKDOWN_DRAFT
+→ ASSETS_REVIEW
+→ ASSETS_LOCKED
+→ STORYBOARD_DRAFT
+→ STORYBOARD_VALIDATED
+→ BOARDS_READY
+→ MEDIA_SUBMITTED
+→ DELIVERED
 ```
 
-## 状态转换
+`SHOT_BREAKDOWN_DRAFT` 是用于估算镜头和盘点资产的草分镜；资产锁定后，才创建绑定资产引用的制作版分镜。只做文本或剧本的任务在对应阶段结束，不必推进到媒体生成。
 
-```text
-INTAKE -> STYLE_DRAFT
-STYLE_DRAFT -> SOURCE_DRAFT
-SOURCE_DRAFT -> SOURCE_APPROVED
-SOURCE_APPROVED -> EVENTS_EXTRACTED
-EVENTS_EXTRACTED -> BIBLE_DRAFT
-BIBLE_DRAFT -> BIBLE_APPROVED
-BIBLE_APPROVED -> SKELETON_READY
-SKELETON_READY -> EPISODES_READY
-EPISODES_READY -> SCRIPT_DRAFT
-SCRIPT_DRAFT -> SCRIPT_VALIDATED
-SCRIPT_VALIDATED -> ASSETS_REGISTERED
-ASSETS_REGISTERED -> ASSETS_REVIEW
-ASSETS_REVIEW -> ASSETS_LOCKED
-ASSETS_LOCKED -> STORYBOARD_DRAFT
-STORYBOARD_DRAFT -> STORYBOARD_VALIDATED
-STORYBOARD_VALIDATED -> SHOTLIST_READY
-SHOTLIST_READY -> MEDIA_READY
-MEDIA_READY -> POST_READY
-```
+## 门禁
 
-## 关键门禁
-
-- `SOURCE_APPROVED` 前不得正式提取事件；
-- `BIBLE_APPROVED` 前不得生成正式骨架、分集和剧本；
-- `SCRIPT_VALIDATED` 前不得把资产标记为投产资产；
-- `ASSETS_LOCKED` 前不得创建制作级分镜；
-- `STORYBOARD_VALIDATED` 前不得生成视频；
-- 任一上游版本变化，都要使受影响下游回到待复核状态。
+- 正文未实际读取，不得声称完成原文分析；用户提供的原文不需要额外的“原文确认”轮。
+- 剧本和草分镜必须能追溯到来源版本；事实冲突与未知项单独标记，不擅自补全。
+- 核心角色的制作资产须有可读角色卡和已就绪三视图；主要场景、关键服装/道具按镜头需要锁定。声音参考音频可选，不阻塞视频。
+- `ASSETS_LOCKED` 前只能维护草分镜；锁定后制作版分镜必须绑定真实资产版本。
+- `STORYBOARD_VALIDATED` 前不得生成黑白分镜板；`BOARDS_READY` 前不得进入该工作流的视频生成。
+- 媒体生成的能力、预算和用户审批由系统合同处理；创作偏好表单不等于收费授权。
+- 上游内容变化时，只将受影响的下游阶段标记为待复核，保留旧版本和仍有效的引用。
 
 ## 资产状态
 
-每个资产必须有 `assetId`、`type`、`version`、`status`、`sourceVersion`、`bibleVersion`。
-
 ```text
-DRAFT -> REVIEW -> APPROVED -> LOCKED
+DRAFT → REVIEW → LOCKED
 ```
 
-核心角色只有角色卡已创建、可读且三视图引用就绪时才能进入 `LOCKED`；角色卡在角色库中改版后，台账版本同步更新，受影响下游回到待复核。
-
-用户拒绝时回到 `DRAFT`；资产内容变化时递增版本号，保留旧版本和旧引用，不覆盖仍被使用的结果。
+每个资产记录真实 ID、版本、来源版本、状态和引用。用户确认或授权按推荐方案采用后才能锁定；角色卡的 `imageReference.ready` 必须为真。启用音频参考时再检查 `audioReference.ready`。用户拒绝或资产更新时保留旧版本，按引用关系复核下游。

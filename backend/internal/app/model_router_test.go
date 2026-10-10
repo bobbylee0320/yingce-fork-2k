@@ -107,6 +107,20 @@ func TestSKUSelectorInfersImageResolutionFromSizeWhenQualityIsAutomatic(t *testi
 	}
 }
 
+func TestSKUSelectorSeparatesImageQualityAndResolution(t *testing.T) {
+	selector := skuSelectorForIntent(ModelRequestIntent{Capability: "image", Options: map[string]any{"quality": "medium", "size": "2048x2048"}})
+	if selector["quality"] != "medium" || selector["resolution"] != "2k" {
+		t.Fatalf("selector = %#v, want quality=medium and resolution=2k", selector)
+	}
+	modelWithTiers := model.ChannelModel{PriceTiers: []model.ChannelModelPriceTier{
+		{ID: "legacy-2k", SelectorJSON: `{"quality":"2k"}`, Enabled: true, PriceConfigured: true},
+		{ID: "new-medium-2k", SelectorJSON: `{"quality":"medium","resolution":"2k"}`, Enabled: true, PriceConfigured: true},
+	}}
+	matched := channelModelPriceTierForIntent(modelWithTiers, ModelRequestIntent{Capability: "image", Options: map[string]any{"quality": "medium", "size": "2048x2048"}})
+	if matched == nil || matched.ID != "new-medium-2k" {
+		t.Fatalf("matched tier = %#v, want new-medium-2k", matched)
+	}
+}
 func TestSKUSelectorHandlesMissingImageOptions(t *testing.T) {
 	for _, quality := range []any{nil, "", "auto", "any"} {
 		options := map[string]any{"size": "2048x2048"}

@@ -97,6 +97,11 @@ export async function executeImageGeneration({
         height: rootHeight,
         metadata: {
             ...resetGenerationTaskMetadata(reuseSourceNode ? sourceNode?.metadata : undefined, NODE_STATUS_LOADING),
+            imageLayerGroup: undefined,
+            layerDecomposition: undefined,
+            imageLayerWorkflow: undefined,
+            experimentalLayerPlan: undefined,
+            layerExtraction: undefined,
             ...canvasGenerationPromptMetadata(prompt, effectivePrompt),
             status: NODE_STATUS_LOADING,
             size: generationConfig.size,

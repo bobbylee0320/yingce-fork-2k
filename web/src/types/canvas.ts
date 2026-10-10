@@ -323,6 +323,56 @@ export type CanvasNodeMetadata = {
     batchUsesReferenceImages?: boolean;
     primaryImageId?: string;
     imageBatchExpanded?: boolean;
+    /** 拆层请求身份与画布展开位置分离，恢复任务时沿用同一结果消费流程。 */
+    layerDecomposition?: { sourceNodeId: string; canvas?: { width: number; height: number } };
+    /** 一次拆分从视觉规划起计时；刷新不续发尚未提交的拆图请求。 */
+    imageLayerWorkflow?: { sourceNodeId: string; startedAt: string; stage: "planning" | "extract"; total?: number; plannerModel: string; planningTaskId?: string };
+    /** 普通生图模型逐层提取；刷新只恢复已提交任务，不自动提交下一次付费请求。 */
+    experimentalLayerPlan?: {
+        sourceNodeId: string;
+        requests: Array<{
+            nodeId: string;
+            target: string;
+            removeFromBackground?: boolean;
+            extraction?: import("@/lib/canvas/canvas-image-layer-strategy").ImageLayerExtraction;
+            generation?: import("@/lib/canvas/canvas-image-layers").ImageLayerGeneration;
+        }>;
+        errorSignature?: string;
+        composedSignature?: string;
+        plannerModel?: string;
+        planningTaskId?: string;
+        progress?: string;
+    };
+    layerExtraction?: {
+        sourceNodeId: string;
+        groupId: string;
+        index: number;
+        strategy?: import("@/lib/canvas/canvas-image-layer-strategy").ImageLayerExtraction;
+        source?: import("@/lib/canvas/canvas-image-layer-strategy").ImageLayerSource;
+        backgroundPatch?: import("@/lib/canvas/canvas-image-layer-strategy").ImageLayerBackgroundPatch;
+        allowBackgroundRemoval?: boolean;
+        backgroundRemovalModel?: string;
+        phase?: "extract" | "background-removal-required" | "remove-background" | "complete";
+        extractionTaskId?: string;
+        /** 原任务资源与本地归一化/修补后的资源分开登记，不能沿用原素材身份。 */
+        sourceResultStorageKey?: string;
+        rejectedTaskId?: string;
+        canvas?: { width: number; height: number };
+    };
+    imageLayerGroup?: {
+        width: number;
+        height: number;
+        /** 从底到顶；x/y 为合成像素坐标，不是画布节点位置。 */
+        layers: Array<{ nodeId: string; x: number; y: number; visible: boolean }>;
+        compositeSignature?: string;
+        compositeStatus?: "ready" | "updating" | "error";
+        compositeError?: string;
+        incomplete?: { completed: number; total: number; failed: number; missingBackground: boolean };
+    };
+    imageLayer?: { groupId: string; outputIndex: number; kind?: "base" | "transparent" };
+    /** 裁切素材与完整画布尺寸的图层合成分别保存。 */
+    imageLayerMaterials?: { auto?: boolean; status?: "loading" | "ready" | "error"; groupId?: string; error?: string };
+    imageLayerMaterial?: { sourceLayerId: string; sourceGroupId: string; bounds: { left: number; top: number; width: number; height: number } };
     storageKey?: string;
     mimeType?: string;
     bytes?: number;

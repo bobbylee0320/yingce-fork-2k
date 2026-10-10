@@ -1,3 +1,4 @@
+import { imageQualityLabel } from "@/lib/image-quality";
 import type { ChannelModel, ChannelModelPriceTier } from "@/services/api/wallet";
 import { AdminStatusBadge } from "./admin-ui";
 import { formatModelMargin, formatModelPrice, modelPriceFields } from "./channel-model-pricing";
@@ -47,7 +48,8 @@ export function specificationLabel(tier: ChannelModelPriceTier) {
     return (
         [
             operation ? operations[operation] || operation : "",
-            specific(selector.quality).toUpperCase(),
+            imageQualityLabel(specific(selector.quality)),
+            imageQualityLabel(specific(selector.resolution)),
             specific(selector.size),
             resolution.toUpperCase(),
             duration ? `${duration} 秒` : "",

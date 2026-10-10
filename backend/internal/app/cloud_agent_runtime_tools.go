@@ -86,7 +86,22 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 				detail["exampleArguments"] = map[string]any{}
 			}
 			if call.Function.Name == "canvas_apply_ops" {
-				detail["exampleArguments"] = map[string]any{"snapshotHash": "<canvas_get_state.snapshotHash>", "ops": []any{map[string]any{"type": "add_node", "id": "<new-node-id>", "nodeType": "text", "content": "<content>"}}}
+				if fieldErr != nil && (strings.HasSuffix(fieldErr.Field, ".fromHandleId") || strings.HasSuffix(fieldErr.Field, ".toHandleId")) {
+					// 这里只提供纠正模板，不修改原调用。handle 放错节点时应换到分镜一端；
+					// 行 ID 或格式错误则保持原方向，要求重新读取真实 rowId。
+					sourceHandle := strings.HasSuffix(fieldErr.Field, ".fromHandleId")
+					if fieldErr.Issue == "invalid_node_handle" {
+						sourceHandle = !sourceHandle
+					}
+					op := map[string]any{"type": "connect_nodes", "id": "<new-edge-id>", "fromNodeId": "<asset-node-id>", "toNodeId": "<script-node-id>", "toHandleId": "row:<rowId-from-canvas_read_storyboard>"}
+					if sourceHandle {
+						op = map[string]any{"type": "connect_nodes", "id": "<new-edge-id>", "fromNodeId": "<script-node-id>", "toNodeId": "<output-image-or-video-node-id>", "fromHandleId": "row:<rowId-from-canvas_read_storyboard>"}
+					}
+					detail["guidance"] = message + "；本次连线未执行，示例仅是参数模板，节点 ID 和 rowId 必须来自最新读取结果"
+					detail["exampleArguments"] = map[string]any{"snapshotHash": "<canvas_get_state.snapshotHash>", "ops": []any{op}}
+				} else {
+					detail["exampleArguments"] = map[string]any{"snapshotHash": "<canvas_get_state.snapshotHash>", "ops": []any{map[string]any{"type": "add_node", "id": "<new-node-id>", "nodeType": "text", "content": "<content>"}}}
+				}
 			}
 		}
 		// 稳定归类 + 可行动字段：只加标注，不改任何放行/拒绝判定。
@@ -663,11 +678,12 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			return s.failCloudAgent(run, state, cloudAgentImageInspectionBudgetMessage)
 		}
 	}
-	// Skill reads use the domain repository and filesystem, not the checkpoint
-	// transaction's connection. Read first to avoid nesting DB reads on SQLite.
+	// Service-backed reads may open resources or use domain repositories.
+	// Read before the checkpoint transaction to avoid nested DB reads on SQLite
+	// and holding the write transaction open during storage IO.
 	var skillResult any
 	var skillErr error
-	if allowed && (call.Function.Name == "skill_read_file" || call.Function.Name == "model_list" || call.Function.Name == "image_annotation_render") {
+	if allowed && (call.Function.Name == "skill_read_file" || call.Function.Name == "model_list" || call.Function.Name == "image_annotation_render" || call.Function.Name == "canvas_read_text") {
 		state.RuntimeRunID = run.ID
 		if call.Function.Name == "image_annotation_render" {
 			skillResult, skillErr = cloudAgentReadTool(s.repo, run.UserID, state, call, s)
@@ -717,7 +733,7 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 					}
 				}
 			}
-		case call.Function.Name == "skill_read_file", call.Function.Name == "model_list", call.Function.Name == "image_annotation_render":
+		case call.Function.Name == "skill_read_file", call.Function.Name == "model_list", call.Function.Name == "image_annotation_render", call.Function.Name == "canvas_read_text":
 			result, toolErr = skillResult, skillErr
 		default:
 			result, toolErr = cloudAgentReadToolCached(repo, run.UserID, state, call)

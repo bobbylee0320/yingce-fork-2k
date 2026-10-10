@@ -8,7 +8,7 @@ import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/s
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { AdminStatusBadge } from "./admin-ui";
 
-type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
+type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "inspirationSourcesVisible" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
 type FeatureRow = {
     key: FeatureKey;
     title: string;
@@ -17,7 +17,7 @@ type FeatureRow = {
     dependsOn?: FeatureKey;
 };
 
-const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers"];
+const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "inspirationSourcesVisible", "frontendModelsEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers"];
 
 const workspaceFeatureRows: FeatureRow[] = [
     {
@@ -43,6 +43,12 @@ const workspaceFeatureRows: FeatureRow[] = [
         title: "自定义渠道",
         description: "允许用户配置并使用自己的模型渠道。",
         icon: <RadioTower className="size-4" aria-hidden="true" />,
+    },
+    {
+        key: "inspirationSourcesVisible",
+        title: "素材来源署名",
+        description: "显示创作首页的素材来源说明；关闭后隐藏该面板。",
+        icon: <Sparkles className="size-4" aria-hidden="true" />,
     },
 ];
 
@@ -245,7 +251,7 @@ export default function FeatureAvailabilityPanel() {
                     title="1. 用户工作台入口"
                     description="先决定普通用户能进入哪些核心工作区"
                     icon={<MonitorCog className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/4 开放`} tone={enabledWorkspaceFeatures === 4 ? "success" : "neutral"} />}
+                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/5 开放`} tone={enabledWorkspaceFeatures === 5 ? "success" : "neutral"} />}
                 >
                     {workspaceFeatureRows.map((row) => (
                         <FeatureSettingRow key={row.key} row={row} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
@@ -351,6 +357,7 @@ function toEditablePayload(features: FeatureAvailability) {
         taskCenterEnabled: features.taskCenterEnabled,
         creditsEnabled: features.creditsEnabled,
         customChannelsEnabled: features.customChannelsEnabled,
+        inspirationSourcesVisible: features.inspirationSourcesVisible,
         frontendModelsEnabled: features.frontendModelsEnabled,
         pluginCenterEnabled: features.pluginCenterEnabled,
         systemPluginsVisibleToUsers: features.systemPluginsVisibleToUsers,
@@ -373,6 +380,7 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         taskCenterEnabled: record.taskCenterEnabled as boolean,
         creditsEnabled: record.creditsEnabled as boolean,
         customChannelsEnabled: record.customChannelsEnabled as boolean,
+        inspirationSourcesVisible: record.inspirationSourcesVisible as boolean,
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,
         systemPluginsVisibleToUsers: record.systemPluginsVisibleToUsers as boolean,

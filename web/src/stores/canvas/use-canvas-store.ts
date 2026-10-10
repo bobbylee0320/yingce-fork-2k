@@ -12,6 +12,8 @@ import type { CanvasStarterMode } from "@/lib/canvas/canvas-starter";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "@/types/canvas";
 import type { PrevisScene } from "@/types/previs";
 import type { TimelineProject } from "@/types/timeline";
+import { useSyncProgressStore, type SyncProjectProgress } from "@/stores/use-sync-progress-store";
+import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
 
 export type CanvasProject = {
     id: string;
@@ -56,12 +58,154 @@ type QueuedCanvasPersist = {
     baseRevision: number;
     state: PersistedCanvasState;
     token: number;
+    journal?: CanvasPersistenceJournal;
 };
 
 type ObservedCanvasPersist = {
     projects: CanvasProject[];
     revision: number;
+    savedAt?: string;
 };
+
+type CanvasPersistenceJournal = {
+    version: 1;
+    name: string;
+    scope: string;
+    writerId: string;
+    token: number;
+    savedAt: string;
+    baseRevision: number;
+    baseProjects: CanvasProject[];
+    projects: CanvasProject[];
+};
+
+const CANVAS_PERSISTENCE_JOURNAL_KEY = "yingce:canvas_store_journal";
+const CANVAS_JOURNAL_MAX_BYTES = 450_000;
+const canvasJournalWriterId = `tab-${nanoid(10)}`;
+
+function canvasPersistenceJournalKey(scope: string, writerId = canvasJournalWriterId) {
+    return `${CANVAS_PERSISTENCE_JOURNAL_KEY}:user:${encodeURIComponent(scope)}:${writerId}`;
+}
+
+function createCanvasPersistenceJournal(scope: string, name: string, previous: CanvasProject[], next: CanvasProject[], token: number, baseRevision: number): CanvasPersistenceJournal {
+    const before = new Map(previous.map((project) => [project.id, project]));
+    const after = new Map(next.map((project) => [project.id, project]));
+    const changed = new Set([...before.keys(), ...after.keys()].filter((id) => before.get(id) !== after.get(id)));
+    return {
+        version: 1, name, scope, writerId: canvasJournalWriterId, token,
+        savedAt: new Date().toISOString(), baseRevision,
+        baseProjects: previous.filter((project) => changed.has(project.id)),
+        projects: next.filter((project) => changed.has(project.id)),
+    };
+}
+
+function readCanvasPersistenceJournals(scope: string): CanvasPersistenceJournal[] {
+    try {
+        if (typeof window === "undefined") return [];
+        const storage = window.localStorage;
+        if (!storage) return [];
+        const prefix = canvasPersistenceJournalKey(scope, "");
+        const keys = new Set([canvasPersistenceJournalKey(scope)]);
+        for (let index = 0; index < storage.length; index += 1) {
+            const key = storage.key(index);
+            if (key?.startsWith(prefix)) keys.add(key);
+        }
+        return [...keys].flatMap((key) => {
+            const raw = storage.getItem(key);
+            if (!raw) return [];
+            try {
+                const journal = JSON.parse(raw) as CanvasPersistenceJournal;
+                return journal.version === 1 && journal.scope === scope && journal.name && typeof journal.writerId === "string"
+                    && key === canvasPersistenceJournalKey(scope, journal.writerId) && Number.isSafeInteger(journal.token)
+                    && Array.isArray(journal.projects) && Array.isArray(journal.baseProjects) ? [journal] : [];
+            } catch { return []; }
+        });
+    } catch { return []; }
+}
+
+function writeCanvasPersistenceJournal(journal: CanvasPersistenceJournal) {
+    try {
+        if (typeof window === "undefined" || !window.localStorage) return false;
+        const serialized = JSON.stringify(journal);
+        // Large media stays in IndexedDB. Oversized recovery records trigger an
+        // immediate full save and remain visibly pending until that write succeeds.
+        if (new TextEncoder().encode(serialized).byteLength > CANVAS_JOURNAL_MAX_BYTES) return false;
+        window.localStorage.setItem(canvasPersistenceJournalKey(journal.scope, journal.writerId), serialized);
+        return true;
+    } catch { return false; }
+}
+
+function clearCanvasPersistenceJournal(scope: string, token: number, writerId = canvasJournalWriterId) {
+    try {
+        if (typeof window === "undefined") return;
+        const key = canvasPersistenceJournalKey(scope, writerId);
+        const raw = window.localStorage?.getItem(key);
+        // A previous save must never clear edits made while IndexedDB was writing.
+        if (raw && (JSON.parse(raw) as CanvasPersistenceJournal).token <= token) window.localStorage.removeItem(key);
+    } catch { /* The durable receipt makes a leftover journal safe to replay. */ }
+}
+
+function applyCanvasPersistenceJournal(document: CanvasStorageDocument, journal: CanvasPersistenceJournal) {
+    if ((document.journalTokens?.[journal.writerId] ?? -1) >= journal.token) return { document, conflicts: [] };
+    return rebaseCanvasProjects({ document, baseProjects: journal.baseProjects, localProjects: journal.projects, baseRevision: journal.baseRevision });
+}
+
+async function preserveLocalRebaseConflicts(scope: string, projects: CanvasProject[], conflicts: ReturnType<typeof rebaseCanvasProjects>["conflicts"]) {
+    if (!conflicts.length) return;
+    const ids = new Set(conflicts.map((conflict) => conflict.projectId || conflict.id));
+    const { preserveCanvasSyncDraftLocked } = await import("@/services/canvas-sync-drafts");
+    for (const project of projects.filter((item) => ids.has(item.id))) {
+        const draftCount = await preserveCanvasSyncDraftLocked(project, scope);
+        if (getActiveUserScope() === scope) useSyncProgressStore.getState().setProjectProgress(project.id, {
+            phase: "conflict", errorKind: "conflict", draftCount,
+            message: "其他标签页也修改了此画布，本地版本已保留为草稿",
+        });
+    }
+}
+
+
+
+function setCanvasLocalPersistenceProgress(projects: CanvasProject[], patch: Partial<SyncProjectProgress>) {
+    const progress = useSyncProgressStore.getState();
+    for (const project of projects) {
+        const current = progress.syncingProjects[project.id];
+        progress.setProjectProgress(project.id, { projectId: project.id, ...(current ? {} : { phase: "local" as const }), ...patch });
+    }
+}
+
+function markCanvasLocalPersistencePending(projects: CanvasProject[], error?: string) {
+    setCanvasLocalPersistenceProgress(projects, {
+        localPhase: error ? "error" : "pending",
+        localError: error,
+        errorKind: error ? "local" : undefined,
+        pendingWrites: 1,
+    });
+}
+
+function markCanvasLocalPersistenceSaved(projects: CanvasProject[], savedAt: string) {
+    setCanvasLocalPersistenceProgress(projects, { localPhase: "saved", localSavedAt: savedAt, localError: undefined, errorKind: undefined, pendingWrites: 0 });
+}
+
+function recordCanvasNodePersistenceCounts(before: CanvasProject[], after: CanvasProject[]) {
+    const beforeById = new Map(before.map((project) => [project.id, project]));
+    const afterById = new Map(after.map((project) => [project.id, project]));
+    for (const id of new Set([...beforeById.keys(), ...afterById.keys()])) {
+        const nodesBefore = beforeById.get(id)?.nodes.length || 0;
+        const nodesAfter = afterById.get(id)?.nodes.length || 0;
+        if (nodesBefore === nodesAfter) continue;
+        recordDiagnosticEvent({
+            level: nodesAfter < nodesBefore ? "error" : "info",
+            category: "action",
+            code: nodesAfter < nodesBefore ? "canvas.persistence.nodes_decreased" : "canvas.persistence.nodes_changed",
+            message: nodesAfter < nodesBefore ? "画布持久化后节点数量减少" : "画布持久化后节点数量变化",
+            projectId: id,
+            nodes_before: nodesBefore,
+            nodes_after: nodesAfter,
+        });
+    }
+}
+
+
 
 let suppressCanvasStorePersistence = 0;
 const canvasMemoryStates = new Map<string, PersistedCanvasState>();
@@ -130,10 +274,20 @@ export function canvasStoreStorageRevision(scope: string) {
 }
 
 export function recordCanvasStorageDocument(scope: string, document: CanvasStorageDocument) {
+    const savedAt = document.savedAt || new Date().toISOString();
     observedCanvasPersists.set(scope, {
         projects: document.state.projects,
         revision: document.storageRevision,
+        savedAt,
     });
+    if (getActiveUserScope() !== scope) return;
+    const queued = queuedCanvasPersists.get(scope);
+    if (queued || failedCanvasJournalRecoveries.has(scope)) {
+        if (failedCanvasJournalRecoveries.has(scope)) return;
+        markCanvasLocalPersistencePending(queued!.state.projects);
+    } else {
+        markCanvasLocalPersistenceSaved(document.state.projects, savedAt);
+    }
 }
 
 export async function commitPendingCanvasStorePersistenceLocked(scope: string) {
@@ -150,24 +304,37 @@ export async function commitPendingCanvasStorePersistenceLocked(scope: string) {
             baseProjects: queued.baseProjects,
             localProjects: queued.state.projects,
             baseRevision: queued.baseRevision,
-        }).document;
-        await storage.setItem(queued.name, serializeCanvasStorageDocument(rebased));
-        committed = rebased;
-        recordCanvasStorageDocument(scope, rebased);
+        });
+        await preserveLocalRebaseConflicts(scope, queued.state.projects, rebased.conflicts);
+        const savedAt = new Date().toISOString();
+        const savedDocument = { ...rebased.document, savedAt, journalTokens: { ...durable.journalTokens, [canvasJournalWriterId]: queued.token } };
+        await storage.setItem(queued.name, serializeCanvasStorageDocument(savedDocument));
+        committed = savedDocument;
+        clearCanvasPersistenceJournal(scope, queued.token);
+        recordCanvasNodePersistenceCounts(durable.state.projects, savedDocument.state.projects);
+        recordCanvasNodePersistenceCounts(queued.state.projects, savedDocument.state.projects);
 
         const latest = queuedCanvasPersists.get(scope);
         if (!latest || latest.token === queued.token) {
             if (latest?.token === queued.token) queuedCanvasPersists.delete(scope);
+            recordCanvasStorageDocument(scope, savedDocument);
             return committed;
         }
 
         latest.baseProjects = queued.state.projects;
-        latest.baseRevision = rebased.storageRevision;
+        latest.baseRevision = savedDocument.storageRevision;
+        recordCanvasStorageDocument(scope, savedDocument);
     }
 }
 
 async function writeQueuedCanvasPersist(scope: string, _token: number) {
-    await withCanvasStorePersistenceLock(scope, () => commitPendingCanvasStorePersistenceLocked(scope));
+    try {
+        await withCanvasStorePersistenceLock(scope, () => commitPendingCanvasStorePersistenceLocked(scope));
+    } catch (error) {
+        const queued = queuedCanvasPersists.get(scope);
+        if (queued) markCanvasLocalPersistencePending(queued.state.projects, error instanceof Error ? error.message : "本地画布保存失败");
+        throw error;
+    }
 }
 
 export function pendingCanvasStorePersistence(scope: string) {
@@ -379,16 +546,57 @@ export function reconcileCanvasGenerationFailure(scope: string, durableProjects:
     });
 }
 
+const failedCanvasJournalRecoveries = new Map<string, string>();
+
+async function recoverCanvasPersistenceJournalLocked(scope: string, name: string, initial: CanvasStorageDocument) {
+    const journals = readCanvasPersistenceJournals(scope).filter((journal) => journal.name === name)
+        .sort((left, right) => left.savedAt.localeCompare(right.savedAt) || left.writerId.localeCompare(right.writerId) || left.token - right.token);
+    if (!journals.length) return initial;
+    const storage = localForageStorageForScope(scope);
+    let durable = parseCanvasStorageDocument(await storage.getItem(name), initial.state.projects);
+    for (const journal of journals) {
+        const rebased = applyCanvasPersistenceJournal(durable, journal);
+        await preserveLocalRebaseConflicts(scope, journal.projects, rebased.conflicts);
+        const saved = { ...rebased.document, savedAt: new Date().toISOString(), journalTokens: { ...rebased.document.journalTokens, [journal.writerId]: Math.max(journal.token, durable.journalTokens?.[journal.writerId] ?? 0) } };
+        await storage.setItem(name, serializeCanvasStorageDocument(saved));
+        clearCanvasPersistenceJournal(scope, journal.token, journal.writerId);
+        recordCanvasNodePersistenceCounts(durable.state.projects, saved.state.projects);
+        durable = saved;
+    }
+    failedCanvasJournalRecoveries.delete(scope);
+    return durable;
+}
+
+async function recoverCanvasPersistenceJournal(scope: string, name: string, initial: CanvasStorageDocument) {
+    try {
+        return await withCanvasStorePersistenceLock(scope, () => recoverCanvasPersistenceJournalLocked(scope, name, initial));
+    } catch (error) {
+        failedCanvasJournalRecoveries.set(scope, name);
+        const projects = new Map(initial.state.projects.map((project) => [project.id, project]));
+        // Keep unsaved branches visible when recovery itself cannot be persisted.
+        // Journals stay intact; a later flush retries their original three-way merge.
+        for (const journal of readCanvasPersistenceJournals(scope).filter((item) => item.name === name)) {
+            if ((initial.journalTokens?.[journal.writerId] ?? -1) >= journal.token) continue;
+            for (const project of journal.projects) projects.set(project.id, project);
+        }
+        const recoveredProjects = [...projects.values()];
+        if (getActiveUserScope() === scope) markCanvasLocalPersistencePending(recoveredProjects, error instanceof Error ? error.message : "本地恢复记录写入失败");
+        return { ...initial, state: { projects: recoveredProjects } };
+    }
+}
+
 const canvasStorage: PersistStorage<CanvasStore> = {
     getItem: async (name) => {
         const scope = getActiveUserScope();
-        const value = await localForageStorageForScope(scope).getItem(name);
-        if (!value) {
+        const storage = localForageStorageForScope(scope);
+        const value = await storage.getItem(name);
+        let document = parseCanvasStorageDocument(value);
+        document = await recoverCanvasPersistenceJournal(scope, name, document);
+        if (!value && !document.state.projects.length) {
             canvasMemoryStates.set(scope, { projects: [] });
-            observedCanvasPersists.set(scope, { projects: [], revision: 0 });
+            observedCanvasPersists.set(scope, { projects: [], revision: document.storageRevision });
             return null;
         }
-        const document = parseCanvasStorageDocument(value);
         const state = document.state as PersistedCanvasState;
         canvasMemoryStates.set(scope, state);
         recordCanvasStorageDocument(scope, document);
@@ -397,7 +605,8 @@ const canvasStorage: PersistStorage<CanvasStore> = {
     setItem: (name, value) => {
         const scope = getActiveUserScope();
         const nextState = value.state as PersistedCanvasState;
-        if (canvasMemoryStates.get(scope)?.projects === nextState.projects) return;
+        const previousState = canvasMemoryStates.get(scope);
+        if (previousState?.projects === nextState.projects) return;
         canvasMemoryStates.set(scope, nextState);
         if (suppressCanvasStorePersistence) return;
 
@@ -405,29 +614,35 @@ const canvasStorage: PersistStorage<CanvasStore> = {
         const observed = observedCanvasPersists.get(scope);
         const token = (canvasPersistTokens.get(scope) || 0) + 1;
         canvasPersistTokens.set(scope, token);
-        const baseProjects = queued?.baseProjects ?? observed?.projects ?? [];
+        const baseProjects = queued?.baseProjects ?? observed?.projects ?? previousState?.projects ?? [];
+        const baseRevision = queued?.baseRevision ?? observed?.revision ?? 0;
+        const queuedState = ordinaryCanvasPersistenceState(scope, nextState, observed?.projects ?? baseProjects);
+        const journalBaseProjects = queued?.baseProjects ?? observed?.projects ?? previousState?.projects ?? [];
+        const journal = createCanvasPersistenceJournal(scope, name, journalBaseProjects, queuedState.projects, token, baseRevision);
+        const journalWritten = journal ? writeCanvasPersistenceJournal(journal) : false;
         queuedCanvasPersists.set(scope, {
             name,
             scope,
             baseProjects,
-            baseRevision: queued?.baseRevision ?? observed?.revision ?? 0,
-            // generationEffectKeys 由专用 generation durable commit 管理；普通队列只能携带已确认 stamp。
-            state: ordinaryCanvasPersistenceState(scope, nextState, observed?.projects ?? baseProjects),
+            baseRevision,
+            state: queuedState,
             token,
+            journal: journalWritten ? journal || undefined : undefined,
         });
+        markCanvasLocalPersistencePending(nextState.projects, journal && !journalWritten ? "本地快速恢复记录写入失败，正在等待完整画布保存" : undefined);
         clearCanvasSaveTimer(scope);
         const timer = setTimeout(() => {
             if (canvasSaveTimers.get(scope) === timer) canvasSaveTimers.delete(scope);
             void writeQueuedCanvasPersist(scope, token).catch((error) => {
-                // 自动保存无法把异常返回给原始状态更新调用方，但失败队列仍会保留给下一次写入或显式 flush 重试。
-                // 自动保存失败有队列兜底，属可降级场景；在无本地存储的环境（如测试进程）不应升级为错误级日志。
+                // 自动保存无法把异常返回给原始状态更新调用方，但失败队列和 journal 会保留给下一次写入或显式 flush 重试。
                 console.warn("画布本地持久化失败，已保留待写队列", { scope, error });
             });
-        }, 400);
+        }, journalWritten ? 400 : 0);
         canvasSaveTimers.set(scope, timer);
     },
     removeItem: (name) => {
         const scope = getActiveUserScope();
+        for (const journal of readCanvasPersistenceJournals(scope)) clearCanvasPersistenceJournal(scope, journal.token, journal.writerId);
         return localForageStorageForScope(scope).removeItem(name);
     },
 };

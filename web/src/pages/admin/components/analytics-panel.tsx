@@ -300,6 +300,8 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                     trend={formatCountDelta(currentTrend?.activeUsers, previousTrend?.activeUsers)}
                     detail={data ? `日 ${formatNumber(data.kpi.dau)} · 周 ${formatNumber(data.kpi.wau)} · 月 ${formatNumber(data.kpi.mau)}` : undefined}
                 />
+                <AnalyticsHealthCard icon={<CircleDollarSign className="size-4" />} label="用户总余额" value={data ? formatCredits(data.kpi.totalBalanceMicrocredits ?? 0) : "--"} detail="当前所有用户可用积分余额" />
+                <AnalyticsHealthCard icon={<CircleDollarSign className="size-4" />} label="范围消耗" value={data ? formatCredits(data.kpi.totalConsumedMicrocredits ?? 0) : "--"} detail="筛选范围内已计费调用" />
                 <AnalyticsHealthCard
                     icon={<Workflow className="size-4" />}
                     label="生成任务"

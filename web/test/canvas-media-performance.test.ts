@@ -27,6 +27,8 @@ const workflowProductionSource = readFileSync(resolve(import.meta.dir, "../src/p
 const videoPlayerSource = readFileSync(resolve(import.meta.dir, "../src/components/video-player.tsx"), "utf8");
 const canvasProjectSource = moduleGroupSource("pages/canvas/project.tsx");
 const globalStylesSource = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
+const resourceBlobCacheSource = readFileSync(resolve(import.meta.dir, "../src/services/resource-blob-cache.ts"), "utf8");
+const resourceApiSource = readFileSync(resolve(import.meta.dir, "../src/services/api/resources.ts"), "utf8");
 
 function node(id: string, type: CanvasNodeType): CanvasNodeData {
     return { id, type, title: id, position: { x: 0, y: 0 }, width: 320, height: 180, metadata: {} };
@@ -120,9 +122,26 @@ describe("large canvas media rendering", () => {
         expect(workflowProductionSource).not.toContain("await response.blob()");
     });
 
+    test("merges concurrent full Blob consumers before starting the download", () => {
+        expect(resourceBlobCacheSource).toContain("const blobInFlight = new Map<string, Promise<Blob | null>>();");
+        expect(resourceBlobCacheSource).toContain("const pending = blobInFlight.get(target.key);");
+        expect(resourceBlobCacheSource).toContain("return pending;");
+        expect(resourceBlobCacheSource).toContain("getOrDownloadResourceBlob(storageKey, target)");
+    });
+
+    test("coalesces forced access refreshes already in flight", () => {
+        expect(resourceApiSource).toContain("const inFlightRefresh = accessRequests.get(key);");
+        expect(resourceApiSource).toContain("if (inFlightRefresh) return inFlightRefresh;");
+    });
+
+    test("reuses a cached full video Blob for poster capture before requesting playback access", () => {
+        expect(canvasVideoPreviewSource).toContain("peekCachedResourceObjectUrl(storageKey)");
+        expect(canvasVideoPreviewSource).toContain("getCachedResourceObjectUrl(storageKey)");
+    });
+
     test("shows a captured first frame before its OSS poster upload finishes and allows later retries", () => {
-        expect(canvasVideoPreviewSource).toContain("const localUrl = URL.createObjectURL(captured.poster)");
-        expect(canvasVideoPreviewSource).toContain("return { localUrl, persisted }");
+        expect(canvasVideoPreviewSource).toContain("const localUrl = URL.createObjectURL(result.poster)");
+        expect(canvasVideoPreviewSource).toContain("persisted: result.persisted");
         expect(canvasVideoPreviewSource).not.toContain("previewRequests");
     });
 });

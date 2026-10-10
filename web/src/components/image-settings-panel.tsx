@@ -8,18 +8,11 @@ import { type CanvasTheme } from "@/lib/canvas-theme";
 import { buildImageResolutionOptions, formatImageResolutionSize } from "@/lib/image-resolution-tiers";
 import { modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { mergedImageCapabilityConfig } from "@/lib/model-selection";
+import { imagePriceSelector, normalizeImagePriceSelector } from "@/lib/image-pricing";
 import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
+import { imageQualityLabel } from "@/lib/image-quality";
 
-const qualityOptions = [
-    { value: "auto", label: "自动" },
-    { value: "high", label: "高" },
-    { value: "medium", label: "中" },
-    { value: "low", label: "低" },
-    { value: "1k", label: "1K" },
-    { value: "2k", label: "2K" },
-    { value: "4k", label: "4K" },
-];
-
+export { imageQualityLabel } from "@/lib/image-quality";
 type AspectOption = { value: string; label: string; width: number; height: number; icon: string; size?: string };
 
 const aspectOptions: AspectOption[] = [
@@ -65,7 +58,7 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const effectiveMaxCount = Math.min(maxCount, profile.maxOutputs);
     const count = Math.max(1, Math.min(effectiveMaxCount, Number(normalized.count)));
     const activeSize = normalized.size;
-    const activeQualityOptions = profile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: value });
+    const activeQualityOptions = profile.quality.values.map((value) => ({ value, label: imageQualityLabel(value) }));
     const priceTiers = imageModelPriceTiers(config);
 
     return (
@@ -142,10 +135,6 @@ export function ImageSettingsTheme({ theme, children }: { theme: CanvasTheme; ch
     );
 }
 
-export function imageQualityLabel(value: string) {
-    return ({ auto: "自动", high: "高", medium: "中", low: "低", "1k": "1K", "2k": "2K", "4k": "4K" } as Record<string, string>)[value.toLowerCase()] || value || "默认";
-}
-
 function isGrokResolutionQuality(profile: ImageCapabilityConfig) {
     const values = profile.quality.values.map((item) => item.toLowerCase());
     return values.some((value) => ["1k", "2k", "4k"].includes(value));
@@ -163,11 +152,12 @@ function imageModelPriceTiers(config: AiConfig) {
 }
 
 function hasPriceTierForImageSelection(tiers: ReturnType<typeof imageModelPriceTiers>, quality: string, size: string) {
-	if (!tiers.length) return true;
-	return tiers.some((tier) => {
-		const selector = tier.selector || {};
-		return (!selector.quality || selector.quality === "*" || selector.quality === quality.toLowerCase()) && (!selector.size || selector.size === "*" || selector.size === size.toLowerCase());
-	});
+    if (!tiers.length) return true;
+    const requested = imagePriceSelector(quality, size);
+    return tiers.some((tier) => {
+        const selector = normalizeImagePriceSelector(tier.selector || {});
+        return Object.entries(selector).every(([key, value]) => value === "*" || requested[key] === value);
+    });
 }
 
 function OptionPill({ selected, disabled = false, theme, onClick, children }: { selected: boolean; disabled?: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {

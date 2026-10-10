@@ -29,7 +29,6 @@ import { resourceFileUrl, resourceStorageKey, uploadResourceFile } from "@/servi
 import { primeResourceBlobCache } from "@/services/resource-blob-cache";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
-import { CanvasSyncDraftMenu } from "./canvas-sync-status";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 const CanvasDeleteProjectsDialog = lazy(() => import("@/components/canvas/canvas-delete-projects-dialog").then((module) => ({ default: module.CanvasDeleteProjectsDialog })));
@@ -416,7 +415,6 @@ export default function CanvasPage() {
                     meta={<span className="app-projects-header-meta">{totalProjects} 个</span>}
                     actions={
                         <div className="collection-header-actions">
-                            <CanvasSyncDraftMenu />
                             <Button type="primary" disabled={!hydrated} icon={<Plus />} onClick={createAndEnter}>
                                 新建画布
                             </Button>

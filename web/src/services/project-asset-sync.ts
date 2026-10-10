@@ -1,4 +1,4 @@
-import { canvasNodeToAsset, declaredCanvasNodeAssetCategory, findCanvasNodeAsset, type CanvasAssetSource } from "@/lib/canvas/canvas-node-asset";
+import { canvasNodeToAsset, declaredCanvasNodeAssetCategory, findCanvasNodeAsset, requiresMaterializedCanvasAsset, type CanvasAssetSource } from "@/lib/canvas/canvas-node-asset";
 import { canvasVideoAssetPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { readImageMeta } from "@/lib/image-utils";
 import { parseBackendGenerationResult, type BackendGenerationResult } from "@/services/api/generation-task";
@@ -13,7 +13,7 @@ import { getImageBlob, resolveImageUrl, setImageBlob } from "@/services/image-st
 import { generationArtifactStorageKey, loadOrStoreGenerationArtifact } from "@/services/generation-artifact-sink";
 import { createProviderNeutralGenerationTaskEffectStore } from "@/services/provider-neutral-generation-effects";
 import { getCachedResourceBlob } from "@/services/resource-blob-cache";
-import { loadAssetsForUse, saveRemoteUserDataNow } from "@/services/user-data-sync";
+import { hasRemoteUserDataSyncSession, loadAssetsForUse, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { normalizeAssetCategory } from "@/lib/asset-category";
 import { runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
@@ -86,7 +86,8 @@ export async function retryCanvasAssetSyncAfterRateLimit<T>(operation: () => Pro
 
 export function ensureCanvasNodeAsset(options: EnsureCanvasNodeAssetOptions) {
     const scope = getActiveUserScope();
-    const identity = options.taskId || options.node.metadata?.taskId || options.node.metadata?.storageKey || options.node.id;
+    const taskIdentity = options.taskId || options.node.metadata?.taskId || options.node.metadata?.storageKey || options.node.id;
+    const identity = options.node.metadata?.imageLayerGroup || options.node.metadata?.layerExtraction ? `${taskIdentity}:${options.node.metadata.storageKey || ""}` : taskIdentity;
     const key = [scope, options.domainProjectId || "personal", options.canvasId, options.node.id, identity].join(":");
     const pending = pendingAssetSyncs.get(key);
     if (pending) return pending;
@@ -108,7 +109,7 @@ async function persistCanvasNodeAsset(options: EnsureCanvasNodeAssetOptions): Pr
     let created = false;
     if (!asset) {
         // 受管生成结果必须采用已登记的身份，不能以随机 ID 再建一份。
-        if ((options.taskId || options.node.metadata?.taskId) && options.node.metadata?.storageKey?.startsWith("resource:")) throw new Error("生成素材尚未加载，请重新读取生成结果");
+        if (requiresMaterializedCanvasAsset(options.node, options.taskId)) throw new Error("生成素材尚未加载，请重新读取生成结果");
         const input = canvasNodeToAsset(options.node, { canvasId: options.canvasId, source: options.source, taskId: options.taskId });
         if (!input) throw new Error("当前节点没有可保存的素材内容");
         const assetId = store.addAsset(options.category ? { ...input, category: options.category } : input);
@@ -120,8 +121,10 @@ async function persistCanvasNodeAsset(options: EnsureCanvasNodeAssetOptions): Pr
         store.updateAsset(asset.id, { category: declaredCategory });
         asset = useAssetStore.getState().assets.find((item) => item.id === asset?.id) || asset;
     }
+    // 生成结果先以本地资产完成闭环；未建立云端同步会话时，后续登录同步会
+    // 继续上传素材和画布，不能把一个可恢复的本地成功报告成失败。
+    if (!hasRemoteUserDataSyncSession()) return { assetId: asset.id, created, linkedToProject: false };
     if (!options.domainProjectId) {
-        // 个人画布也必须在返回成功前把素材提交到服务端，不能只依赖延迟自动同步。
         await saveRemoteUserDataNow();
         throwIfAborted(options.signal);
         return { assetId: asset.id, created, linkedToProject: false };

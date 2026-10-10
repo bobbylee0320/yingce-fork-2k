@@ -272,3 +272,17 @@ html:not(.dark) .app-product-overlays .creation-control-popover .ant-popover-inn
 html:not(.dark) .app-product-overlays .creation-control-popover-surface {
     box-shadow: 0 16px 40px rgba(25, 25, 30, .12) !important;
 }
+
+/* 长提示词保持编辑器可控：按当前字号最多展示约 12 行，继续输入时只在编辑区内部滚动。 */
+.creation-home .creation-chat-editor textarea,
+.creation-home .creation-chat-mention-editor {
+    max-height: 18.6em !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.creation-home .creation-chat-mention-container {
+    min-height: 0 !important;
+}

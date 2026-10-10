@@ -4,6 +4,7 @@ import type { ColumnsType } from "antd/es/table";
 import { Braces, Copy, FileJson, FileText, Plus, Power, Search, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { AdminSearchInput } from "../components/admin-search-input";
 
 import { AdminDrawer } from "@/pages/admin/ui/overlays";
 import { PromptCodeEditor, type PromptCodeEditorHandle } from "@/components/prompt/prompt-code-editor";
@@ -178,7 +179,7 @@ export default function StoryboardPromptsPage() {
     return (
         <AdminPageFrame title="提示词模板" description="平台创作策略与版本管理" actions={<Button type="primary" icon={<Plus className="size-4" />} disabled={!definitions.length} onClick={() => openDrawer()}>新建版本</Button>}>
             <AdminDataTable
-                toolbar={<Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} aria-label="搜索提示词模板" placeholder="搜索模板或内容" onChange={(event) => updateUrl({ filter: event.target.value })} />}
+                toolbar={<AdminSearchInput allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} aria-label="搜索提示词模板" placeholder="搜索模板或内容" onValueChange={(value) => updateUrl({ filter: value })} />}
                 toolbarActive={hasFilters}
                 toolbarFilters={<><Select aria-label="筛选提示词类型" className="w-40" value={operationFilter} onChange={(value) => updateUrl({ operation: value })} options={[{ label: "全部类型", value: "all" }, ...definitions.map((item) => ({ label: item.label, value: item.operation }))]} /><Select aria-label="筛选提示词状态" className="w-32" value={status} onChange={(value) => updateUrl({ status: value })} options={[{ label: "全部状态", value: "all" }, { label: "启用中", value: "enabled" }, { label: "历史版本", value: "disabled" }]} /></>}
                 onReset={() => updateUrl({ filter: "", operation: "all", status: "all" })}

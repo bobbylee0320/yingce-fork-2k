@@ -103,6 +103,7 @@ export default function CreatePage() {
     const [hydrated, setHydrated] = useState(false);
     const userId = useUserStore((state) => state.user?.id || null);
     const userSessionHydrated = useUserStore((state) => state.hydrated);
+    const inspirationSourcesVisible = useUserStore((state) => state.features.inspirationSourcesVisible);
     const [conversationScope, setConversationScope] = useState<string | null>(null);
     const [mode, setMode] = useState<CreationMode>(() => initialComposerPreferences.mode || defaultCreationMode);
     const [prompt, setPrompt] = useState("");
@@ -1064,15 +1065,15 @@ export default function CreatePage() {
                         }}><Maximize2 /></button></Tooltip>
                     </motion.div> : null}
                 </AnimatePresence>
-                <CreationInspirationTunnel
-                    mode={mode}
-                    onStartPrompt={(nextMode, prompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
-                />
                 <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-empty-workspace creation-scrollbar">
                 <div className="creation-home-heading">
                     <h1>和{brandName}聊聊创作想法</h1>
                     <p>从一个画面、一个角色或一句话开始，继续你的创作。</p>
                 </div>
+                <CreationInspirationTunnel
+                    mode={mode}
+                    onStartPrompt={(nextMode, prompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
+                />
                 <section ref={launchpadRef} className="creation-launchpad" aria-label="开始创作">
                     <div className={cn("creation-composer-stage is-home-mode", agentMode && "is-agent-mode")}>
                         <CreationModeTabs mode={mode} agentActive={agentMode} onAgentSelect={() => setAgentMode(true)} onModeChange={(next) => { setAgentMode(false); selectMode(next); }} />
@@ -1083,8 +1084,7 @@ export default function CreatePage() {
                         onOpenLibrary={() => { setAgentMode(false); selectMode("image"); setLibraryOpen(true); }}
                     />
                 </section>
-                </main>
-                <div className="creation-inspiration-credit">
+                {inspirationSourcesVisible ? <div className="creation-inspiration-credit">
                     <details>
                         <summary>素材来源</summary>
                         {declaredInspirationSources().map((source) => (
@@ -1101,7 +1101,8 @@ export default function CreatePage() {
                             </p>
                         ))}
                     </details>
-                </div>
+                </div> : null}
+                </main>
             </> : <div className="creation-thread-workbench">
                 <CreationWorkspaceToolbar onNewConversation={startNewConversation} onOpenHistory={() => setHistoryOpen(true)} shots={videoShots} onJumpToShot={jumpToShot} onContinueCanvas={() => void continueOnCanvas()} openingCanvas={openingCanvas} />
                 <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-thread-scroll creation-scrollbar">

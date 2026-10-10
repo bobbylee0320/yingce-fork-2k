@@ -14,6 +14,7 @@ import {
     resetRemoteUserDataSync,
     saveRemoteUserDataNow,
     syncRemoteUserData,
+    overwriteRemoteCanvasProject,
 } from "../src/services/user-data-sync";
 import { createAgentCanvasSync } from "../src/services/agent-canvas-sync";
 import { flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from "../src/stores/canvas/use-canvas-store";
@@ -214,6 +215,17 @@ test("stale viewport, no-op restore and open do not submit old content", async (
     expect(latest.viewport).toEqual({ x: 100, y: 40, k: 2 });
     await saveRemoteUserDataNow();
     expect(requests.filter((request) => request.method === "put")).toHaveLength(0);
+});
+
+test("explicit local overwrite replaces only the selected cloud canvas after a revision conflict", async () => {
+    remote.set("canvas", { ...canvas(), title: "cloud edit", revision: 2 });
+    useCanvasStore.getState().renameProject("canvas", "local edit");
+
+    await overwriteRemoteCanvasProject("canvas");
+
+    expect(remote.get("canvas")).toMatchObject({ title: "local edit", revision: 3 });
+    expect(remote.get("other")).toMatchObject({ title: "other", revision: 1 });
+    expect(useSyncProgressStore.getState().syncingProjects.canvas).toMatchObject({ phase: "done", cloudRevision: 3, pendingChanges: 0 });
 });
 
 test("load latest, save and reload stay synced when Agent history replays an unversioned delta", async () => {

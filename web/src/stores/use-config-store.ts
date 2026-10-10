@@ -88,6 +88,7 @@ export type ModelChannel = {
     hasApiKey?: boolean;
     hasSecretKey?: boolean;
     concurrencyLimit?: number;
+    proxyUrl?: string;
     modelCosts?: Array<{
         model: string;
         displayName?: string;

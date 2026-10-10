@@ -1,11 +1,10 @@
 import { AppDrawer } from "@/components/ui/product/app-drawer";
 import { EmptyState } from "@/components/ui/product/empty-state";
 import { App, Button, Grid, Spin } from "antd";
-import { Check, ChevronDown, Cloud, Download, FileClock, History, RefreshCw, X } from "lucide-react";
+import { Check, ChevronDown, Cloud, FileClock, History, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCanvasHistoryEntry, listCanvasHistory, type CanvasHistoryEntry } from "@/services/api/user-data";
 import { readCanvasSyncDrafts, type CanvasSyncDraft } from "@/services/canvas-sync-drafts";
-import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
 import { getActiveUserScope } from "@/lib/user-scope";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
@@ -40,7 +39,6 @@ export function useCanvasVersionHistory(projectId: string, onRestore: (snapshotI
     const [draftLoading, setDraftLoading] = useState(false);
     const [restoring, setRestoring] = useState(false);
     const [confirming, setConfirming] = useState(false);
-    const [exporting, setExporting] = useState(false);
     const [error, setError] = useState("");
     const [draftError, setDraftError] = useState("");
     const [reload, setReload] = useState(0);
@@ -161,20 +159,6 @@ export function useCanvasVersionHistory(projectId: string, onRestore: (snapshotI
         });
     };
 
-    const download = async () => {
-        if (!preview?.project || !isCurrentContext()) return;
-        setExporting(true);
-        try {
-            // Drawing strokes are not versioned; never mix today's local strokes into an old snapshot.
-            await exportCanvasProjects([preview.project], `${preview.project.title}-${preview.label}`, { includeLocalDrawings: false });
-            message.success("已下载，可从画布列表导入为新画布");
-        } catch (cause) {
-            message.error(cause instanceof Error ? cause.message : "下载失败，请重试");
-        } finally {
-            setExporting(false);
-        }
-    };
-
     return {
         open,
         listOpen,
@@ -188,7 +172,6 @@ export function useCanvasVersionHistory(projectId: string, onRestore: (snapshotI
         draftLoading,
         restoring,
         confirming,
-        exporting,
         error,
         draftError,
         show: () => {
@@ -225,14 +208,13 @@ export function useCanvasVersionHistory(projectId: string, onRestore: (snapshotI
         },
         returnToCurrent,
         restore,
-        download,
     };
 }
 
 export type CanvasVersionHistoryController = ReturnType<typeof useCanvasVersionHistory>;
 
 export function CanvasVersionHistory({ history }: { history: CanvasVersionHistoryController }) {
-    const { open, tab, entries, drafts, currentRevision, preview, loading, draftLoading, restoring, exporting, error, draftError } = history;
+    const { open, tab, entries, drafts, currentRevision, preview, loading, draftLoading, restoring, error, draftError } = history;
     if (!open) return null;
     const groups = new Map<string, CanvasHistoryEntry[]>();
     for (const entry of entries) {
@@ -340,7 +322,7 @@ export function CanvasVersionHistory({ history }: { history: CanvasVersionHistor
                     </>
                 ) : (
                     <>
-                        <p className="canvas-version-draft-note">发生冲突或恢复版本时保留的本机备份。下载后可从画布列表导入为新画布。</p>
+                        <p className="canvas-version-draft-note">发生冲突或恢复版本时，系统自动保留的本地内容，可在此查看。</p>
                         {draftError ? (
                             <p role="alert" className="canvas-version-error">
                                 {draftError}
@@ -383,19 +365,16 @@ export function CanvasVersionHistory({ history }: { history: CanvasVersionHistor
                             </small>
                         ) : null}
                         {preview.project?.nodes.some((node) => node.type === "drawing") ? <p className="canvas-version-hint">绘图仅保留已上传的预览，不含本机历史笔画。</p> : null}
-                        <div className="canvas-version-actions">
-                            {preview.kind === "cloud" ? (
+                        {preview.kind === "cloud" ? (
+                            <div className="canvas-version-actions">
                                 <Button block type="primary" loading={restoring} disabled={!preview.project || currentRevision === undefined || loading} onClick={history.restore}>
                                     恢复此版本
                                 </Button>
-                            ) : null}
-                            <Button block type={preview.kind === "draft" ? "primary" : "default"} icon={<Download size={14} />} loading={exporting} disabled={!preview.project || restoring} onClick={() => void history.download()}>
-                                {preview.kind === "draft" ? "下载草稿" : "下载此版本"}
-                            </Button>
-                        </div>
+                            </div>
+                        ) : null}
                     </>
                 ) : (
-                    <p className="canvas-version-hint">{tab === "cloud" ? "内容变化时最多每 5 分钟保留一份，保留最近 20 份。恢复前额外备份。" : "草稿仅存于此浏览器，建议及时下载保留。"}</p>
+                    <p className="canvas-version-hint">{tab === "cloud" ? "内容变化时最多每 5 分钟保留一份，保留最近 20 份。恢复前额外备份。" : "草稿保存在此浏览器中，查看草稿不会修改当前画布。"}</p>
                 )}
             </footer>
         </div>

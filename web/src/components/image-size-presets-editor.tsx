@@ -1,13 +1,15 @@
 import { useId, useState } from "react";
-import { Button, Input } from "antd";
+import { Button, Input, InputNumber } from "antd";
 import { Check, Plus } from "lucide-react";
 import { Switch } from "@/components/ui/base/switch";
 import "./image-size-picker.css";
 import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
-import { IMAGE_RATIOS, IMAGE_RESOLUTIONS, imagePresetForRatio, imageResolutionUsesQuality, imageSizeConfigWithPresets, imageSizePresets, imageTierAvailable } from "@/lib/image-size-presets";
+import { IMAGE_RATIOS, imageResolutionTiers, imagePresetForRatio, imageResolutionUsesQuality, imageSizeConfigWithPresets, imageSizePresets, imageTierAvailable } from "@/lib/image-size-presets";
+import { validateImageSize } from "@/services/api/image-validation";
 import type { ImageResolutionTier } from "@/lib/image-resolution-tiers";
 
 export function ImageSizePresetsEditor({ profile, disabled, onChange }: { profile: ImageCapabilityConfig; disabled?: boolean; onChange: (size: ImageCapabilityConfig["size"]) => void }) {
+    const IMAGE_RESOLUTIONS = imageResolutionTiers(profile);
     const presets = imageSizePresets(profile);
     const id = useId();
     const [drafts, setDrafts] = useState<Partial<Record<ImageResolutionTier, string>>>({});
@@ -34,6 +36,25 @@ export function ImageSizePresetsEditor({ profile, disabled, onChange }: { profil
         } catch (reason) {
             setErrors((current) => ({ ...current, [tier]: reason instanceof Error ? reason.message : "比例格式无效" }));
             return false;
+        }
+    };
+    const editDimensions = (tier: ImageResolutionTier, ratio: string, field: "width" | "height", rawValue: number | null) => {
+        if (disabled) return;
+        const value = rawValue == null ? NaN : Math.round(rawValue);
+        const selected = presets.find((preset) => preset.tier === tier && preset.ratio === ratio);
+        if (!selected || !Number.isInteger(value) || value <= 0) {
+            setErrors((current) => ({ ...current, [tier]: "请输入正整数像素" }));
+            return;
+        }
+        const width = field === "width" ? value : selected.width;
+        const height = field === "height" ? value : selected.height;
+        try {
+            validateImageSize(width, height);
+            const next = presets.map((preset) => preset === selected ? { ...preset, width, height, size: `${width}x${height}` } : preset);
+            onChange(imageSizeConfigWithPresets(profile, next));
+            setErrors((current) => ({ ...current, [tier]: "" }));
+        } catch (reason) {
+            setErrors((current) => ({ ...current, [tier]: reason instanceof Error ? reason.message : "像素尺寸无效" }));
         }
     };
     const addRatio = (tier: ImageResolutionTier) => {
@@ -68,24 +89,38 @@ export function ImageSizePresetsEditor({ profile, disabled, onChange }: { profil
                                     const selected = items.find((item) => item.ratio === ratio);
                                     const dimensions = selected || imagePresetForRatio(tier, ratio);
                                     return (
-                                        <button
-                                            key={ratio}
-                                            type="button"
-                                            disabled={disabled}
-                                            aria-pressed={Boolean(selected)}
-                                            aria-label={`${tier.toUpperCase()} ${ratio}`}
-                                            className="image-size-preset-option"
-                                            title={`${ratio} · ${dimensions.width} × ${dimensions.height} px${selected ? " · 点击移除" : " · 点击添加"}`}
-                                            onClick={() => update(tier, selected ? items.filter((item) => item.ratio !== ratio).map((item) => item.ratio) : [...items.map((item) => item.ratio), ratio])}
-                                        >
-                                            <span className="image-size-preset-option-label">
-                                                <span>{ratio}</span>
-                                                {selected ? <Check size={12} aria-hidden="true" /> : <Plus size={12} aria-hidden="true" />}
-                                            </span>
-                                            <small>
-                                                {dimensions.width} × {dimensions.height}
-                                            </small>
-                                        </button>
+                                        <div key={ratio} className="image-size-preset-option-wrap">
+                                            <button
+                                                type="button"
+                                                disabled={disabled}
+                                                aria-pressed={Boolean(selected)}
+                                                aria-label={`${tier.toUpperCase()} ${ratio}`}
+                                                className="image-size-preset-option"
+                                                title={`${ratio} · ${dimensions.width} × ${dimensions.height} px${selected ? " · 点击移除" : " · 点击添加"}`}
+                                                onClick={() => update(tier, selected ? items.filter((item) => item.ratio !== ratio).map((item) => item.ratio) : [...items.map((item) => item.ratio), ratio])}
+                                            >
+                                                <span className="image-size-preset-option-label">
+                                                    <span>{ratio}</span>
+                                                    {selected ? <Check size={12} aria-hidden="true" /> : <Plus size={12} aria-hidden="true" />}
+                                                </span>
+                                                <small>
+                                                    {dimensions.width} × {dimensions.height}
+                                                </small>
+                                            </button>
+                                            {selected ? (
+                                                <div className="image-size-preset-dimensions" aria-label={`${tier.toUpperCase()} ${ratio} 精确像素`}>
+                                                    <label>
+                                                        <span>宽</span>
+                                                        <InputNumber min={1} precision={0} value={selected.width} disabled={disabled} aria-label={`${tier.toUpperCase()} ${ratio} 宽度像素`} onChange={(value) => editDimensions(tier, ratio, "width", value)} />
+                                                    </label>
+                                                    <span aria-hidden="true">×</span>
+                                                    <label>
+                                                        <span>高</span>
+                                                        <InputNumber min={1} precision={0} value={selected.height} disabled={disabled} aria-label={`${tier.toUpperCase()} ${ratio} 高度像素`} onChange={(value) => editDimensions(tier, ratio, "height", value)} />
+                                                    </label>
+                                                </div>
+                                            ) : null}
+                                        </div>
                                     );
                                 })}
                             </div>

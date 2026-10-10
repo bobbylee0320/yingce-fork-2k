@@ -14,9 +14,12 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"io"
 	"strings"
 	"time"
+	"unicode/utf8"
 
+	"yingce/backend/internal/assets"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -45,7 +48,7 @@ func cloudAgentReadToolCacheable(name string) bool {
 // and search results are allowed to change between calls.
 func cloudAgentReadToolReadOnly(name string) bool {
 	switch name {
-	case "agent_profile_read", "canvas_get_state", "canvas_read_storyboard", "previs_scene_read", "canvas_read_batch_table", "canvas_list_node_types", "skill_read_file", "skill_search", "model_list", "recall_lessons", "task_get":
+	case "agent_profile_read", "canvas_get_state", "canvas_read_text", "canvas_read_storyboard", "previs_scene_read", "canvas_read_batch_table", "canvas_list_node_types", "skill_read_file", "skill_search", "model_list", "recall_lessons", "task_get":
 		return true
 	default:
 		return false
@@ -60,7 +63,7 @@ func cloudAgentReadCacheKey(call cloudAgentCall) string {
 			// These defaults are semantically identical to omission. Canonicalizing
 			// them prevents offset=0 retries from bypassing the read cache.
 			switch call.Function.Name {
-			case "skill_read_file", "canvas_get_state", "canvas_read_storyboard", "canvas_read_batch_table":
+			case "skill_read_file", "canvas_get_state", "canvas_read_text", "canvas_read_storyboard", "canvas_read_batch_table":
 				for _, field := range []string{"offset", "connectionOffset", "storyboardOffset"} {
 					if _, exists := object[field]; !exists {
 						object[field] = float64(0)
@@ -85,7 +88,7 @@ func cloudAgentReadCacheKeyForState(repo *repository.Repository, userID string, 
 		return key
 	}
 	switch call.Function.Name {
-	case "canvas_get_state", "canvas_read_storyboard", "previs_scene_read":
+	case "canvas_get_state", "canvas_read_text", "canvas_read_storyboard", "previs_scene_read":
 		if repo != nil {
 			if canvas, err := repo.CanvasProjectForUser(userID, state.Request.CanvasID); err == nil && canvas != nil {
 				return fmt.Sprintf("%s:canvas-revision:%d", key, canvas.Revision)
@@ -312,6 +315,99 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 			return cloudAgentCanvasStateWithFocus(repo, userID, state.Request.CanvasID, doc, args.Offset, args.FocusNodeIDs, depth, args.StoryboardOffset, args.ConnectionOffset)
 		}
 		return cloudAgentCanvasState(repo, userID, state.Request.CanvasID, doc, args.Offset, args.NodeIDs, args.StoryboardOffset, args.ConnectionOffset)
+	case "canvas_read_text":
+		var args struct {
+			NodeID   string `json:"nodeId"`
+			Offset   int    `json:"offset"`
+			MaxChars int    `json:"maxChars"`
+		}
+		if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
+			return nil, cloudAgentJSONArgumentError(err)
+		}
+		if err := validateCloudAgentID(args.NodeID, "文本节点ID", 80); err != nil || args.Offset < 0 {
+			return nil, &cloudAgentArgumentError{BadAuthRequest("文本节点ID或分页参数无效")}
+		}
+		if args.MaxChars == 0 {
+			args.MaxChars = 16000
+		}
+		if args.MaxChars < 1 || args.MaxChars > 16000 {
+			return nil, &cloudAgentArgumentError{BadAuthRequest("maxChars 必须在1到16000之间")}
+		}
+		canvas, err := repo.CanvasProjectForUser(userID, state.Request.CanvasID)
+		if err != nil {
+			return nil, err
+		}
+		doc, err := creationDocument(canvas.PayloadJSON)
+		if err != nil {
+			return nil, err
+		}
+		nodes, err := creationObjects(doc["nodes"])
+		if err != nil {
+			return nil, err
+		}
+		node := nodes[args.NodeID]
+		if node == nil {
+			return nil, BadAuthRequest("目标文本节点不在当前画布")
+		}
+		kind := stringValue(node["type"])
+		meta, _ := node["metadata"].(map[string]any)
+		if kind != "text" && kind != "markdown" && kind != "file" {
+			return nil, BadAuthRequest("目标节点不是可读取的文本或文件节点")
+		}
+		if stringValue(meta["workflowKind"]) == "character" {
+			return nil, BadAuthRequest("角色卡正文不是普通文本，请读取 character 字段")
+		}
+		content := stringValue(meta["content"])
+		resourceID := assets.ResourceID(stringValue(meta["storageKey"]))
+		if resourceID == "" {
+			resourceID = assets.ResourceID(content)
+		}
+		if resourceID != "" {
+			if service == nil {
+				return nil, BadAuthRequest("文本资源读取服务不可用")
+			}
+			resource, resourceErr := repo.ResourceForUser(userID, resourceID)
+			if resourceErr != nil {
+				return nil, resourceErr
+			}
+			if resource.Status != model.ResourceStatusReady {
+				return nil, BadAuthRequest("文本资源尚未上传完成")
+			}
+			if !isReadableTextResource(resource) {
+				return nil, BadAuthRequest("该文件不是可直接读取的文本资源")
+			}
+			const maxTextResourceBytes = 32 << 20
+			if resource.Size > maxTextResourceBytes {
+				return nil, BadAuthRequest("文本资源超过32MB，请先拆分文件后再读取")
+			}
+			stream, streamErr := service.OpenResourceRange(userID, resourceID, "")
+			if streamErr != nil {
+				return nil, streamErr
+			}
+			defer stream.Body.Close()
+			body, readErr := io.ReadAll(io.LimitReader(stream.Body, maxTextResourceBytes+1))
+			if readErr != nil {
+				return nil, readErr
+			}
+			if len(body) > maxTextResourceBytes {
+				return nil, BadAuthRequest("文本资源超过32MB，请先拆分文件后再读取")
+			}
+			content = string(body)
+		}
+		if strings.TrimSpace(content) == "" {
+			return map[string]any{"nodeId": args.NodeID, "title": stringValue(node["title"]), "content": "", "offset": args.Offset, "nextOffset": 0, "hasMore": false}, nil
+		}
+		runes := []rune(content)
+		if args.Offset > len(runes) {
+			return nil, &cloudAgentArgumentError{BadAuthRequest("文本读取 offset 超出正文长度")}
+		}
+		end := min(len(runes), args.Offset+args.MaxChars)
+		chunk := string(runes[args.Offset:end])
+		return map[string]any{
+			"nodeId": args.NodeID, "title": stringValue(node["title"]),
+			"content": chunk, "offset": args.Offset, "nextOffset": end,
+			"hasMore": end < len(runes), "totalChars": utf8.RuneCountInString(content),
+		}, nil
 	case "canvas_read_storyboard":
 		var args struct {
 			NodeID string `json:"nodeId"`
@@ -491,6 +587,22 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 		return result, nil
 	}
 	return nil, BadAuthRequest("未知工具")
+}
+
+func isReadableTextResource(resource *model.Resource) bool {
+	if resource == nil {
+		return false
+	}
+	mimeType := strings.ToLower(strings.TrimSpace(resource.MimeType))
+	if strings.HasPrefix(mimeType, "text/") {
+		return true
+	}
+	for _, suffix := range []string{".txt", ".md", ".markdown", ".json", ".csv", ".xml", ".rtf"} {
+		if strings.HasSuffix(strings.ToLower(resource.ObjectKey), suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func cloudAgentRenderImageAnnotations(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, service *Service) (any, error) {

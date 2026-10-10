@@ -15,6 +15,8 @@ export type CanvasStorageDocument = {
     state: { projects: CanvasProject[] };
     version: number;
     storageRevision: number;
+    savedAt?: string;
+    journalTokens?: Record<string, number>;
     tombstones: CanvasStorageTombstones;
 };
 
@@ -73,6 +75,8 @@ export function parseCanvasStorageDocument(value: string | null, fallback: Canva
         state?: { projects?: unknown };
         version?: unknown;
         storageRevision?: unknown;
+        savedAt?: unknown;
+        journalTokens?: unknown;
         tombstones?: unknown;
     };
     if (!Array.isArray(parsed.state?.projects)) throw new Error("画布持久状态无效");
@@ -80,6 +84,8 @@ export function parseCanvasStorageDocument(value: string | null, fallback: Canva
         state: { projects: normalizeProjectAssetCategories(parsed.state.projects as CanvasProject[]) },
         version: typeof parsed.version === "number" ? parsed.version : 0,
         storageRevision: typeof parsed.storageRevision === "number" && Number.isFinite(parsed.storageRevision) ? parsed.storageRevision : 0,
+        savedAt: typeof parsed.savedAt === "string" && parsed.savedAt ? parsed.savedAt : undefined,
+        journalTokens: recordOfNumbers(parsed.journalTokens),
         tombstones: normalizeTombstones(parsed.tombstones),
     };
 }

@@ -4,7 +4,13 @@ import { CanvasNodeType, isBuiltinCanvasNodeType, type CanvasNodeData } from "@/
 export const MEDIA_NODE_MIN_SIZE = { width: 420, height: 236 } as const;
 export const VIDEO_NODE_MAX_SIZE = { width: 720, height: 520 } as const;
 
-export function fitNodeSize(width: number, height: number, maxWidth = 720, maxHeight = 520, minWidth = MEDIA_NODE_MIN_SIZE.width, minHeight = MEDIA_NODE_MIN_SIZE.height) {
+/** 素材使用有界预览框，极宽文字/极窄装饰不能把整组撑大；文件比例由 object-contain 保留。 */
+export function fitImageMaterialNodeSize(width: number, height: number) {
+    const fitted = fitNodeSize(width, height, 720, 520, 0, 0);
+    return { width: Math.max(MEDIA_NODE_MIN_SIZE.width, fitted.width), height: Math.max(MEDIA_NODE_MIN_SIZE.height, fitted.height) };
+}
+
+export function fitNodeSize(width: number, height: number, maxWidth = 720, maxHeight = 520, minWidth: number = MEDIA_NODE_MIN_SIZE.width, minHeight: number = MEDIA_NODE_MIN_SIZE.height) {
     const w = Math.max(1, width);
     const h = Math.max(1, height);
     // 媒体节点既要保留原始比例，也要给生成状态、操作按钮留下稳定的可读空间。

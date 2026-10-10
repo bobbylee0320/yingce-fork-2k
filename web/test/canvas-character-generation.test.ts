@@ -78,6 +78,35 @@ function videoConfig() {
 }
 
 describe("canvas character reference delivery", () => {
+    test("saved resource references stay as storage keys without browser materialization", async () => {
+        const { images } = mockResources([]);
+        const context = contextFor([node("scene", CanvasNodeType.Image, { storageKey: "resource:scene" })], "@图片1");
+
+        const hydrated = await hydrateNodeGenerationContext(context, "canvas", undefined, "video", false, true, undefined, false);
+
+        expect(hydrated.referenceImages).toEqual([expect.objectContaining({ storageKey: "resource:scene", dataUrl: "" })]);
+        expect(images).not.toHaveBeenCalled();
+    });
+
+    test("character resource references also skip browser materialization", async () => {
+        const { images } = mockResources([detail("a")]);
+        const context = contextFor([characterNode("a")], "@角色1");
+
+        const hydrated = await hydrateNodeGenerationContext(context, "canvas", undefined, "video", false, true, undefined, false);
+
+        expect(hydrated.referenceImages.map((image) => image.storageKey)).toEqual(["resource:a-main"]);
+        expect(images).not.toHaveBeenCalled();
+    });
+
+    test("local browser-only references still materialize for generation", async () => {
+        const { images } = mockResources([]);
+        const context = contextFor([node("scene", CanvasNodeType.Image, { storageKey: "image:local-scene" })], "@图片1");
+
+        await hydrateNodeGenerationContext(context, "canvas", undefined, "video", false, true, undefined, false);
+
+        expect(images).toHaveBeenCalledTimes(1);
+    });
+
     test("mixed references preserve primary slots through hydration and backend task preparation", async () => {
         const a = detail("a", [
             ["primary", "a-main"],

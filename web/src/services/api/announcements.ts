@@ -87,6 +87,7 @@ export type BannerAnnouncement = {
     noticeType?: BannerNoticeType;
     link?: string;
     status: "active" | "disabled";
+    sortOrder?: number;
     startsAt?: string;
     endsAt?: string;
     createdBy: string;
@@ -107,6 +108,7 @@ export type AdminBannerPayload = {
     noticeType?: BannerNoticeType;
     link?: string;
     status: "active" | "disabled";
+    sortOrder?: number;
     startsAt?: string;
     endsAt?: string;
 };

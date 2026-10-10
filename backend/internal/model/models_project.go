@@ -476,6 +476,7 @@ type BannerAnnouncement struct {
 	NoticeType string     `json:"noticeType" gorm:"size:24"`
 	Link       string     `json:"link" gorm:"size:500"`        // 点击跳转目标：http(s) 外链或 / 开头的站内路径；空表示不可点击
 	Status     string     `json:"status" gorm:"size:24;index"` // "active" | "disabled"
+	SortOrder  int        `json:"sortOrder" gorm:"index"`
 	StartsAt   *time.Time `json:"startsAt,omitempty" gorm:"index"`
 	EndsAt     *time.Time `json:"endsAt,omitempty" gorm:"index"`
 	CreatedBy  string     `json:"createdBy" gorm:"size:36"`

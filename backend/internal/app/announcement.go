@@ -520,6 +520,7 @@ type CreateBannerAnnouncementRequest struct {
 	NoticeType string     `json:"noticeType"`
 	Link       string     `json:"link"`
 	Status     string     `json:"status"` // "active" | "disabled"
+	SortOrder  int        `json:"sortOrder"`
 	StartsAt   *time.Time `json:"startsAt"`
 	EndsAt     *time.Time `json:"endsAt"`
 }
@@ -763,6 +764,7 @@ func (s *Service) CreateBannerAnnouncement(actor *model.User, req CreateBannerAn
 		NoticeType: noticeType,
 		Link:       link,
 		Status:     status,
+		SortOrder:  req.SortOrder,
 		StartsAt:   req.StartsAt,
 		EndsAt:     req.EndsAt,
 		CreatedBy:  actor.ID,
@@ -810,6 +812,7 @@ func (s *Service) UpdateBannerAnnouncement(actor *model.User, id string, req Upd
 	banner.NoticeType = noticeType
 	banner.Link = link
 	banner.Status = status
+	banner.SortOrder = req.SortOrder
 	banner.StartsAt = req.StartsAt
 	banner.EndsAt = req.EndsAt
 	banner.UpdatedAt = time.Now()

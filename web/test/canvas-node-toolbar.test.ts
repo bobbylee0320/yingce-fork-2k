@@ -91,5 +91,7 @@ describe("canvas node toolbar model", () => {
         expect(tools.find((tool) => tool.id === "crop")?.section).toBe("构图与尺寸");
         expect(tools.find((tool) => tool.id === "resize")?.active).toBe(true);
         expect(tools.find((tool) => tool.id === "copyPrompt")?.group).toBe("more");
+        expect(tools.find((tool) => tool.id === "previs")?.group).toBe("primary");
+        expect(tools.find((tool) => tool.id === "previs")?.description).toContain("Agent");
     });
 });

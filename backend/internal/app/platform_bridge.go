@@ -30,6 +30,7 @@ const (
 	FeatureFrontendModels        = platform.FeatureFrontendModels
 	FeaturePluginCenter          = platform.FeaturePluginCenter
 	FeatureSystemPlugins         = platform.FeatureSystemPlugins
+	FeatureInspirationSources    = platform.FeatureInspirationSources
 	FeatureTimelineTranscription = platform.FeatureTimelineTranscription
 )
 

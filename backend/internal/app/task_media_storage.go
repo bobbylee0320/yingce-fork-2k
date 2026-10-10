@@ -130,7 +130,18 @@ func (s *Service) downloadTaskMedia(ctx context.Context, config providerConfig, 
 		ApplyOutboundHeaders(req, config.Headers)
 	}
 	ApplyDefaultOutboundHeaders(req)
-	response, err := OutboundHTTPClient(3 * time.Minute).Do(req)
+	// 结果文件可能托管在渠道同域（sameProviderOrigin 时还带渠道鉴权），
+	// 渠道配置了出站代理时下载必须走同一代理，否则配代理渠道的结果无法取回。
+	proxyURL := ""
+	if metadata, ok := ctx.Value(providerAnalyticsKey{}).(providerAnalyticsContext); ok {
+		proxyURL = metadata.ProxyURL
+	}
+	if strings.TrimSpace(proxyURL) == "" && strings.TrimSpace(config.ChannelID) != "" {
+		if ch, err := s.repo.SystemChannel(config.ChannelID); err == nil {
+			proxyURL = ch.ProxyURL
+		}
+	}
+	response, err := OutboundHTTPClientWithProxy(3*time.Minute, proxyURL).Do(req)
 	if err != nil {
 		return "", "", err
 	}

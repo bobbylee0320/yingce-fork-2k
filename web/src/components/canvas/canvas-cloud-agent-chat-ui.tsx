@@ -84,6 +84,7 @@ export type CloudAgentChatMessage = {
     meta?: string;
     detail?: unknown;
     attachments?: CloudAgentChatAttachment[];
+    canvasReferenceNodeId?: string;
     interjection?: "sent" | "undelivered";
 };
 
@@ -381,6 +382,8 @@ export function AgentChatMessage({
     const formAnswer = item.formAnswer ?? (isUser ? parseCloudAgentFormAnswer(item.text) : undefined);
     const markdownComponents = useMemo(() => createAgentMessageMarkdownComponents(references, onFocusNode), [onFocusNode, references]);
     const agentMarkdownText = rewriteAgentNodeLinks(displayedText, references);
+    const canvasReference = item.canvasReferenceNodeId ? references.find((reference) => reference.nodeId === item.canvasReferenceNodeId) : undefined;
+    const userCanvasMarkdown = canvasReference ? item.text.replace("此图", createAgentNodeLink(canvasReference.nodeId, canvasReference)) : item.text;
     const errorTone = item.errorSeverity === "warning" ? "warning" : "error";
     const color = theme.node.text;
     if (item.reasoning) {
@@ -484,6 +487,10 @@ export function AgentChatMessage({
                     <AIMessageMarkdown className="text-left" isStreaming={isStreaming} streamingAnimation="none" components={markdownComponents}>
                         {agentMarkdownText}
                     </AIMessageMarkdown>
+                ) : isUser && canvasReference ? (
+                    <AIMessageMarkdown className="text-left" components={markdownComponents}>
+                        {userCanvasMarkdown}
+                    </AIMessageMarkdown>
                 ) : formAnswer ? (
                     <AgentFormAnswerCard answer={formAnswer} theme={theme} />
                 ) : (
@@ -531,9 +538,9 @@ export function AgentReasoningFeed({ items, theme }: { items: CloudAgentChatMess
 
 /**
  * Agent SSE events contain text chunks. Keep the full text in the message
- * state, but reveal one code point at a time so a chunk never appears as a
- * whole block. The loop continues briefly after the stream ends to drain any
- * text that was buffered by the network.
+ * state, but reveal it in small batches. A fixed one-code-point delay lets a
+ * fast stream build an ever-growing queue, so the batch grows with the
+ * backlog and eventually catches up to the latest text in one render.
  */
 function useTypewriterText(targetText: string, shouldAnimate: boolean) {
     const targetRef = useRef(targetText);
@@ -561,16 +568,29 @@ function useTypewriterText(targetText: string, shouldAnimate: boolean) {
             }
 
             const currentCharacters = Array.from(visibleRef.current);
-            if (currentCharacters.length >= targetCharacters.length) {
+            const pendingCharacters = targetCharacters.length - currentCharacters.length;
+            if (pendingCharacters <= 0) {
                 runningRef.current = false;
                 timerRef.current = null;
                 return;
             }
 
-            const nextText = targetCharacters.slice(0, currentCharacters.length + 1).join("");
+            // Normal output remains visibly animated. Once stream chunks start
+            // outrunning the renderer, increase the batch instead of queuing
+            // every code point behind a fixed 16ms delay.
+            const revealCount = pendingCharacters > 384
+                ? pendingCharacters
+                : pendingCharacters > 192
+                    ? 32
+                    : pendingCharacters > 96
+                        ? 16
+                        : pendingCharacters > 24
+                            ? 8
+                            : 3;
+            const nextText = targetCharacters.slice(0, currentCharacters.length + revealCount).join("");
             visibleRef.current = nextText;
             setVisibleText(nextText);
-            timerRef.current = window.setTimeout(step, 16);
+            timerRef.current = window.setTimeout(step, 12);
         };
 
         step();

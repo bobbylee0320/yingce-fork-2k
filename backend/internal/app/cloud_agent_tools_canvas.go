@@ -189,18 +189,28 @@ func validateCloudAgentConnectionWithHandles(nodes []map[string]any, fromID, toI
 	return nil
 }
 
+// validateCloudAgentStoryboardHandle 校验 handle 所属端点和真实镜头行，返回可修正的具体字段。
+// 资产引用与镜头输出方向不同，只给出纠正说明，不自动交换端点或迁移 handle。
 func validateCloudAgentStoryboardHandle(node map[string]any, handleID, side string) error {
 	if handleID == "" {
 		return nil
 	}
+	field := "toHandleId"
+	if side == "来源" {
+		field = "fromHandleId"
+	}
 	if stringValue(node["type"]) != "script" {
-		return BadAuthRequest(fmt.Sprintf("只有分镜脚本节点可以指定%s handle", side))
+		message := "toHandleId 只能填写在分镜目标节点；若要指定镜头输出，请使用分镜→图片/视频，并将 row:<真实rowId> 填入分镜来源的 fromHandleId"
+		if side == "来源" {
+			message = "fromHandleId 只能填写在分镜来源节点；若要把素材绑定到镜头行，请使用素材→分镜，省略 fromHandleId，将 row:<真实rowId> 填入分镜目标的 toHandleId"
+		}
+		return cloudAgentFieldError(field, "invalid_node_handle", message)
 	}
 	if handleID == "storyboard:context" {
 		return nil
 	}
 	if !strings.HasPrefix(handleID, "row:") || strings.TrimSpace(strings.TrimPrefix(handleID, "row:")) == "" {
-		return BadAuthRequest(fmt.Sprintf("分镜%s handle 必须是 row:<rowId> 或 storyboard:context", side))
+		return cloudAgentFieldError(field, "invalid_handle", field+" 必须是 row:<真实rowId> 或 storyboard:context；镜头编号不是 rowId，请先读取分镜")
 	}
 	metadata, _ := node["metadata"].(map[string]any)
 	storyboard, _ := metadata["storyboard"].(map[string]any)
@@ -210,7 +220,7 @@ func validateCloudAgentStoryboardHandle(node map[string]any, handleID, side stri
 			return nil
 		}
 	}
-	return BadAuthRequest(fmt.Sprintf("分镜%s handle 引用的 rowId 不存在，请先读取最新分镜", side))
+	return cloudAgentFieldError(field, "not_found", field+" 引用的 rowId 不存在，请先用 canvas_read_storyboard 读取最新真实行 ID，不要用镜头编号代替")
 }
 
 func cloudAgentInputKindLabel(kind string) string {

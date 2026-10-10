@@ -18,6 +18,7 @@ import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import type { ModelReferenceLimits } from "@/lib/model-selection";
 import type { Asset } from "@/stores/use-asset-store";
+import { resourceIdFromStorageKey } from "@/services/api/resources";
 
 export type CharacterGenerationReference = {
     nodeId: string;
@@ -444,18 +445,28 @@ export function buildNodeResponseMessages(context: NodeGenerationContext): AiTex
     ];
 }
 
-export async function hydrateNodeGenerationContext(context: NodeGenerationContext, projectId: string, domainProjectId?: string, mode?: CanvasGenerationMode, includeCharacterVoiceSamples = false, includeCharacterPrompt = true, referenceLimits?: ModelReferenceLimits) {
+export async function hydrateNodeGenerationContext(
+    context: NodeGenerationContext,
+    projectId: string,
+    domainProjectId?: string,
+    mode?: CanvasGenerationMode,
+    includeCharacterVoiceSamples = false,
+    includeCharacterPrompt = true,
+    referenceLimits?: ModelReferenceLimits,
+    materializeStoredMedia = true,
+) {
     const { imageToDataUrl } = await import("@/services/image-storage");
     let referenceImages = await Promise.all(
         context.referenceImages.map(async (image) => {
             if (image.source?.kind === "drawing") return resolveCanvasDrawingReference(projectId, image);
             if (image.source?.kind === "colorgrade") return resolveCanvasColorGradeReference(image);
+            if (!materializeStoredMedia && resourceIdFromStorageKey(image.storageKey)) return image;
             return { ...image, dataUrl: await imageToDataUrl(image) };
         }),
     );
     if (!context.characterReferences.length) return { ...context, referenceImages };
     const { getCharacter } = await import("@/services/api/projects");
-    const { getResource, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey } = await import("@/services/api/resources");
+    const { getResource, resourceFileUrl, resourceIdFromStorageKey: getResourceIdFromStorageKey, resourceStorageKey } = await import("@/services/api/resources");
     const details = await Promise.all(context.characterReferences.map((reference) => getCharacter(reference.assetId)));
     const remainingBudget = Math.max(0, (referenceLimits?.maxImages ?? 9) - referenceImages.length);
     const selectedEntries = details.flatMap((detail, index) => {
@@ -484,7 +495,9 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
         dataUrl: "",
         storageKey: resourceStorageKey(entry.representation.resourceId),
     } satisfies ReferenceImage));
-    const hydratedCharacterImages = await Promise.all(characterImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) })));
+    const hydratedCharacterImages = materializeStoredMedia
+        ? await Promise.all(characterImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) })))
+        : characterImages;
     const primaryByNodeId = new Map<string, ReferenceImage>();
     selectedEntries.forEach((entry, index) => {
         const image = hydratedCharacterImages[index];
@@ -545,7 +558,7 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
             instructions: [language && `语言与口音：${language}`, voiceAge && `声音年龄感：${voiceAge}`, timbre && `音色气质：${timbre}`, deliveryInstructions].filter(Boolean).join("；"),
         }];
     });
-    const usedAudioResourceIds = new Set(context.referenceAudios.map((audio) => resourceIdFromStorageKey(audio.storageKey)).filter(Boolean));
+    const usedAudioResourceIds = new Set(context.referenceAudios.map((audio) => getResourceIdFromStorageKey(audio.storageKey)).filter(Boolean));
     const voiceSamples: ResolvedCharacterVoice[] = [];
     // 视频模型接收声音样本；独立配音任务仍通过 voiceKey 选音色，不能把两种协议混用。
     if (mode === "video" && includeCharacterVoiceSamples) {
@@ -570,7 +583,7 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
     }));
     const referenceAudios = [...context.referenceAudios, ...characterVoiceAudios];
     const voiceBlocks = mode === "video" ? resolvedCharacterVoices.flatMap((voice) => {
-        const sampleIndex = voice.sampleResourceId ? referenceAudios.findIndex((audio) => resourceIdFromStorageKey(audio.storageKey) === voice.sampleResourceId) : -1;
+        const sampleIndex = voice.sampleResourceId ? referenceAudios.findIndex((audio) => getResourceIdFromStorageKey(audio.storageKey) === voice.sampleResourceId) : -1;
         if (sampleIndex < 0 && !includeCharacterPrompt) return [];
         return [[
             includeCharacterPrompt ? compileResolvedVoicePrompt(voice) : `【角色声音：${voice.characterName}】`,

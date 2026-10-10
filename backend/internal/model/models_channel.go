@@ -20,7 +20,10 @@ type ModelChannel struct {
 	SecretKey        string `json:"-"`
 	APIFormat        string `json:"apiFormat" gorm:"size:24"`
 	ConcurrencyLimit int    `json:"concurrencyLimit"`
-	ModelsJSON       string `json:"modelsJson" gorm:"type:text"`
+	// ProxyURL 是渠道级出站代理地址，支持 socks5://、socks5h://、http://、https://。
+	// 留空时使用全局环境变量代理。
+	ProxyURL   string `json:"proxyUrl" gorm:"size:512"`
+	ModelsJSON string `json:"modelsJson" gorm:"type:text"`
 	// RetiredModelsJSON 记录已被一个模型家族吸收的上游 SKU，防止目录拉取时重新创建重复记录。
 	RetiredModelsJSON string         `json:"-" gorm:"type:text"`
 	HeadersJSON       string         `json:"-" gorm:"type:text"`

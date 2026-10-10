@@ -64,6 +64,30 @@ export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyM
     delete metadata.primaryImageId;
     delete metadata.imageBatchExpanded;
     delete metadata.batchUsesReferenceImages;
+    delete metadata.layerDecomposition;
+    delete metadata.imageLayerWorkflow;
+    delete metadata.experimentalLayerPlan;
+    delete metadata.layerExtraction;
+    delete metadata.imageLayerMaterials;
+    delete metadata.imageLayer;
+    delete metadata.imageLayerGroup;
+    if (node.metadata?.imageLayerGroup) {
+        const layers = node.metadata.imageLayerGroup.layers.flatMap((layer) => {
+            const nodeId = idMap.get(layer.nodeId);
+            return nodeId ? [{ ...layer, nodeId }] : [];
+        });
+        if (layers.length === node.metadata.imageLayerGroup.layers.length) {
+            metadata.imageLayerGroup = { ...node.metadata.imageLayerGroup, layers, compositeSignature: undefined };
+            metadata.isBatchRoot = true;
+            metadata.batchChildIds = layers.map((layer) => layer.nodeId);
+            metadata.imageBatchExpanded = node.metadata.imageBatchExpanded;
+        }
+    }
+    if (node.metadata?.imageLayer && idMap.has(node.metadata.imageLayer.groupId)) {
+        const groupId = idMap.get(node.metadata.imageLayer.groupId)!;
+        metadata.imageLayer = { ...node.metadata.imageLayer, groupId };
+        metadata.batchRootId = groupId;
+    }
     delete metadata.versionOfNodeId;
     delete metadata.versionLabel;
     delete metadata.versionPrimary;

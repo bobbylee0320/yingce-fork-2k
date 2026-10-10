@@ -19,8 +19,10 @@ func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationI
 	groups := [][]providerMedia{input.ReferenceImages, input.ReferenceVideos, input.ReferenceAudios}
 	for groupIndex, group := range groups {
 		mediaPolicy := policy
-		// 仅 Agent 图片走内存字节；视频、音频及普通生成任务保留原来的协议策略。
-		if groupIndex == 0 && input.Mode == "text" && input.AgentRequests != nil && input.AgentRequests.Canonical != nil {
+		// 识图规划与 Agent 看图都发送归属校验后的实际像素，避免供应商无法读取签名 URL。
+		// 视频、音频及其他普通生成任务保留原来的协议策略。
+		inlineVision := input.Mode == "text" && ((input.AgentRequests != nil && input.AgentRequests.Canonical != nil) || metadataString(input.Metadata, "edit") == "layer-planning")
+		if groupIndex == 0 && inlineVision {
 			mediaPolicy = providerMediaHydrationPolicy{imageOnly: true}
 			if input.Config.CapabilityConfig != nil && input.Config.CapabilityConfig.Text != nil {
 				limits := input.Config.CapabilityConfig.Text.References
@@ -107,6 +109,9 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 	}
 	mimeType := normalizedMediaMimeType(firstNonEmpty(media.MimeType, resource.MimeType), data)
 	media.DataURL = dataURL(mimeType, data)
+	if policy.imageOnly {
+		media.URL = ""
+	}
 	media.MimeType = mimeType
 	media.Bytes = int64(len(data))
 	media.Width = resource.Width

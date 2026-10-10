@@ -34,6 +34,15 @@ func BuiltinRegistry() *Registry {
 			SummaryFields: []string{"content"}, DetailFields: []string{"content"},
 			PatchFields: editableNodeFields("metadata.content", "Markdown 正文", "Markdown 正文"),
 		},
+		{
+			Type: "file", Version: "1", Label: "文本文件", DefaultWidth: 420, DefaultHeight: 320,
+			Purpose:     "承载上传到画布的 TXT、Markdown 或其它文件资源；正文通过 canvas_read_text 在当前用户权限内读取。",
+			GoodFor:     []string{"读取上传小说或剧本原文", "保留原始文件作为改编来源"},
+			NotIdealFor: []string{"图片、视频或音频参考", "需要逐镜维护的结构化分镜"},
+			Tradeoffs:   []string{"文件正文按需读取并分页返回", "二进制文件不会被当作文本解析"},
+			InputKind:   "text", Connection: ConnectionPolicy{CanSource: true},
+			SummaryFields: []string{"mimeType"}, DetailFields: []string{"mimeType"},
+		},
 		generatedMediaDescriptor("image", "2", "图片", 720, 405, "image", ConnectionPolicy{
 			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image", "character"},
 		}),

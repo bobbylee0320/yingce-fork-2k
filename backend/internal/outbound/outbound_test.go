@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -43,6 +44,24 @@ func TestConfiguredProxyHostIsTrustedAsDeploymentEgress(t *testing.T) {
 	}
 	if configuredProxyHost("172.24.176.2") {
 		t.Fatal("configuredProxyHost() accepted an unrelated private host")
+	}
+}
+
+func TestOutboundHTTPClientWithProxyFailsClosedForInvalidURL(t *testing.T) {
+	client := OutboundHTTPClientWithProxy(time.Second, "ftp://127.0.0.1:1080")
+	request, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Do(request); err == nil || !strings.Contains(err.Error(), "渠道代理地址无效") {
+		t.Fatalf("invalid proxy should fail closed, got %v", err)
+	}
+}
+
+func TestOutboundHTTPClientWithProxyFallsBackForEmptyURL(t *testing.T) {
+	client := OutboundHTTPClientWithProxy(time.Second, " \t")
+	if client.Transport != outboundTransport {
+		t.Fatal("empty proxy URL should use the global outbound transport")
 	}
 }
 

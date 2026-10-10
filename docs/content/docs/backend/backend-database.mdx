@@ -31,7 +31,7 @@ Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`ex
 
 ## 结构迁移与版本
 
-当前结构版本为 42。版本 42 `cloud_agent_pi_sessions` 新增 `cloud_agent_pi_sessions` 表，按运行 ID 保存 Pi 原生 JSONL 会话快照、用户 ID、乐观并发 revision 和更新时间；会话正文由 Agent runtime 管理，Go 只将其作为不透明快照读写，不替代有界控制检查点、事件日志或任务记录。版本 41 `resource_thumbnail` 为 `resources` 增加缩略图元数据。版本 40 `builtin_skill_tombstones` 新增内置技能删除记录，管理员删除平台技能后，后续启动同步不会重新创建该技能；版本 39 `skill_library_categories` 新增 `skill_library_categories` 表，并为 `user_skill_states` 增加 `library_category_id`，保存个人技能库分类及每个用户对技能的归类；分类不改变 `skills.tag` 的技能广场共享分类。版本 38 `prefixed_id_sequence_reconcile` 创建（若缺失）并校准 `id_sequences`：`CHANNEL`、`MODEL`、`PTIER`、`ATTEMPT`、`LMODEL`、`REVISION`、`ROUTE` 按对应业务表的最大有效 ID 前移，包含软删除记录，不回退已有序列、不重写业务 ID。分配新 ID 时再次校准并检查冲突；SQLite → PostgreSQL 迁移完成后也校准序列。
+当前结构版本为 49。版本 49 `banner_sort_order` 为 `banner_announcements` 增加可配置的 `sort_order` 展示顺序；版本 48 `channel_proxy_url` 为 `model_channels` 增加渠道级出站代理地址 `proxy_url`，支持 `socks5://`、`http://`、`https://`；留空时沿用全局代理。代理地址只返回管理员视图，普通用户目录不暴露渠道代理或其中的认证信息。版本 42 `cloud_agent_pi_sessions` 新增 `cloud_agent_pi_sessions` 表，按运行 ID 保存 Pi 原生 JSONL 会话快照、用户 ID、乐观并发 revision 和更新时间；会话正文由 Agent runtime 管理，Go 只将其作为不透明快照读写，不替代有界控制检查点、事件日志或任务记录。版本 41 `resource_thumbnail` 为 `resources` 增加缩略图元数据。版本 40 `builtin_skill_tombstones` 新增内置技能删除记录，管理员删除平台技能后，后续启动同步不会重新创建该技能；版本 39 `skill_library_categories` 新增 `skill_library_categories` 表，并为 `user_skill_states` 增加 `library_category_id`，保存个人技能库分类及每个用户对技能的归类；分类不改变 `skills.tag` 的技能广场共享分类。版本 38 `prefixed_id_sequence_reconcile` 创建（若缺失）并校准 `id_sequences`：`CHANNEL`、`MODEL`、`PTIER`、`ATTEMPT`、`LMODEL`、`REVISION`、`ROUTE` 按对应业务表的最大有效 ID 前移，包含软删除记录，不回退已有序列、不重写业务 ID。分配新 ID 时再次校准并检查冲突；SQLite → PostgreSQL 迁移完成后也校准序列。
 
 版本 36 `cloud_agent_gemini_cache` 创建 `cloud_agent_gemini_caches`，保存用户范围内的官方 Gemini 缓存元数据；版本 37 `cloud_agent_gemini_cache_identity` 将缓存标识约束修正为 `(user_id, cache_key)`，移除旧的全局 cache_key 唯一索引。版本 35 `auth_notifications` 为认证通知与组合验证补齐 `auth_verifications`、`notification_quotas`、`sms_channels`、`sms_records` 四张表，并为 `users` 增加 `phone`、`email_verified_at`、`phone_verified_at`，为 `email_verification_codes` 增加 `attempts`；同时创建非空手机号唯一索引。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。
 
@@ -264,7 +264,7 @@ schema v27 为 `channel_model_price_tiers` 和 `billing_orders` 添加 `cost_con
 | `announcements` | 保存管理员发布的系统公告 | `pinned` 只改变排序；`image_resource_id` 只能绑定由当前管理员上传并在发布事务中消费的公告配图草稿 |
 | `announcement_image_drafts` | 标记尚未发布的公告配图资源 | 发布/更新事务消费草稿；取消编辑显式回收，超过 24 小时的异常遗留草稿由后台清理 |
 | `user_announcement_reads` | 保存用户已读状态 | 同一用户和公告唯一；公告重新发布时清除旧已读记录 |
-| `banner_announcements` | 保存首页顶部常驻展示的滚动通知条 | 与系统公告完全独立：只有标题、图标与跳转链接，无正文、无配图、无已读状态；`link` 仅接受 `http(s)` 外链或 `/` 开头的站内路径；`status` 为 `active` / `disabled`，`starts_at` / `ends_at` 构成生效窗口（可预约未来开始）；`title_runs` 以 JSON 文本保存标题的样式分段；`notice_type` 决定通知条底色，`icon` 是标题前的图标键 |
+| `banner_announcements` | 保存首页顶部常驻展示的滚动通知条 | 与系统公告完全独立：只有标题、图标与跳转链接，无正文、无配图、无已读状态；`link` 仅接受 `http(s)` 外链或 `/` 开头的站内路径；`status` 为 `active` / `disabled`，`sort_order` 越小越靠前，`starts_at` / `ends_at` 构成生效窗口（可预约未来开始）；`title_runs` 以 JSON 文本保存标题的样式分段；`notice_type` 决定通知条底色，`icon` 是标题前的图标键 |
 
 活动公告按置顶状态优先、发布时间倒序返回；置顶不会绕过关闭状态或用户登录校验。公告只要求标题，正文和配图均可为空。用户首次进入工作区时会自动看到未读公告，可以只关闭本次或选择今日不再提醒；主动打开公告中心后才会写入服务端已读状态。替换或移除配图时，公告更新、旧资源记录删除和物理删除任务入队在同一数据库事务完成。
 

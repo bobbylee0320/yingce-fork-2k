@@ -1,3 +1,4 @@
+import { imageQualityLabel } from "@/lib/image-quality";
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import type { ChannelModel, ChannelModelPriceTier } from "@/services/api/wallet";
 
@@ -62,13 +63,13 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
 
 export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValues {
     const selector = tier.selector || {};
-    const hasSpecificMatch = [selector.operation, selector.quality, selector.size].some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*");
+    const hasSpecificMatch = [selector.operation, selector.quality, selector.resolution, selector.size].some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*");
     return {
         matchMode: hasSpecificMatch ? "advanced" : "default",
         operation: selector.operation || "*",
         quality: selector.quality || "*",
         size: selector.size || "*",
-        resolution: tier.resolution || "*",
+        resolution: selector.resolution || tier.resolution || "*",
         videoSeconds: tier.videoSeconds || 0,
         videoGenerateAudio: selector.videoGenerateAudio || "*",
         imageCount: Number(selector.imageCount || 0),
@@ -112,6 +113,7 @@ export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: Pri
     }
     if (capability === "image") {
         if (tier.quality && tier.quality !== "*") selector.quality = tier.quality;
+        if (tier.resolution && tier.resolution !== "*") selector.resolution = tier.resolution;
         if (tier.size && tier.size !== "*") selector.size = tier.size;
     }
     return selector;
@@ -119,6 +121,10 @@ export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: Pri
 
 export function priceTierResolutionFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues) {
     return capability === "video" && tier.matchMode === "advanced" ? tier.resolution || "*" : "*";
+}
+
+export function imagePriceQualityOptions() {
+    return ["low", "medium", "high", "xhigh", "max", "auto", "1k", "2k", "4k"].map((value) => ({ label: imageQualityLabel(value), value }));
 }
 
 export function priceTierVideoSecondsFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues) {

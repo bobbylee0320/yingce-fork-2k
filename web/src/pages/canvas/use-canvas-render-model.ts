@@ -6,14 +6,16 @@ import { sameNodeSemanticData } from "@/lib/canvas/canvas-project-domain";
 import { canvasNodeRenderBudget, canvasNodeRenderPadding, CANVAS_MAX_RENDERED_CONNECTIONS, shouldReduceCanvasMediaEffects } from "@/lib/canvas/canvas-performance-mode";
 import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences, buildToolMentionReference, parseToolMentionTokens } from "@/lib/canvas/canvas-resource-references";
 import { buildSkillMentionReferences } from "@/lib/canvas/canvas-skill-mentions";
-import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialIndex, type CanvasSpatialIndexEntry } from "@/lib/canvas/canvas-spatial-index";
+import { buildCanvasConnectionIndex, type CanvasIndexedConnection } from "@/lib/canvas/canvas-connection-index";
+import { retainCanvasLayoutNodes } from "@/lib/canvas/canvas-layout-snapshot";
+import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialIndex } from "@/lib/canvas/canvas-spatial-index";
 import { canvasOverviewMode, resolveCanvasNodeLOD, type CanvasNodeRenderLOD } from "@/lib/canvas/canvas-node-lod";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { intersectsCanvasBounds, selectCanvasVisibleNodes } from "@/lib/canvas/canvas-node-visibility";
 import type { Skill } from "@/services/api/skills";
 import type { Asset, ImageAsset } from "@/stores/use-asset-store";
 import type { PrevisScene } from "@/types/previs";
-import { CanvasNodeType, type CanvasConnection, type CanvasDisplayConnection, type CanvasMediaPerformanceMode, type CanvasNodeData, type ContextMenuState, type ViewportTransform } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasMediaPerformanceMode, type CanvasNodeData, type ContextMenuState, type ViewportTransform } from "@/types/canvas";
 
 type DragPreview = { x: number; y: number; nodeIds: Set<string> } | null;
 
@@ -90,9 +92,10 @@ export function useCanvasRenderModel({
         const renderHiddenNodeIds = new Set<string>();
         const frameChildrenById = new Map<string, CanvasNodeData[]>();
         const canvasImageNodes: CanvasNodeData[] = [];
-        const batchRoots: CanvasNodeData[] = [];
+        const batchChildNodes: CanvasNodeData[] = [];
         const batchMotionById = new Map<string, { x: number; y: number; index: number }>();
         const batchChildIndexByRootId = new Map<string, Map<string, number>>();
+        const batchChildCountById = new Map<string, number>();
 
         for (const node of nodes) {
             const rootId = node.metadata?.batchRootId;
@@ -103,6 +106,12 @@ export function useCanvasRenderModel({
             }
 
             if (rootId && collapsingBatchIds.has(rootId)) renderHiddenNodeIds.delete(node.id);
+            if (rootId) batchChildNodes.push(node);
+            const childIndex = root?.metadata?.isBatchRoot
+                ? batchChildIndexByRootId.get(root.id) || new Map((root.metadata.batchChildIds || []).map((childId, index) => [childId, index]))
+                : undefined;
+            if (root?.metadata?.isBatchRoot && childIndex && !batchChildIndexByRootId.has(root.id)) batchChildIndexByRootId.set(root.id, childIndex);
+            if (root && childIndex?.has(node.id)) batchChildCountById.set(root.id, (batchChildCountById.get(root.id) || 0) + 1);
             const parent = node.parentId ? nodeById.get(node.parentId) : undefined;
             if (parent && isFrameNode(parent)) {
                 const children = frameChildrenById.get(parent.id);
@@ -111,17 +120,16 @@ export function useCanvasRenderModel({
                 if (parent.metadata?.frame?.collapsed) renderHiddenNodeIds.add(node.id);
             }
 
-            if (node.metadata?.isBatchRoot) batchRoots.push(node);
+            if (node.metadata?.isBatchRoot) {
+                if (!batchChildIndexByRootId.has(node.id)) batchChildIndexByRootId.set(node.id, new Map((node.metadata.batchChildIds || []).map((childId, index) => [childId, index])));
+                if (!batchChildCountById.has(node.id)) batchChildCountById.set(node.id, 0);
+            }
             if (node.type === CanvasNodeType.Image && node.metadata?.content && !collapsedBatchChildIds.has(node.id) && !(parent && isFrameNode(parent) && parent.metadata?.frame?.collapsed)) {
                 canvasImageNodes.push(node);
             }
         }
 
-        for (const root of batchRoots) {
-            const childIndex = new Map((root.metadata?.batchChildIds || []).map((childId, index) => [childId, index]));
-            batchChildIndexByRootId.set(root.id, childIndex);
-        }
-        for (const node of nodes) {
+        for (const node of batchChildNodes) {
             const rootId = node.metadata?.batchRootId;
             if (!rootId) continue;
             const root = nodeById.get(rootId);
@@ -129,13 +137,6 @@ export function useCanvasRenderModel({
             const stackX = root ? root.position.x + 34 + index * 14 : node.position.x;
             const stackY = root ? root.position.y + 14 + index * 8 : node.position.y;
             batchMotionById.set(node.id, { x: stackX - node.position.x, y: stackY - node.position.y, index: Math.max(index, 0) });
-        }
-
-        const batchChildCountById = new Map<string, number>();
-        for (const root of batchRoots) {
-            const childIndex = batchChildIndexByRootId.get(root.id);
-            const liveChildCount = [...(childIndex?.keys() || [])].filter((childId) => nodeById.get(childId)?.metadata?.batchRootId === root.id).length;
-            batchChildCountById.set(root.id, liveChildCount);
         }
 
         return { batchChildCountById, batchMotionById, canvasImageNodes, collapsedBatchChildIds, frameChildrenById, renderHiddenNodeIds };
@@ -162,21 +163,20 @@ export function useCanvasRenderModel({
             retain: { left: viewLeft - retainPadding, top: viewTop - retainPadding, right: viewLeft + viewWidth + retainPadding, bottom: viewTop + viewHeight + retainPadding },
         };
     }, [reduceMediaEffects, viewport.k, viewport.x, viewport.y, viewportSize.height, viewportSize.width]);
+    const layoutNodesRef = useRef<CanvasNodeData[]>(nodes);
+    const layoutNodes = useMemo(() => {
+        const retained = retainCanvasLayoutNodes(layoutNodesRef.current, nodes);
+        layoutNodesRef.current = retained;
+        return retained;
+    }, [nodes]);
     const nodeSpatialIndexRef = useRef<{ source: CanvasNodeData[]; index: CanvasSpatialIndex<string> } | null>(null);
     const nodeSpatialIndex = useMemo(() => {
         const previous = nodeSpatialIndexRef.current;
-        const geometryUnchanged =
-            previous &&
-            previous.source.length === nodes.length &&
-            nodes.every((node, index) => {
-                const old = previous.source[index];
-                return old.id === node.id && old.position.x === node.position.x && old.position.y === node.position.y && old.width === node.width && old.height === node.height;
-            });
-        if (geometryUnchanged) return previous.index;
-        const index = buildCanvasSpatialIndex(nodes.map((node) => ({ id: node.id, bounds: canvasNodeBounds(node), value: node.id })));
-        nodeSpatialIndexRef.current = { source: nodes, index };
+        if (previous?.source === layoutNodes) return previous.index;
+        const index = buildCanvasSpatialIndex(layoutNodes.map((node) => ({ id: node.id, bounds: canvasNodeBounds(node), value: node.id })));
+        nodeSpatialIndexRef.current = { source: layoutNodes, index };
         return index;
-    }, [nodes]);
+    }, [layoutNodes]);
     const renderedNodeIdsRef = useRef<Set<string>>(new Set());
     const forcedRenderNodeIds = useMemo(() => new Set([...selectedNodeIds, ...(dragPreview?.nodeIds || [])]), [dragPreview, selectedNodeIds]);
     const candidateNodes = useMemo(() => {
@@ -328,35 +328,9 @@ export function useCanvasRenderModel({
         });
         return { nodeIds, connectionIds };
     }, [activeNodeId, connections]);
-    const connectionSpatialIndex = useMemo(() => {
-        const entries: CanvasSpatialIndexEntry<CanvasDisplayConnection>[] = [];
-        const connectionIdsByNodeId = new Map<string, Set<string>>();
-        connections.forEach((connection) => {
-            if (collapsedBatchChildIds.has(connection.fromNodeId) || collapsedBatchChildIds.has(connection.toNodeId)) return;
-            const fromNode = nodeById.get(connection.fromNodeId);
-            const toNode = nodeById.get(connection.toNodeId);
-            if (!fromNode || !toNode) return;
-            const fromParent = fromNode.parentId ? nodeById.get(fromNode.parentId) : null;
-            const toParent = toNode.parentId ? nodeById.get(toNode.parentId) : null;
-            const displayFrom = fromParent && isFrameNode(fromParent) && fromParent.metadata?.frame?.collapsed ? fromParent : fromNode;
-            const displayTo = toParent && isFrameNode(toParent) && toParent.metadata?.frame?.collapsed ? toParent : toNode;
-            if (displayFrom.id === displayTo.id) return;
-            const left = Math.min(displayFrom.position.x, displayTo.position.x);
-            const top = Math.min(displayFrom.position.y, displayTo.position.y);
-            const right = Math.max(displayFrom.position.x + displayFrom.width, displayTo.position.x + displayTo.width);
-            const bottom = Math.max(displayFrom.position.y + displayFrom.height, displayTo.position.y + displayTo.height);
-            const value = { connection, from: displayFrom, to: displayTo };
-            entries.push({ id: connection.id, bounds: { left, top, right, bottom }, value });
-            for (const nodeId of new Set([connection.fromNodeId, connection.toNodeId, displayFrom.id, displayTo.id])) {
-                const ids = connectionIdsByNodeId.get(nodeId) || new Set<string>();
-                ids.add(connection.id);
-                connectionIdsByNodeId.set(nodeId, ids);
-            }
-        });
-        return { index: buildCanvasSpatialIndex(entries), connectionIdsByNodeId, entriesById: new Map(entries.map((entry) => [entry.id, entry.value])) };
-    }, [collapsedBatchChildIds, connections, nodeById]);
+    const connectionSpatialIndex = useMemo(() => buildCanvasConnectionIndex(layoutNodes, connections), [connections, layoutNodes]);
     const displayConnections = useMemo(() => {
-        const candidateById = new Map<string, CanvasDisplayConnection>();
+        const candidateById = new Map<string, CanvasIndexedConnection>();
         connectionSpatialIndex.index.query(renderBounds.retain, CANVAS_MAX_RENDERED_CONNECTIONS).forEach((display) => candidateById.set(display.connection.id, display));
         dragPreview?.nodeIds.forEach((nodeId) => {
             connectionSpatialIndex.connectionIdsByNodeId.get(nodeId)?.forEach((connectionId) => {
@@ -364,9 +338,12 @@ export function useCanvasRenderModel({
                 if (display) candidateById.set(connectionId, display);
             });
         });
-        return [...candidateById.values()].flatMap(({ connection, from: sourceFrom, to: sourceTo }) => {
-            const from = dragPreview?.nodeIds.has(sourceFrom.id) ? { ...sourceFrom, position: { x: sourceFrom.position.x + dragPreview.x, y: sourceFrom.position.y + dragPreview.y } } : sourceFrom;
-            const to = dragPreview?.nodeIds.has(sourceTo.id) ? { ...sourceTo, position: { x: sourceTo.position.x + dragPreview.x, y: sourceTo.position.y + dragPreview.y } } : sourceTo;
+        return [...candidateById.values()].flatMap(({ connection, fromId, toId }) => {
+            const sourceFrom = nodeById.get(fromId);
+            const sourceTo = nodeById.get(toId);
+            if (!sourceFrom || !sourceTo) return [];
+            const from = dragPreview?.nodeIds.has(fromId) ? { ...sourceFrom, position: { x: sourceFrom.position.x + dragPreview.x, y: sourceFrom.position.y + dragPreview.y } } : sourceFrom;
+            const to = dragPreview?.nodeIds.has(toId) ? { ...sourceTo, position: { x: sourceTo.position.x + dragPreview.x, y: sourceTo.position.y + dragPreview.y } } : sourceTo;
             const connectionLeft = Math.min(from.position.x, to.position.x);
             const connectionTop = Math.min(from.position.y, to.position.y);
             const connectionRight = Math.max(from.position.x + from.width, to.position.x + to.width);
@@ -374,7 +351,7 @@ export function useCanvasRenderModel({
             if (connectionRight <= renderBounds.retain.left || connectionLeft >= renderBounds.retain.right || connectionBottom <= renderBounds.retain.top || connectionTop >= renderBounds.retain.bottom) return [];
             return [{ connection, from, to }];
         });
-    }, [connectionSpatialIndex, dragPreview, renderBounds]);
+    }, [connectionSpatialIndex, dragPreview, nodeById, renderBounds]);
 
     const configInputsById = useMemo(() => {
         const map = new Map<string, NodeGenerationInput[]>();

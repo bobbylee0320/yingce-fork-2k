@@ -1086,7 +1086,9 @@ func cloudAgentPrevisApplyName(item map[string]any, value *string, label string)
 }
 
 func cloudAgentPrevisApplyCharacterBinding(item map[string]any, operation cloudAgentPrevisPatchOperation) error {
-	provided := operation.CharacterAssetID != nil || operation.CharacterVersionID != nil || operation.ReferenceNodeID != nil || operation.CharacterName != nil
+	// characterName is descriptive metadata for a real character-card binding;
+	// a name on an actor from an ordinary reference image must not trigger binding.
+	provided := operation.CharacterAssetID != nil || operation.CharacterVersionID != nil || operation.ReferenceNodeID != nil
 	if !provided {
 		return nil
 	}
@@ -1122,7 +1124,7 @@ func cloudAgentPrevisApplyCharacterBinding(item map[string]any, operation cloudA
 }
 
 func cloudAgentPrevisValidateCharacterBindingInCanvas(doc map[string]any, operation cloudAgentPrevisPatchOperation) error {
-	if operation.CharacterAssetID == nil && operation.CharacterVersionID == nil && operation.ReferenceNodeID == nil && operation.CharacterName == nil {
+	if operation.CharacterAssetID == nil && operation.CharacterVersionID == nil && operation.ReferenceNodeID == nil {
 		return nil
 	}
 	if operation.CharacterAssetID == nil || operation.CharacterVersionID == nil || operation.ReferenceNodeID == nil {

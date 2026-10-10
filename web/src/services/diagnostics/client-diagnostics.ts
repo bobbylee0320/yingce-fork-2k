@@ -20,6 +20,8 @@ export type ClientDiagnosticEvent = {
     taskId?: string;
     projectId?: string;
     canvasId?: string;
+    nodes_before?: number;
+    nodes_after?: number;
     stack?: string;
 };
 
@@ -133,6 +135,8 @@ export function recordDiagnosticEvent(input: DiagnosticEventInput) {
         taskId: safeDiagnosticId(input.taskId),
         projectId: safeDiagnosticId(input.projectId),
         canvasId: safeDiagnosticId(input.canvasId),
+        nodes_before: input.nodes_before === undefined ? undefined : clampNumber(input.nodes_before, 0, 10_000_000),
+        nodes_after: input.nodes_after === undefined ? undefined : clampNumber(input.nodes_after, 0, 10_000_000),
         stack: redactClientText(input.stack, 4000),
     };
     events.push(event);

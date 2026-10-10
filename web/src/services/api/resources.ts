@@ -470,7 +470,8 @@ export async function getResourceAccess(storageKey: string | undefined, purpose:
     const forceRefresh = fetchOptions.forceRefresh === true;
     if (forceRefresh) {
         accessCache.delete(key);
-        accessRequests.delete(key);
+        const inFlightRefresh = accessRequests.get(key);
+        if (inFlightRefresh) return inFlightRefresh;
         if (purpose === "display") {
             try {
                 await localForageStorageForScope(scope).removeItem(persistedDisplayAccessKey(id, variant));

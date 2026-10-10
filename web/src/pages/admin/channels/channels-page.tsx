@@ -2,6 +2,7 @@ import { App, Button, Form, Input, InputNumber, Modal, Spin, Switch } from "antd
 import { ChevronRight, Copy, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { AdminSearchInput } from "../components/admin-search-input";
 
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
 import { refreshSystemChannels } from "@/lib/user-session";
@@ -25,6 +26,7 @@ type ChannelFormValues = {
     useGlobalConcurrency?: boolean;
     concurrencyLimit?: number;
     enabled?: boolean;
+    proxyUrl?: string;
 };
 
 export function adminChannelSavePayload(values: ChannelFormValues) {
@@ -37,6 +39,7 @@ export function adminChannelSavePayload(values: ChannelFormValues) {
         useGlobalConcurrency: values.useGlobalConcurrency !== false,
         concurrencyLimit: values.useGlobalConcurrency === false ? values.concurrencyLimit : undefined,
         enabled: values.enabled !== false,
+        proxyUrl: values.proxyUrl?.trim() || "",
     };
 }
 
@@ -129,8 +132,9 @@ export default function ChannelsPage() {
                       useGlobalConcurrency: !channel.concurrencyLimit,
                       concurrencyLimit: channel.concurrencyLimit || undefined,
                       enabled: channel.enabled !== false,
+                      proxyUrl: channel.proxyUrl || "",
                   }
-                : { name: "", baseUrl: "", apiKey: "", secretKey: "", headers: [], useGlobalConcurrency: true, concurrencyLimit: undefined, enabled: true },
+                : { name: "", baseUrl: "", apiKey: "", secretKey: "", headers: [], useGlobalConcurrency: true, concurrencyLimit: undefined, enabled: true, proxyUrl: "" },
         );
         setDrawerOpen(true);
     };
@@ -252,7 +256,7 @@ export default function ChannelsPage() {
                         <Button block type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
                             新增渠道
                         </Button>
-                        <Input
+                        <AdminSearchInput
                             id="admin-channel-search"
                             aria-label="搜索系统渠道"
                             autoComplete="off"
@@ -260,7 +264,7 @@ export default function ChannelsPage() {
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={keyword}
                             placeholder="搜索渠道名称或地址"
-                            onChange={(event) => updateUrl({ filter: event.target.value }, true)}
+                            onValueChange={(value) => updateUrl({ filter: value }, true)}
                         />
                         <Select
                             aria-label="筛选渠道状态"
@@ -393,6 +397,13 @@ export default function ChannelsPage() {
                             <ChannelHeadersEditor />
                         </Form.Item>
                     </div>
+                    <Form.Item
+                        name="proxyUrl"
+                        label="代理地址"
+                        extra="为该渠道单独配置出站代理，支持 socks5://、socks5h://、http://、https://。留空则使用全局环境变量代理。"
+                    >
+                        <Input placeholder="例如：socks5://127.0.0.1:1080 或 http://127.0.0.1:7890" />
+                    </Form.Item>
                     <Form.Item name="useGlobalConcurrency" label="跟随系统并发配置" valuePropName="checked">
                         <Switch />
                     </Form.Item>

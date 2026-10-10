@@ -1,4 +1,4 @@
-export type ImageResolutionTier = "1k" | "2k" | "4k";
+export type ImageResolutionTier = "1k" | "1.5k" | "2k" | "4k";
 
 export type ImageResolutionOption = {
     size: string;
@@ -10,7 +10,7 @@ export type ImageResolutionOption = {
 
 export type ImageResolutionChoice = "auto" | ImageResolutionTier;
 
-const tierOrder: ImageResolutionTier[] = ["1k", "2k", "4k"];
+const tierOrder: ImageResolutionTier[] = ["1k", "1.5k", "2k", "4k"];
 const ratioOrder = ["1:1", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4", "16:9", "9:16", "2:1", "1:2", "21:9"];
 
 export function supportsImageResolutionPresets(size: { parameter: string; values: string[]; allowCustom?: boolean }) {

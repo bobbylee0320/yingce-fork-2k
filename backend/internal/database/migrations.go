@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 47
+const CurrentSchemaVersion int64 = 49
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -151,6 +151,18 @@ var schemaMigrations = []migration{
 	}},
 	{version: 46, name: "skill_curation", checksum: "sha256:skill-curation-v46-20261005", apply: migrateSkillCuration},
 	{version: 47, name: "skill_curation_roots", checksum: "sha256:skill-curation-roots-v47-20261005", apply: migrateSkillCurationRoots},
+	{version: 48, name: "channel_proxy_url", checksum: "sha256:channel-proxy-url-v48-20261009", apply: func(tx *gorm.DB) error {
+		if !tx.Migrator().HasColumn(&model.ModelChannel{}, "ProxyURL") {
+			return tx.Migrator().AddColumn(&model.ModelChannel{}, "ProxyURL")
+		}
+		return nil
+	}},
+	{version: 49, name: "banner_sort_order", checksum: "sha256:banner-sort-order-v49-20261010", apply: func(tx *gorm.DB) error {
+		if !tx.Migrator().HasColumn(&model.BannerAnnouncement{}, "SortOrder") {
+			return tx.Migrator().AddColumn(&model.BannerAnnouncement{}, "SortOrder")
+		}
+		return nil
+	}},
 }
 
 func migratePrefixedIDSequenceReconcile(tx *gorm.DB) error {

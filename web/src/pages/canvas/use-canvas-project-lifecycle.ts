@@ -96,7 +96,7 @@ export function useCanvasProjectLifecycle({
     const observedContentRef = useRef<CanvasHistorySnapshot | null>(null);
     const loadLatestRef = useRef(false);
     const historyRestoreRef = useRef<{ snapshotId: string; revision: number; resolve: () => void; reject: (error: unknown) => void } | null>(null);
-    const pendingReloadRef = useRef<{ resolve: () => void; reject: (error: unknown) => void } | null>(null);
+    const pendingReloadRef = useRef<{ promise: Promise<void>; resolve: () => void; reject: (error: unknown) => void } | null>(null);
     const editorReadyRef = useRef(false);
 
     useEffect(() => {
@@ -311,11 +311,12 @@ export function useCanvasProjectLifecycle({
         renameProject(projectId, title);
         // 标题是画布列表和分享入口的元数据，重命名后立即提交，避免只停留在浏览器缓存。
         void saveRemoteUserDataNow(projectId).catch((error) => {
-            message.warning(error instanceof Error ? `名称已更新到本地，云端同步将在后台重试：${error.message}` : "名称已更新到本地，云端同步将在后台重试");
+            // 后台同步状态统一显示在同步面板，避免每次重试都打断编辑。
+            void error;
         });
     }, [message, projectId, renameProject]);
 
-    const persistLocalEdits = useCallback(async () => {
+    const persistLocalEdits = useCallback(async (options: { flush?: boolean } = {}) => {
         const snapshot = { nodes: nodesRef.current, connections: connectionsRef.current, chatSessions, activeChatId, canvasAppearance, backgroundMode, showImageInfo };
         if (observedContentRef.current && !sameCanvasHistorySnapshot(observedContentRef.current, snapshot)) {
             updateProject(projectId, {
@@ -331,18 +332,34 @@ export function useCanvasProjectLifecycle({
             observedContentRef.current = snapshot;
         }
         updateProject(projectId, { viewport: viewportRef.current });
-        await flushCanvasStorePersistence();
+        if (options.flush !== false) await flushCanvasStorePersistence();
     }, [activeChatId, backgroundMode, canvasAppearance, chatSessions, connectionsRef, nodesRef, projectId, showImageInfo, updateProject, viewportRef]);
 
     const reloadLatestCanvasProject = useCallback(async () => {
-        await persistLocalEdits();
-        return new Promise<void>((resolve, reject) => {
-            pendingReloadRef.current?.reject(new Error("已有新的加载请求"));
-            loadLatestRef.current = true;
-            pendingReloadRef.current = { resolve, reject };
-            setLoadAttempt((value) => value + 1);
+        const pending = pendingReloadRef.current;
+        if (pending) return pending.promise;
+
+        // The load path writes a durable draft before replacing the editor. Waiting
+        // for the ordinary canvas queue here makes a viewport drag able to starve
+        // the cloud read, so only bring the latest editor snapshot into memory.
+        useSyncProgressStore.getState().setProjectProgress(projectId, { phase: "reconciling", message: "正在加载云端最新版本" });
+        try {
+            await persistLocalEdits({ flush: false });
+        } catch (error) {
+            useSyncProgressStore.getState().setProjectProgress(projectId, { phase: "error", message: error instanceof Error ? error.message : "准备加载云端版本失败" });
+            throw error;
+        }
+        let resolve!: () => void;
+        let reject!: (error: unknown) => void;
+        const promise = new Promise<void>((done, fail) => {
+            resolve = done;
+            reject = fail;
         });
-    }, [persistLocalEdits]);
+        pendingReloadRef.current = { promise, resolve, reject };
+        loadLatestRef.current = true;
+        setLoadAttempt((value) => value + 1);
+        return promise;
+    }, [persistLocalEdits, projectId]);
 
     const restoreCanvasProjectVersion = useCallback(async (snapshotId: string, revision: number) => {
         await persistLocalEdits();
@@ -365,7 +382,8 @@ export function useCanvasProjectLifecycle({
             message.success("画布已保存到云端");
         } catch (error) {
             const detail = error instanceof Error ? error.message : "未知错误";
-            message.warning(`本地画布布局已保存，云端同步失败：${detail}`);
+            // 本地保存已经完成，云端状态统一显示在同步面板，不弹出同步失败 toast。
+            void detail;
             // Imports can retain their durable local result; sharing requires cloud success.
             return options.requireRemote === false;
         }
@@ -375,7 +393,7 @@ export function useCanvasProjectLifecycle({
     const forceSaveCanvasProject = useCallback(async (): Promise<boolean> => {
         try { await persistLocalEdits(); } catch { message.error("本地保存失败，请重试"); return false; }
         try {
-            const result = await forceOverwriteRemoteCanvasSync();
+            const result = await forceOverwriteRemoteCanvasSync(projectId);
             message.success(result.reboundNodes > 0 ? `已保存，并修复 ${result.reboundNodes} 处媒体与素材的绑定` : "素材关联已核对，画布已保存");
         } catch (error) {
             message.error(`修复并保存失败：${error instanceof Error ? error.message : "未知错误"}`);

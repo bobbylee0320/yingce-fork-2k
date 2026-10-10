@@ -52,8 +52,7 @@ export async function continueCreationConversationOnCanvas(source: SourceConvers
         await flushCanvasStorePersistence();
         assertScope();
         try {
-            if (!hasRemoteUserDataSyncSession()) throw new Error("尚未建立云端同步会话");
-            await saveRemoteUserDataNow();
+            if (hasRemoteUserDataSyncSession()) await saveRemoteUserDataNow();
         } catch (cause) { syncError = cause; }
     } else {
         const session: CanvasAssistantSession = { id: sessionId, title: source.title, createdAt: source.messages[0].createdAt, updatedAt: source.updatedAt, messages };

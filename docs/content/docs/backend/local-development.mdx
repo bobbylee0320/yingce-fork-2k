@@ -5,6 +5,20 @@ description: 在宿主机启动影策前后端开发服务
 
 # 本地开发
 
+## SMTP 邮件故障日志
+
+注册、登录、绑定邮箱和密码找回的邮件投递失败统一输出 `ERROR` 级别的 `smtp email delivery failed` 后端日志。日志包含 `host`、`port`、`encryption`、脱敏 `recipient` 和 `error`，默认 `CANVAS_LOG_LEVEL=info` 即可看到，无需开启 debug。
+
+`error` 保留 SMTP 状态码和服务器错误说明，并标记失败步骤：`connect` / `connect_tls`（连接）、`greeting`（服务器欢迎响应）、`starttls`、`auth`、`mail_from`、`rcpt_to`、`data`、`write_body`、`finish_data` 或 `quit`。日志不主动记录账号、密码、邮件标题、正文或验证码，并对错误中回显的这些值及其 Base64 编码做脱敏。对外 API 继续使用原有通用错误响应。
+
+宿主机开发查看运行后端的终端；Docker 查看实际使用的 Compose 文件中的 `backend` 服务，例如：
+
+```bash
+docker compose -f docker-compose.deploy.yml logs --since=15m -f backend
+```
+
+本地构建和热更新开发分别将文件名换成 `docker-compose.local.yml` 或 `docker-compose.dev.yml`。代码修改后需要运行新构建的后端，旧容器不会自动增加这些日志。
+
 ## Compose 公网资源地址
 
 `docker-compose.yml`、`docker-compose.dev.yml`、`docker-compose.local.yml`、`docker-compose.server.yml` 和 `docker-compose.deploy.yml` 均将 `.env` 中的 `CANVAS_PUBLIC_BASE_URL` 传入后端。使用本地文件存储且上游模型需要读取参考素材时，将它设为上游能访问的 HTTPS 站点根地址（例如 `https://canvas.example.com`，不要附加 `/api`）；存储设置中的公网访问地址优先于该环境变量。

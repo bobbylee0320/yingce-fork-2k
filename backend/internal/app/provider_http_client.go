@@ -257,10 +257,12 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 	cacheManagementRequest := requestKind == "cache-create" || requestKind == "cache-delete"
 	responseLimit := maxProviderResponseBytes
 	channelID := ""
+	channelProxyURL := ""
 	if metadata, ok := req.Context().Value(providerAnalyticsKey{}).(providerAnalyticsContext); ok && metadata.Service != nil {
 		runtimeService = metadata.Service
 		coordinator = metadata.Service.coordinator
 		channelID = metadata.ChannelID
+		channelProxyURL = metadata.ProxyURL
 		policy, err := metadata.Service.RuntimePolicy()
 		if err != nil {
 			err = fmt.Errorf("读取生成资源限制失败：%w", err)
@@ -302,7 +304,7 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 		return nil, "", err
 	}
 	ApplyDefaultOutboundHeaders(req)
-	client := OutboundHTTPClient(requestTimeout)
+	client := OutboundHTTPClientWithProxy(requestTimeout, channelProxyURL)
 	resp, err := client.Do(req)
 	if err != nil {
 		err = providerConnectionError(err)

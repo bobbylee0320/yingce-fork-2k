@@ -142,6 +142,7 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
                     <InfoItem label="耗时" value={<span className="tabular-nums">{formatDuration(log.durationMs)}</span>} />
                     <InfoItem label="HTTP 状态" value={log.statusCode || "未记录"} />
                     <InfoItem label="请求地址" value={<span className="break-all font-mono text-xs">{log.method} {log.path || "未记录"}</span>} />
+                    <InfoItem label="上游渠道 URL" value={<span className="break-all font-mono text-xs">{log.upstreamUrl || "未记录"}</span>} />
                 </div>
                 {log.error || log.errorCode ? (
                     <div className="api-log-detail-error">

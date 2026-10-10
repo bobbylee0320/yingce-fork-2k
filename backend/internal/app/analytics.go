@@ -28,24 +28,27 @@ type AnalyticsOverview struct {
 }
 
 type AnalyticsKPI struct {
-	ActiveUsers        int              `json:"activeUsers"`
-	DAU                int              `json:"dau"`
-	WAU                int              `json:"wau"`
-	MAU                int              `json:"mau"`
-	GenerationTasks    int              `json:"generationTasks"`
-	UpstreamRequests   int              `json:"upstreamRequests"`
-	SuccessRate        float64          `json:"successRate"`
-	P95DurationMs      int64            `json:"p95DurationMs"`
-	CurrentQueuedTasks int64            `json:"currentQueuedTasks"`
-	Finance            AnalyticsFinance `json:"finance"`
+	ActiveUsers               int              `json:"activeUsers"`
+	DAU                       int              `json:"dau"`
+	WAU                       int              `json:"wau"`
+	MAU                       int              `json:"mau"`
+	GenerationTasks           int              `json:"generationTasks"`
+	UpstreamRequests          int              `json:"upstreamRequests"`
+	SuccessRate               float64          `json:"successRate"`
+	P95DurationMs             int64            `json:"p95DurationMs"`
+	CurrentQueuedTasks        int64            `json:"currentQueuedTasks"`
+	Finance                   AnalyticsFinance `json:"finance"`
+	TotalBalanceMicrocredits  int64            `json:"totalBalanceMicrocredits"`
+	TotalConsumedMicrocredits int64            `json:"totalConsumedMicrocredits"`
 }
 
 type AnalyticsTrendPoint struct {
-	Day                string  `json:"day"`
-	Tasks              int     `json:"tasks"`
-	Requests           int     `json:"requests"`
-	ActiveUsers        int     `json:"activeUsers"`
-	RequestSuccessRate float64 `json:"requestSuccessRate"`
+	Day                  string  `json:"day"`
+	Tasks                int     `json:"tasks"`
+	Requests             int     `json:"requests"`
+	ActiveUsers          int     `json:"activeUsers"`
+	RequestSuccessRate   float64 `json:"requestSuccessRate"`
+	ConsumedMicrocredits int64   `json:"consumedMicrocredits"`
 }
 
 type AnalyticsModelRow struct {
@@ -163,11 +166,21 @@ func (s *Service) AdminAnalytics(actor *model.User, query AnalyticsQuery) (*Anal
 	if err != nil {
 		return nil, err
 	}
+	totalBalance, err := s.repo.TotalCreditBalance()
+	if err != nil {
+		return nil, err
+	}
 	queued, err := s.repo.CurrentQueuedTaskCount()
 	if err != nil {
 		return nil, err
 	}
 	result := buildAnalyticsOverview(filter, tasks, rollingTasks, rollingLogs, logs, activities, users)
+	result.KPI.TotalBalanceMicrocredits = totalBalance
+	for _, log := range logs {
+		if log.BillingAmount > 0 {
+			result.KPI.TotalConsumedMicrocredits += log.BillingAmount
+		}
+	}
 	records, err := s.analyticsFinancialRecords(logs)
 	if err != nil {
 		return nil, err

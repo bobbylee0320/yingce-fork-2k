@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -18,6 +19,8 @@ import (
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/prompts"
 )
+
+const cloudAgentEventPayloadLimit = 128 << 10
 
 func cloudAgentDecode(run *model.CloudAgentExecution) (cloudAgentRuntime, error) {
 	var state cloudAgentRuntime
@@ -262,7 +265,7 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 			return err
 		}
 		raw, err := json.Marshal(event.Payload)
-		if err != nil || len(raw) > 128<<10 {
+		if err != nil || len(raw) > cloudAgentEventPayloadLimit {
 			return errors.New("Agent runtime event payload is too large")
 		}
 	}
@@ -471,6 +474,9 @@ func cloudAgentSave(run *model.CloudAgentExecution, state *cloudAgentRuntime) er
 	}
 	if run.ID != "" {
 		if err := validateCloudAgentRuntime(run, state); err != nil {
+			// HTTP 日志只记录错误类型；在首次校验失败处保留原因，避免被后续模型错误掩盖。
+			// 不记录完整检查点、提示词或工具参数，日志仅用于定位失败步骤。
+			log.Printf("[Agent] checkpoint validation failed run=%s step=%d call_index=%d: %v", run.ID, state.Step, state.CallIndex, err)
 			return cloudAgentCheckpointFailure("runtime validation", err)
 		}
 		for index, event := range state.Events {

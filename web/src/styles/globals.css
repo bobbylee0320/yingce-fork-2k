@@ -18219,7 +18219,9 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     flex: 1 1 auto !important;
 }
 .app-user-workspace .creation-home > .creation-empty-workspace {
-    display: block !important;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
     width: min(1680px, calc(100% - 72px)) !important;
     height: 100% !important;
     max-width: none !important;

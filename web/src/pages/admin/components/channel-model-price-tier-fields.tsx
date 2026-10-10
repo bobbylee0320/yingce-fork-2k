@@ -4,7 +4,7 @@ import type { ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
 import type { ModelCapabilityChoice as EditableCapability } from "@/components/model-protocol-picker";
 import type { ChannelModelFormValues as FormValues } from "./channel-model-editor-form";
-import { normalizeUpstreamModelKey } from "./channel-model-price-tier-form";
+import { imagePriceQualityOptions, normalizeUpstreamModelKey } from "./channel-model-price-tier-form";
 import { CreditCostFields } from "./credit-cost-fields";
 import { Select } from "@/components/ui/base/select";
 
@@ -57,7 +57,7 @@ export function PriceTierFields({
                     <span className="admin-price-tier-card-index">{String(ordinal).padStart(2, "0")}</span>
                     <div className="admin-price-tier-card-heading-copy">
                         <div className="admin-price-tier-card-title">{matchMode === "default" ? "默认价格" : `规格价格 ${ordinal}`}</div>
-                        <div className="admin-price-tier-card-summary">{matchMode === "default" ? "所有请求使用同一价格" : isVideo ? "按生成方式与分辨率匹配" : "按生成方式、质量或尺寸匹配"}</div>
+                        <div className="admin-price-tier-card-summary">{matchMode === "default" ? "所有请求使用同一价格" : isVideo ? "按生成方式与分辨率匹配" : "按生成方式、画质、分辨率或尺寸匹配"}</div>
                     </div>
                 </div>
                 <div className="admin-price-tier-card-actions">
@@ -116,16 +116,19 @@ export function PriceTierFields({
                                     </Form.Item>
                                 ) : null}
                                 {isImage ? (
-                                    <Form.Item className="mb-0" name={[index, "quality"]} label="质量/分辨率" rules={[{ required: true, message: "请选择质量或分辨率" }]}>
-                                        <Select
-                                            options={[
-                                                { label: "任意质量", value: "*" },
-                                                { label: "1K", value: "1k" },
-                                                { label: "2K", value: "2k" },
-                                                { label: "4K", value: "4k" },
-                                            ]}
-                                        />
-                                    </Form.Item>
+                                    <>
+                                        <Form.Item className="mb-0" name={[index, "quality"]} label="画质" rules={[{ required: true, message: "请选择画质" }]}>
+                                            <Select
+                                                options={[
+                                                    { label: "任意画质", value: "*" },
+                                                    ...imagePriceQualityOptions(),
+                                                ]}
+                                            />
+                                        </Form.Item>
+                                        <Form.Item className="mb-0" name={[index, "resolution"]} label="分辨率">
+                                            <Select options={[{ label: "任意分辨率", value: "*" }, { label: "1K", value: "1k" }, { label: "2K", value: "2k" }, { label: "4K", value: "4k" }]} />
+                                        </Form.Item>
+                                    </>
                                 ) : null}
                                 {isImage ? (
                                     <Form.Item className="mb-0" name={[index, "size"]} label="画幅/尺寸">

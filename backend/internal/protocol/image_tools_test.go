@@ -36,6 +36,9 @@ func TestImageToolsProvidersBuildAsyncImageRequests(t *testing.T) {
 			if body["image"] != "https://cdn.example/source.png" {
 				t.Fatalf("source image mapping = %#v", body["image"])
 			}
+			if tc.provider == "image-tools-layer-decomposition" && body["output_format"] != "png" {
+				t.Fatalf("layer outputs must preserve alpha: %#v", body["output_format"])
+			}
 			result, err := adapter.ParseCreate(context.Background(), []byte(`{"data":{"id":"task-image-tool-1","status":"processing"}}`))
 			if err != nil || result.TaskID != "task-image-tool-1" || result.Status != StatusProcessing {
 				t.Fatalf("create result = %#v, err = %v", result, err)

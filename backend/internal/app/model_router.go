@@ -309,17 +309,25 @@ func skuSelectorForIntent(intent ModelRequestIntent) map[string]string {
 		}
 		rawQuality, _ := intent.Options["quality"].(string)
 		rawSize, _ := intent.Options["size"].(string)
-		if quality := normalizeImagePriceQuality(rawQuality, rawSize); quality != "" {
+		quality := normalizeImagePriceQuality(rawQuality, "")
+		if quality != "" {
 			selector["quality"] = quality
+			if isImageResolutionTier(quality) {
+				selector["resolution"] = quality
+			}
 		}
-		for _, key := range []string{"quality", "size"} {
-			if key == "quality" && selector["quality"] != "" {
-				continue
+		if resolution := imageResolutionFromSize(rawSize); resolution != "" {
+			selector["resolution"] = resolution
+			// 保留存量 quality=1k/2k/4k 价格档的请求选择器。
+			if quality == "" || quality == "auto" || quality == "any" {
+				selector["quality"] = resolution
 			}
-			text, _ := intent.Options[key].(string)
-			if value := strings.ToLower(strings.TrimSpace(text)); value != "" && value != "auto" && value != "any" {
-				selector[key] = value
-			}
+		}
+		if quality := selector["quality"]; quality == "auto" || quality == "any" {
+			delete(selector, "quality")
+		}
+		if value := strings.ToLower(strings.TrimSpace(rawSize)); value != "" && value != "auto" && value != "any" {
+			selector["size"] = value
 		}
 	}
 	return selector
@@ -352,8 +360,44 @@ func normalizeImagePriceQuality(rawQuality string, rawSize string) string {
 	}
 }
 
+func imageResolutionFromSize(rawSize string) string {
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(rawSize)), "x")
+	if len(parts) != 2 {
+		return ""
+	}
+	width, widthErr := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+	height, heightErr := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+	if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 || width > (1<<32)/height {
+		return ""
+	}
+	pixels := width * height
+	switch {
+	case pixels <= 2_000_000:
+		return "1k"
+	case pixels <= 4_300_000:
+		return "2k"
+	case pixels <= 8_294_400:
+		return "4k"
+	default:
+		return ""
+	}
+}
+
+func isImageResolutionTier(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1k", "2k", "4k":
+		return true
+	default:
+		return false
+	}
+}
+
 func skuSelectorForTier(tier model.ChannelModelPriceTier) map[string]string {
 	selector := model.DecodeSKUSelector(tier.SelectorJSON)
+	if quality := strings.ToLower(strings.TrimSpace(selector["quality"])); isImageResolutionTier(quality) && strings.TrimSpace(selector["resolution"]) == "" {
+		selector["resolution"] = quality
+		delete(selector, "quality")
+	}
 	if len(selector) == 0 {
 		if resolution := normalizeChannelModelTierResolution(tier.Resolution); resolution != "*" {
 			selector["vquality"] = resolution

@@ -1,4 +1,16 @@
 import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
+import type { GenerationTask } from "@/services/api/task-center";
+
+/** 上游成功不能把旧提取图或尚未验收的去背景结果标成完成。 */
+export function canvasTaskBindingStatus(node: CanvasNodeData, task: Pick<GenerationTask, "id" | "status">): CanvasNodeMetadata["status"] {
+    const extraction = node.metadata?.layerExtraction;
+    if (task.status === "failed" || task.status === "cancelled" || extraction?.rejectedTaskId === task.id) return "error";
+    if (task.status === "succeeded" && Boolean(node.metadata?.content || node.metadata?.storageKey)) {
+        if (!extraction || (extraction.phase === "complete" && node.metadata?.taskId === task.id)) return "success";
+        if (extraction.phase === "background-removal-required" && extraction.extractionTaskId === task.id) return "idle";
+    }
+    return "loading";
+}
 
 /** 查询/消费异常不是任务终态。只标记恢复诊断，不覆盖成功结果或新的任务绑定。 */
 export function markCanvasTaskRecoveryUnconfirmed(node: CanvasNodeData, expectedTaskId: string | undefined, detail: string): CanvasNodeData {

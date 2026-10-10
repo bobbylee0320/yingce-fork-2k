@@ -136,6 +136,7 @@ export function useCanvasGenerationExecutor({
 
                     const sourceTextContent = sourceNode?.type === CanvasNodeType.Text ? sourceNode.metadata?.content?.trim() || "" : "";
                     const editingTextNode = mode === "text" && Boolean(sourceTextContent);
+                    const markSourceStatus = !sourceNode?.metadata?.content && !editingTextNode;
                     let generationPrompt = mode === "image" && sourceNode?.metadata?.portraitTexture ? buildPortraitTexturePrompt(prompt, sourceNode.metadata.portraitTexture) : prompt;
                     if (mode === "image" && sourceNode?.metadata?.cameraControl?.enabled) {
                         const cameraControl = sourceNode.metadata.cameraControl;
@@ -143,6 +144,30 @@ export function useCanvasGenerationExecutor({
                         generationPrompt = `${generationPrompt}\n${cameraPrompt}`;
                     }
                     const isPreparingEmptyImage = mode === "image" && sourceNode?.type === CanvasNodeType.Image && !sourceNode.metadata?.content;
+                    const preparationController = startGenerationRequest(nodeId, nodeId, nodeId, options?.controller);
+                    setRunningNodeId(nodeId);
+                    if (markSourceStatus)
+                        setNodes((current) =>
+                            current.map((node) =>
+                                node.id === nodeId
+                                    ? {
+                                          ...node,
+                                          metadata: {
+                                              ...node.metadata,
+                                              ...canvasGenerationPromptMetadata(prompt, prompt),
+                                              status: NODE_STATUS_LOADING,
+                                              taskStage: "正在准备参考素材",
+                                              taskProgress: 0,
+                                              taskCreatedAt: new Date().toISOString(),
+                                              errorDetails: undefined,
+                                              generationErrorCode: undefined,
+                                              resourceReloadAvailable: undefined,
+                                              failedPromptFingerprint: undefined,
+                                          },
+                                      }
+                                    : node,
+                            ),
+                        );
 
                     let rawGenerationContext: Awaited<ReturnType<typeof hydrateNodeGenerationContext>>;
                     // AutoDL/其他声明式视频协议需要结构化参考素材；只有普通
@@ -164,7 +189,7 @@ export function useCanvasGenerationExecutor({
                         const compatibilityError = usesWorkflowProvider ? "" : modelCompatibilityError(generationConfig, generationConfig.model, requirements);
                         if (compatibilityError) throw new Error(`当前模型无法支持这组输入和参数：${compatibilityError}`);
                         const referenceLimits = usesWorkflowProvider ? undefined : modelGroupReferenceLimits(effectiveConfig, generationConfig.model, mode, requirements);
-                        rawGenerationContext = await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, mode, mode === "video" && Boolean(referenceLimits?.maxAudios), !promptOnly, referenceLimits);
+                        rawGenerationContext = await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, mode, mode === "video" && Boolean(referenceLimits?.maxAudios), !promptOnly, referenceLimits, false);
                         const hydratedRequirements = generationModelRequirements(mode, rawGenerationContext, sourceNode, generationConfig);
                         generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, hydratedRequirements);
                         const hydratedCompatibilityError = usesWorkflowProvider ? "" : modelCompatibilityError(generationConfig, generationConfig.model, hydratedRequirements);
@@ -172,6 +197,8 @@ export function useCanvasGenerationExecutor({
                     } catch (error) {
                         const errorDetails = generationErrorMessage(error);
                         message.error(errorDetails);
+                        finishGenerationRequest(nodeId, preparationController);
+                        setRunningNodeId(null);
                         return;
                     }
 
@@ -180,6 +207,8 @@ export function useCanvasGenerationExecutor({
                         skillExecution = await skillRuntime.prepare({ profile: "canvas", prompt: rawGenerationContext.prompt, skills: addedSkills });
                     } catch (error) {
                         message.error(error instanceof Error ? error.message : "技能上下文加载失败");
+                        finishGenerationRequest(nodeId, preparationController);
+                        setRunningNodeId(null);
                         return;
                     }
                     let effectivePrompt = skillExecution.prompt.trim();
@@ -194,28 +223,38 @@ export function useCanvasGenerationExecutor({
                         } catch (error) {
                             const errorDetails = generationErrorMessage(error);
                             message.error(errorDetails);
+                            finishGenerationRequest(nodeId, preparationController);
+                            setRunningNodeId(null);
                             return;
                         }
                     }
                     const promptLengthError = mode === "video" ? modelPromptLengthError(generationConfig, generationConfig.model, mode, effectivePrompt) : "";
                     if (promptLengthError) {
                         message.error(promptLengthError);
+                        finishGenerationRequest(nodeId, preparationController);
+                        setRunningNodeId(null);
                         return;
                     }
                     const generationContext = { ...rawGenerationContext, prompt: effectivePrompt };
                     if (mode === "audio" && generationContext.characterReferences.length) {
                         if (generationContext.characterReferences.length !== 1) {
                             message.error("角色配音一次只能引用一个角色卡");
+                            finishGenerationRequest(nodeId, preparationController);
+                            setRunningNodeId(null);
                             return;
                         }
                         const voice = generationContext.resolvedCharacterVoices[0];
                         if (!voice) {
                             message.error("角色尚未绑定可用声音，无法创建角色配音任务");
+                            finishGenerationRequest(nodeId, preparationController);
+                            setRunningNodeId(null);
                             return;
                         }
                         generationConfig = { ...generationConfig, audioVoice: voice.voiceKey, audioInstructions: [voice.instructions, generationConfig.audioInstructions].filter(Boolean).join("；") };
                     }
                     if (!effectivePrompt && (mode === "text" || mode === "audio")) {
+                        finishGenerationRequest(nodeId, preparationController);
+                        setRunningNodeId(null);
                         return;
                     }
 
@@ -251,10 +290,13 @@ export function useCanvasGenerationExecutor({
                         context: generationContext,
                     });
                     const duplicateConfirmationRequired = !options?.skipDuplicateConfirmation && !options?.retryContext && sourceNode?.metadata?.lastGenerationRequestFingerprint === requestFingerprint;
-                    if (duplicateConfirmationRequired && !(await confirmDuplicateSubmission())) return;
+                    if (duplicateConfirmationRequired && !(await confirmDuplicateSubmission())) {
+                        finishGenerationRequest(nodeId, preparationController);
+                        setRunningNodeId(null);
+                        return;
+                    }
 
-                    setRunningNodeId(nodeId);
-                    const controller = startGenerationRequest(nodeId, nodeId, nodeId, options?.controller);
+                    const controller = preparationController;
                     if (controller.signal.aborted) {
                         finishGenerationRequest(nodeId, controller);
                         setRunningNodeId(null);
@@ -286,7 +328,6 @@ export function useCanvasGenerationExecutor({
                     }
 
                     // 已有内容节点只是本次生成的来源；任务状态归新目标所有，不能覆盖已成功结果。
-                    const markSourceStatus = !sourceNode?.metadata?.content && !editingTextNode;
                     const statusPrompt = sourceNode?.type === CanvasNodeType.Config ? effectivePrompt : prompt;
                     if (markSourceStatus)
                         setNodes((current) =>

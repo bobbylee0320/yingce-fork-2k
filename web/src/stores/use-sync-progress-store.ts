@@ -1,12 +1,22 @@
 import { create } from "zustand";
 
+export type LocalCanvasPersistencePhase = "saved" | "pending" | "error";
+
 export type SyncProjectProgress = {
     projectId: string;
     total: number;
     completed: number;
-    phase: "pending" | "uploading" | "saving" | "reconciling" | "done" | "error" | "conflict";
+    phase: "local" | "pending" | "uploading" | "saving" | "reconciling" | "done" | "error" | "conflict";
     message?: string;
     draftCount?: number;
+    draftError?: string;
+    errorKind?: "local" | "network" | "conflict" | "draft" | "resources";
+    localPhase?: LocalCanvasPersistencePhase;
+    localSavedAt?: string;
+    localError?: string;
+    pendingWrites?: number;
+    pendingChanges?: number;
+    cloudRevision?: number;
 };
 
 type SyncProgressStore = {
@@ -56,11 +66,11 @@ export const useSyncProgressStore = create<SyncProgressStore>((set, get) => ({
     clearAll: () => set({ syncingProjects: {} }),
     isAnySyncing: () => {
         const list = Object.values(get().syncingProjects);
-        return list.some((item) => item.phase !== "done");
+        return list.some((item) => (item.phase !== "done" && item.phase !== "local") || item.localPhase === "pending" || item.localPhase === "error" || Boolean(item.draftError));
     },
 }));
 
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     window.addEventListener("beforeunload", (event) => {
         if (useSyncProgressStore.getState().isAnySyncing()) {
             event.preventDefault();

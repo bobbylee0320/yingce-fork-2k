@@ -5,7 +5,7 @@ import { App } from "antd";
 import { applyGenerationTaskResultToNodes, generationTaskCanReloadResource, generationTaskNodeId, generationTaskOutputsApplied, shouldRecoverCanvasImageOutputs } from "@/lib/canvas/canvas-generation-task-sync";
 import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-result";
 import { reconcileImageBatchRoot } from "@/lib/canvas/canvas-image-batch-retry";
-import { markCanvasTaskRecoveryUnconfirmed } from "@/lib/canvas/canvas-task-state";
+import { canvasTaskBindingStatus, markCanvasTaskRecoveryUnconfirmed } from "@/lib/canvas/canvas-task-state";
 import { applyCanvasGenerationTaskNodeEffect, isCanvasGenerationDurableAckError } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskNode, ensureCanvasNodeAsset, retryCanvasAssetSyncAfterRateLimit } from "@/services/project-asset-sync";
 import { listGenerationTasks, listTaskLogs, queryGenerationTask, subscribeGenerationTasks, type GenerationTask, type TaskLog } from "@/services/api/task-center";
@@ -16,6 +16,7 @@ import { generationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { generationFailureMetadata } from "@/lib/generation-error";
 import { runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
+import { hasRemoteUserDataSyncSession } from "@/services/user-data-sync";
 import { attachNodeEffectKey } from "@/services/generation-task-materializer";
 import { consumeCanvasGenerationContinuation } from "./use-canvas-operation-history";
 
@@ -184,6 +185,8 @@ export async function recoverCanvasGenerationTaskNode(input: {
                               ...item.metadata,
                               status: input.continuationOnly ? item.metadata?.status : NODE_STATUS_ERROR,
                               ...(input.continuationOnly ? {} : failure),
+                              ...(item.metadata?.layerExtraction && item.metadata.taskId === input.completed.id && input.completed.status === "succeeded"
+                                  ? { layerExtraction: { ...item.metadata.layerExtraction, rejectedTaskId: input.completed.id } } : {}),
                               ...(item.metadata?.agentGenerationContinuation?.status === "pending"
                                   ? {
                                         agentGenerationContinuation: { ...item.metadata.agentGenerationContinuation, status: "failed" as const },
@@ -259,15 +262,16 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 current.map((node) => {
                     if (node.id !== targetNodeId) return node;
                     const failed = task.status === "failed" || task.status === "cancelled";
-                    const hasCompletedContent = task.status === "succeeded" && Boolean(node.metadata?.content || node.metadata?.storageKey);
+                    const extraction = node.metadata?.layerExtraction;
+                    const rejectedLayer = extraction?.rejectedTaskId === task.id;
                     const failure = failed ? generationFailureMetadata(task.error || (task.status === "cancelled" ? "任务已取消" : "任务失败"), nodeGenerationPrompt(node) || task.prompt || "") : undefined;
                     return {
                         ...node,
                         metadata: {
                             ...node.metadata,
                             ...generationTaskMetadata(task),
-                            status: failed ? NODE_STATUS_ERROR : hasCompletedContent ? NODE_STATUS_SUCCESS : NODE_STATUS_LOADING,
-                            ...(failure || { errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined }),
+                            status: canvasTaskBindingStatus(node, task),
+                            ...(failure || (rejectedLayer ? {} : { errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined })),
                         },
                     };
                 }),
@@ -280,7 +284,11 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
         async (node: CanvasNodeData, taskId: string, signal?: AbortSignal) => {
             const result = await retryCanvasAssetSyncAfterRateLimit(() => ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node, source: "canvas-generation", taskId, signal }), { signal });
             if (signal?.aborted) return;
-            setNodes((current) => current.map((item) => (item.id === node.id && item.metadata?.taskId === taskId ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item)));
+            setNodes((current) =>
+                current.map((item) =>
+                    item.id === node.id && item.metadata?.taskId === taskId && (!node.metadata?.imageLayerGroup || item.metadata.storageKey === node.metadata.storageKey) ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item,
+                ),
+            );
             if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
         },
         [domainProjectId, projectId, queryClient, setNodes],
@@ -380,6 +388,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
         async (startedProjectId: string, signal: AbortSignal, isCurrentProject: () => boolean) => {
             if (!isCurrentProject()) return;
             const recoveryNodes = nodesRef.current.filter((node) => {
+                if (node.metadata?.experimentalLayerPlan) return false;
                 const pendingAgentContinuation = node.metadata?.agentGenerationContinuation?.status === "pending";
                 const aggregateBatchRoot = node.metadata?.isBatchRoot && node.metadata.batchChildIds?.length;
                 if (aggregateBatchRoot && !pendingAgentContinuation) return false;
@@ -508,7 +517,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
         nodes.forEach((node) => {
             const taskId = node.metadata?.taskId;
             if (!taskId || !node.metadata?.content || node.metadata.status !== NODE_STATUS_SUCCESS || (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio)) return;
-            const saveKey = `${taskId}:${node.id}:${domainProjectId || "personal"}`;
+            const saveKey = `${taskId}:${node.id}:${domainProjectId || "personal"}${node.metadata.imageLayerGroup ? `:${node.metadata.storageKey}` : ""}`;
             if (autoSavedTaskIdsRef.current.has(saveKey)) return;
             autoSavedTaskIdsRef.current.add(saveKey);
             void runGenerationConsumer(consumerControllerRef.current.signal, async (signal) => {
@@ -516,9 +525,13 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
             }).catch((error) => {
                 autoSavedTaskIdsRef.current.delete(saveKey);
                 if (error instanceof Error && error.name === "AbortError") return;
+                const detail = error instanceof Error ? error.message : "未知错误";
+                const content = hasRemoteUserDataSyncSession()
+                    ? `生成结果已保留，本地素材已保存，云端项目资产稍后重试：${detail}`
+                    : "生成结果已保留在本地素材库，登录后会继续同步到云端";
                 message.warning({
                     key: `canvas-asset-sync:${projectId}`,
-                    content: error instanceof Error ? `生成结果已保留，但项目资产同步失败：${error.message}` : "生成结果已保留，但项目资产同步失败",
+                    content,
                     duration: 4,
                 });
             });

@@ -2,12 +2,13 @@ import { useState } from "react";
 import "./image-size-picker.css";
 import { Input, Button } from "antd";
 import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
-import { IMAGE_RESOLUTIONS, imagePresetForRatio, imagePresetValue, imageQualityForSelection, imageQualityForTier, imageResolutionUsesQuality, imageSizePresets, imageTierAvailable } from "@/lib/image-size-presets";
+import { imageResolutionTiers, imagePresetForRatio, imagePresetValue, imageQualityForSelection, imageQualityForTier, imageResolutionUsesQuality, imageSizePresets, imageTierAvailable } from "@/lib/image-size-presets";
 import { buildImageResolutionOptions, type ImageResolutionOption, type ImageResolutionTier } from "@/lib/image-resolution-tiers";
 
 import { resolveImageRequestSize, validateImageSize } from "@/services/api/image-validation";
 
 export function ImageSizePicker({ profile, size, quality, onChange }: { profile: ImageCapabilityConfig; size: string; quality?: string; onChange: (size: string, quality?: string) => void }) {
+    const IMAGE_RESOLUTIONS = imageResolutionTiers(profile);
     const presets = imageSizePresets(profile).filter((preset) => imageTierAvailable(profile, preset.tier));
     const visibleTiers = IMAGE_RESOLUTIONS.filter((value) => presets.some((preset) => preset.tier === value));
     const [chosenTier, setChosenTier] = useState<ImageResolutionTier>("1k");

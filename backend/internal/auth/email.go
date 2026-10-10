@@ -5,16 +5,20 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"math/big"
 	"mime"
 	"net"
 	"net/mail"
 	"net/smtp"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -425,25 +429,34 @@ func resolveEmailSender(value EmailSettingValue, brandName string) EmailSettingV
 	return value
 }
 
-func sendSMTPMail(setting EmailSettingValue, recipient string, subject string, body string) error {
+func sendSMTPMail(setting EmailSettingValue, recipient string, subject string, body string) (err error) {
+	stage := "connect"
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("smtp %s: %w", stage, err)
+		}
+	}()
 	address := net.JoinHostPort(setting.Host, strconv.Itoa(setting.Port))
 	tlsConfig := &tls.Config{ServerName: setting.Host, MinVersion: tls.VersionTLS12}
 	dialer := &net.Dialer{Timeout: 12 * time.Second}
 	var client *smtp.Client
-	var err error
 	if setting.Encryption == "tls" {
+		stage = "connect_tls"
 		connection, dialErr := tls.DialWithDialer(dialer, "tcp", address, tlsConfig)
 		if dialErr != nil {
 			return dialErr
 		}
+		stage = "greeting"
 		client, err = smtp.NewClient(connection, setting.Host)
 	} else {
 		connection, dialErr := dialer.Dial("tcp", address)
 		if dialErr != nil {
 			return dialErr
 		}
+		stage = "greeting"
 		client, err = smtp.NewClient(connection, setting.Host)
 		if err == nil && setting.Encryption == "starttls" {
+			stage = "starttls"
 			err = client.StartTLS(tlsConfig)
 		}
 	}
@@ -452,37 +465,74 @@ func sendSMTPMail(setting EmailSettingValue, recipient string, subject string, b
 	}
 	defer client.Close()
 	if setting.Username != "" {
+		stage = "auth"
 		if err := client.Auth(smtp.PlainAuth("", setting.Username, setting.Password, setting.Host)); err != nil {
 			return err
 		}
 	}
+	stage = "mail_from"
 	if err := client.Mail(setting.FromEmail); err != nil {
 		return err
 	}
+	stage = "rcpt_to"
 	if err := client.Rcpt(recipient); err != nil {
 		return err
 	}
+	stage = "data"
 	wc, err := client.Data()
 	if err != nil {
 		return err
 	}
 	from := mail.Address{Name: setting.FromName, Address: setting.FromEmail}
 	message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s", from.String(), recipient, mime.QEncoding.Encode("UTF-8", subject), body)
+	stage = "write_body"
 	if _, err := wc.Write([]byte(message)); err != nil {
 		_ = wc.Close()
 		return err
 	}
+	stage = "finish_data"
 	if err := wc.Close(); err != nil {
 		return err
 	}
+	stage = "quit"
 	return client.Quit()
 }
 
 func (s *Service) deliverEmail(setting EmailSettingValue, recipient string, subject string, body string) error {
+	var err error
 	if s.mailSender != nil {
-		return s.mailSender(setting, recipient, subject, body)
+		err = s.mailSender(setting, recipient, subject, body)
+	} else {
+		err = sendSMTPMail(setting, recipient, subject, body)
 	}
-	return sendSMTPMail(setting, recipient, subject, body)
+	if err != nil {
+		slog.Error("smtp email delivery failed",
+			"host", setting.Host, "port", setting.Port, "encryption", setting.Encryption,
+			"recipient", maskedEmail(recipient), "error", smtpLogError(err, setting, recipient, subject, body))
+	}
+	return err
+}
+
+var emailCodeLogPattern = regexp.MustCompile(`[0-9]{6}`)
+
+func smtpLogError(err error, setting EmailSettingValue, recipient, subject, body string) string {
+	// SMTP replies can echo credentials, addresses or message content. Redact
+	// those values before logging while preserving the status and failure detail.
+	secrets := []string{setting.Password, setting.Username, setting.FromEmail, recipient, subject, body,
+		"\x00" + setting.Username + "\x00" + setting.Password}
+	secrets = append(secrets, emailCodeLogPattern.FindAllString(body, -1)...)
+	values := make([]string, 0, len(secrets)*2)
+	for _, secret := range secrets {
+		if secret != "" {
+			values = append(values, secret, base64.StdEncoding.EncodeToString([]byte(secret)))
+		}
+	}
+	sort.Slice(values, func(i, j int) bool { return len(values[i]) > len(values[j]) })
+	pairs := make([]string, 0, len(values)*2)
+	for _, value := range values {
+		pairs = append(pairs, value, "[redacted]")
+	}
+	return strings.NewReplacer(pairs...).Replace(err.Error())
 }
 
 func randomNumericCode(length int) (string, error) {

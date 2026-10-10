@@ -197,6 +197,7 @@ export function useCanvasNodeEditor({
     }, [canvasId, domainProjectId, message, nodesRef, queryClient, setNodes]);
 
     const downloadNodeImage = useCallback(async (node: CanvasNodeData) => {
+        if (node.metadata?.imageLayerGroup?.compositeStatus && node.metadata.imageLayerGroup.compositeStatus !== "ready") { message.warning("请等待图层合成成功后再下载"); return; }
         const supported = node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio;
         const content = node.metadata?.content?.trim();
         const storageKey = node.metadata?.storageKey?.trim();
@@ -210,6 +211,7 @@ export function useCanvasNodeEditor({
     }, [canvasTitle, message]);
 
     const saveNodeAsset = useCallback(async (node: CanvasNodeData) => {
+        if (node.metadata?.imageLayerGroup?.compositeStatus && node.metadata.imageLayerGroup.compositeStatus !== "ready") { message.warning("请等待图层合成成功后再保存素材"); return; }
         if (node.type !== CanvasNodeType.Text && node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) return message.error("当前节点类型不能保存为素材");
         if (!node.metadata?.content?.trim()) return message.error("当前节点没有可保存的内容");
         try {

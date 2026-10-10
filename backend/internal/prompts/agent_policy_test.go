@@ -10,11 +10,14 @@ func TestLoadAgentPoliciesUsesDocumentMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if system.ID != "cloud-agent-system" || system.Version != 13 || media.ID != "cloud-agent-media" || media.Version != 5 {
+	if system.ID != "cloud-agent-system" || system.Version != 14 || media.ID != "cloud-agent-media" || media.Version != 6 {
 		t.Fatalf("unexpected policy metadata: system=%+v media=%+v", system, media)
 	}
 	if strings.Contains(system.Text, "id: cloud-agent-system") || !strings.HasPrefix(system.Text, "# Cloud Agent") {
 		t.Fatalf("metadata leaked into compiled policy body: %q", system.Text)
+	}
+	if !strings.Contains(system.Text, "maxToolCalls") || !strings.Contains(system.Text, "收到这一批的真实执行结果后再继续") {
+		t.Fatal("system policy lost the tool-call batching instruction")
 	}
 	for _, phrase := range []string{
 		"auto 只豁免其他画布修改，不豁免媒体生成",

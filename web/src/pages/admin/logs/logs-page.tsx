@@ -18,6 +18,7 @@ import { AdminBatchBar, AdminDataTable, AdminExportButton, AdminFilterChip, Admi
 import { logBillingLabel, logStatus, normalizeLogView } from "./log-view";
 import "./logs-page.css";
 import { Select } from "@/components/ui/base/select";
+import { AdminSearchInput } from "../components/admin-search-input";
 
 export default function LogsPage() {
     const { message } = App.useApp();
@@ -186,6 +187,8 @@ export default function LogsPage() {
             title="请求明细"
             description="模型生成与结果下载记录；仅计费调用扣除积分"
             actions={
+                <>
+                <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => { setLoading(true); setRetry((value) => value + 1); }}>刷新列表</Button>
                 <AdminExportButton
                     exportFile={() => exportAdminApiLogs({ recordType, capability: capability === "all" ? undefined : capability, keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status })}
                     fileName={() => `请求明细-${new Date().toISOString().slice(0, 10)}.csv`}
@@ -193,6 +196,7 @@ export default function LogsPage() {
                     successMessage="已按当前筛选导出请求明细"
                     errorMessage="导出请求明细失败"
                 />
+                </>
             }
         >
             {loadError ? <Alert type="error" showIcon title="请求明细读取失败" description={loadError} action={<Button size="small" onClick={() => setRetry((value) => value + 1)}>重试</Button>} /> : null}
@@ -200,13 +204,13 @@ export default function LogsPage() {
                 className={view === "all" ? "admin-logs-full" : "admin-logs-compact"}
                 trailing={<Segmented aria-label="请求明细视图" value={view} onChange={(value) => updateUrl({ view: value })} options={[{ label: "排障", value: "troubleshoot" }, { label: "计费", value: "billing" }, { label: "全部字段", value: "all" }]} />}
                 toolbar={
-                    <Input
+                    <AdminSearchInput
                         allowClear
                         className="app-list-search"
                         prefix={<Search className="size-4 text-foreground/40" />}
                         value={keyword}
                         placeholder="搜索用户、渠道、模型、路径或请求号"
-                        onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)}
+                        onValueChange={(value) => updateUrl({ filter: value, page: 1 }, true)}
                     />
                 }
                 toolbarActiveFilters={

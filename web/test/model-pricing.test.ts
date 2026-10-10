@@ -140,6 +140,18 @@ describe("model request pricing", () => {
         expect(priceTiersForCurrentSelection(tiers, "image", { ...config, quality: "4k" })[0]?.unitPriceMicrocredits).toBe(1_000_000);
     });
 
+    test("匹配独立图片画质与像素分辨率，并兼容存量 2K 价格档", () => {
+        const config = systemConfig({
+            capability: "image",
+            tiers: [
+                { selector: { quality: "2k" }, billingMode: "fixed_request", unitPriceMicrocredits: 2_000_000 },
+                { selector: { quality: "medium", resolution: "2k" }, billingMode: "fixed_request", unitPriceMicrocredits: 3_000_000 },
+            ],
+        });
+        const requirements: ModelRequirements = { capability: "image", options: { quality: "medium", size: "2048x2048" } };
+        expect(requestCreditCost({ channelMode: "remote", modelCosts: resolveModelChannel(config, config.model).modelCosts, model: "image-model", capability: "image", config, requirements, count: 1 })).toBe(3);
+        expect(priceTiersForCurrentSelection(resolveModelChannel(config, config.model).modelCosts![0]!.logicalPriceTiers!, "image", config, requirements)[0]?.unitPriceMicrocredits).toBe(3_000_000);
+    });
     test("preserves provider-specific resolution enums when matching price tiers", () => {
         expect(normalizeTierResolution("768P竖")).toBe("768p竖");
         expect(normalizeTierResolution("HD_Portrait")).toBe("hd_portrait");

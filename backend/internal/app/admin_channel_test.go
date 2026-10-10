@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"yingce/backend/internal/model"
@@ -189,15 +190,39 @@ func TestChannelFromRequestStoresAndClearsHeaders(t *testing.T) {
 	}
 }
 
-func TestPublicChannelOnlyReturnsSystemHeadersToAdmin(t *testing.T) {
-	channel := model.ModelChannel{ID: "system-1", Scope: model.ChannelScopeSystem, BaseURL: "https://example.com/v1", HeadersJSON: `[{"name":"X-Gateway-Tenant","value":"tenant-a"}]`}
+func TestChannelFromRequestValidatesProxyURL(t *testing.T) {
+	limit := 4
+	base := model.ModelChannel{}
+	channel, err := channelFromRequest(ChannelRequest{Name: "Proxy", BaseURL: "https://93.184.216.34/v1", ProxyURL: "socks5://user:secret@127.0.0.1:1080", ConcurrencyLimit: &limit}, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if channel.ProxyURL != "socks5://user:secret@127.0.0.1:1080" {
+		t.Fatalf("proxy URL = %q", channel.ProxyURL)
+	}
+	for _, proxyURL := range []string{"ftp://127.0.0.1:1080", "socks5://", "socks5://127.0.0.1:1080#fragment", "http://" + strings.Repeat("a", 506)} {
+		_, err := channelFromRequest(ChannelRequest{Name: "Proxy", BaseURL: "https://93.184.216.34/v1", ProxyURL: proxyURL, ConcurrencyLimit: &limit}, base)
+		if err == nil {
+			t.Fatalf("invalid proxy URL %q was accepted", proxyURL)
+		}
+	}
+}
+
+func TestPublicChannelOnlyReturnsSystemHeadersAndProxyToAdmin(t *testing.T) {
+	channel := model.ModelChannel{ID: "system-1", Scope: model.ChannelScopeSystem, BaseURL: "https://example.com/v1", HeadersJSON: `[{"name":"X-Gateway-Tenant","value":"tenant-a"}]`, ProxyURL: "socks5://user:secret@127.0.0.1:1080"}
 	adminView := publicChannel(channel, true, nil)
 	if len(adminView.Headers) != 1 || adminView.Headers[0].Name != "X-Gateway-Tenant" {
 		t.Fatalf("admin headers = %#v", adminView.Headers)
 	}
+	if adminView.ProxyURL != channel.ProxyURL {
+		t.Fatalf("admin proxy URL = %q", adminView.ProxyURL)
+	}
 	userView := publicChannel(channel, false, nil)
 	if len(userView.Headers) != 0 {
 		t.Fatalf("user headers = %#v", userView.Headers)
+	}
+	if userView.ProxyURL != "" {
+		t.Fatalf("user proxy URL = %q", userView.ProxyURL)
 	}
 }
 

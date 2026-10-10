@@ -1,4 +1,6 @@
 import { CanvasWorkspacePanel } from "@/components/canvas/canvas-workspace-panel";
+import { useCanvasImageLayerGroups } from "./use-canvas-image-layer-groups";
+import { useCanvasImageLayerMaterials } from "./use-canvas-image-layer-materials";
 import { isCanvasNodeGenerating } from "@/lib/canvas/canvas-node-task-state";
 import { createCanvasStateWriter } from "@/lib/canvas/canvas-editor-state";
 import { canCancelGenerationTask } from "@/lib/generation-task-display";
@@ -91,6 +93,8 @@ import {
     replaceCanvasReferenceMentions,
     type CanvasResourceReference,
 } from "@/lib/canvas/canvas-resource-references";
+import { buildImageToPrevisAgentPrompt, buildImageToPrevisDisplayText } from "@/lib/canvas/image-to-previs-agent";
+import type { CloudAgentMessagePresentation } from "@/services/cloud-agent-conversations";
 import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
 import { CanvasOverlayLayerContainer, CanvasOverlayLayerProvider } from "@/components/canvas/canvas-overlay-layer";
 import { CanvasLeaferGraphicsLayer } from "@/components/canvas/canvas-leafer-graphics-layer";
@@ -241,7 +245,7 @@ function CanvasViewportPage() {
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     // 每次发送带递增 id：重复发送同一节点时文本相同，仍需触发一次追加。
-    const [agentPrefillRequest, setAgentPrefillRequest] = useState<{ id: number; text: string } | null>(null);
+    const [agentPrefillRequest, setAgentPrefillRequest] = useState<(CloudAgentMessagePresentation & { id: number; text: string; autoSubmit?: boolean; requiresVision?: boolean }) | null>(null);
     const [isMiniMapOpen, setIsMiniMapOpen] = useState(false);
     const [canvasAppearance, setCanvasAppearance] = useState<CanvasAppearance>(() => canvasAppearanceForTheme(colorTheme));
     const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>(DEFAULT_CANVAS_BACKGROUND_MODE);
@@ -423,6 +427,30 @@ function CanvasViewportPage() {
         openAgent();
         setContextMenu(null);
     }, [agentMentionReferences, openAgent]);
+
+    const sendImageToPrevisAgent = useCallback((node: CanvasNodeData) => {
+        if (node.type !== CanvasNodeType.Image) return;
+        const reference = agentMentionReferences.find((item) => item.nodeId === node.id && item.kind === "image");
+        if (!reference) {
+            message.warning("这张图片暂时没有可供 Agent 引用的画布资源");
+            return;
+        }
+        if (!selectedNodeIdsRef.current.has(node.id)) {
+            const selection = new Set([node.id]);
+            selectedNodeIdsRef.current = selection;
+            setSelectedNodeIds(selection);
+        }
+        setAgentPrefillRequest((current) => ({
+            id: (current?.id ?? 0) + 1,
+            text: buildImageToPrevisAgentPrompt(reference),
+            displayText: buildImageToPrevisDisplayText(),
+            canvasReferenceNodeId: reference.nodeId,
+            autoSubmit: true,
+            requiresVision: true,
+        }));
+        openAgent();
+        setContextMenu(null);
+    }, [agentMentionReferences, message, openAgent]);
     // 修复素材关联仍遵守当前画布版本，不能替用户确认覆盖云端的新内容。
     const confirmForceSaveCanvas = useCallback(() => {
         modal.confirm({
@@ -862,6 +890,7 @@ function CanvasViewportPage() {
         openBackgroundRemoval,
         openLayerDecomposition,
         decomposeImageLayers,
+        activeLayerGroupIds,
         setLayerDecompositionNodeId,
         setTextEditNodeId,
         openTextEditNode,
@@ -895,7 +924,11 @@ function CanvasViewportPage() {
         startGenerationRequest,
         finishGenerationRequest,
         bindGenerationTask,
+        applyGenerationTaskResult,
     });
+
+    useCanvasImageLayerGroups({ projectId, enabled: projectLoaded, nodes, nodesRef, setNodes, runningNodeId, activeLayerGroupIds });
+    const extractLayerMaterials = useCanvasImageLayerMaterials({ projectId, domainProjectId: currentProject?.projectId, enabled: projectLoaded, nodes, nodesRef, setNodes, setConnections });
 
     const handleNodesDeleted = useCallback(
         (removedIds: Set<string>, nextNodes: CanvasNodeData[], removedNodes: CanvasNodeData[]) => {
@@ -1555,8 +1588,9 @@ function CanvasViewportPage() {
             updateMediaNode: updateMediaNodeFromContent,
             openArtCritique,
             addPanoramaCaptureNode,
+            extractLayerMaterials,
         }),
-        [addPanoramaCaptureNode, deleteNodeFromContent, downloadNodeImage, duplicateNodeFromContent, openArtCritique, replaceCanvasNodeMedia, updateMediaNodeFromContent, updateNodeFromContent, updateNodeMetadataFromContent],
+        [addPanoramaCaptureNode, deleteNodeFromContent, downloadNodeImage, duplicateNodeFromContent, extractLayerMaterials, openArtCritique, replaceCanvasNodeMedia, updateMediaNodeFromContent, updateNodeFromContent, updateNodeMetadataFromContent],
     );
     const { dismissLastAgentChange, lastAgentChange, undoAgentOps, viewLastAgentChange } = useCanvasOperationHistory({
         projectId,
@@ -2404,6 +2438,12 @@ function CanvasViewportPage() {
     );
     const retryCanvasNode = useCallback(
         (node: CanvasNodeData) => {
+            if (node.metadata?.imageLayerWorkflow && !node.metadata.experimentalLayerPlan && !node.metadata.layerDecomposition) {
+                const source = nodesRef.current.find((item) => item.id === node.metadata!.imageLayerWorkflow!.sourceNodeId);
+                if (source?.metadata?.content) setLayerDecompositionNodeId(source.id);
+                else message.error("拆层源图片已不存在，请重新选择图片");
+                return;
+            }
             if (node.type === CanvasNodeType.Script) {
                 const prompt = (node.metadata?.composerContent || node.metadata?.prompt || "").trim();
                 if (!prompt) {
@@ -2411,6 +2451,10 @@ function CanvasViewportPage() {
                     return;
                 }
                 void generateScriptRows(node.id, prompt);
+                return;
+            }
+            if (node.metadata?.experimentalLayerPlan || node.metadata?.layerExtraction) {
+                void handleRetryNode(node);
                 return;
             }
             if (node.type === CanvasNodeType.Image && node.metadata?.isBatchRoot) {
@@ -2429,7 +2473,7 @@ function CanvasViewportPage() {
             }
             void handleRetryNode(node);
         },
-        [generateScriptRows, handleRetryNode, message, nodesRef, retryImageBatchChildren],
+        [generateScriptRows, handleRetryNode, message, nodesRef, retryImageBatchChildren, setLayerDecompositionNodeId],
     );
     const openCanvasNodeTaskDetails = useCallback(
         (node: CanvasNodeData) => {
@@ -2978,6 +3022,7 @@ function CanvasViewportPage() {
                                 setLightingNodeId((current) => (current === node.id ? null : node.id));
                             }}
                             onPanorama={openPanoramaConfig}
+                            onPrevis={sendImageToPrevisAgent}
                             onViewImage={(node) => setPreviewNodeId(node.id)}
                             onExtractVideoFrames={openVideoFrameExtractor}
                             onExtractAudioFromVideo={(node) => void extractAudioFromVideo(node)}

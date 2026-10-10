@@ -1,15 +1,10 @@
 import { http } from "@/services/api/request";
 import type { ModelTag } from "@/lib/model-tags";
+import type { ImageResolutionOption } from "@/lib/image-resolution-tiers";
 
 export type InputConstraint = { min: number; max: number };
 export type OptionConstraint = { values?: unknown[]; min?: number; max?: number; step?: number };
-export type CapabilityImageSizePreset = {
-    size: string;
-    tier: "1k" | "2k" | "4k";
-    ratio: string;
-    width: number;
-    height: number;
-};
+export type CapabilityImageSizePreset = ImageResolutionOption;
 export type CapabilityImageSize = {
     parameter?: "size" | "aspect_ratio";
     allowCustom?: boolean;

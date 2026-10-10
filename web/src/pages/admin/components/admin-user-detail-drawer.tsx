@@ -122,6 +122,8 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                             { key: "role", label: "角色", children: detail.user.role === "admin" ? "管理员" : "普通用户" },
                                             { key: "status", label: "状态", children: <AdminStatusBadge label={detail.user.status === "active" ? "启用" : "停用"} tone={detail.user.status === "active" ? "success" : "neutral"} /> },
                                             { key: "available", label: "可用积分", children: formatCredits(detail.account.availableMicrocredits) },
+                                            { key: "recharge", label: "累计充值积分", children: formatCredits(detail.counts.rechargeMicrocredits) },
+                                            { key: "checkin", label: "累计签到积分", children: formatCredits(detail.counts.checkinMicrocredits) },
                                             { key: "reserved", label: "冻结积分", children: formatCredits(detail.account.reservedMicrocredits) },
                                             { key: "created", label: "注册时间", children: formatTime(detail.user.createdAt) },
                                             { key: "login", label: "最后登录", children: formatTime(detail.user.lastLoginAt) },

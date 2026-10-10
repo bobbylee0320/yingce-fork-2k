@@ -23,7 +23,7 @@ func TestFeatureAvailabilityDefaultsToDisableFrontendModels(t *testing.T) {
 	if !setting.WelcomeEnabled {
 		t.Fatal("welcome should be enabled by default")
 	}
-	if setting.Configured || !setting.ShortDramaEnabled || !setting.TaskCenterEnabled || !setting.CreditsEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled || !setting.PluginCenterEnabled || !setting.SystemPluginsVisibleToUsers {
+	if setting.Configured || !setting.ShortDramaEnabled || !setting.TaskCenterEnabled || !setting.CreditsEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled || !setting.PluginCenterEnabled || !setting.SystemPluginsVisibleToUsers || !setting.InspirationSourcesVisible {
 		t.Fatalf("FeatureAvailability() = %#v", setting)
 	}
 }
@@ -75,7 +75,7 @@ func TestUpdateFeatureAvailabilityPersistsAndAudits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !setting.Configured || setting.ShortDramaEnabled || !setting.TaskCenterEnabled || setting.CreditsEnabled || !setting.CustomChannelsEnabled || setting.PluginCenterEnabled || setting.SystemPluginsVisibleToUsers {
+	if !setting.Configured || setting.ShortDramaEnabled || !setting.TaskCenterEnabled || setting.CreditsEnabled || !setting.CustomChannelsEnabled || setting.PluginCenterEnabled || setting.SystemPluginsVisibleToUsers || setting.InspirationSourcesVisible {
 		t.Fatalf("UpdateFeatureAvailability() = %#v", setting)
 	}
 	if enabled, err := svc.FeatureEnabled(FeaturePluginCenter); err != nil || enabled {

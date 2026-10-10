@@ -17,10 +17,12 @@ var (
 )
 
 type AdminUserCounts struct {
-	LedgerEntries int64 `json:"ledgerEntries"`
-	Tasks         int64 `json:"tasks"`
-	APICalls      int64 `json:"apiCalls"`
-	AuditEvents   int64 `json:"auditEvents"`
+	LedgerEntries        int64 `json:"ledgerEntries"`
+	Tasks                int64 `json:"tasks"`
+	APICalls             int64 `json:"apiCalls"`
+	AuditEvents          int64 `json:"auditEvents"`
+	RechargeMicrocredits int64 `json:"rechargeMicrocredits"`
+	CheckinMicrocredits  int64 `json:"checkinMicrocredits"`
 }
 
 func (r *Repository) AppendAdminAudit(event *model.AdminAuditEvent) error {
@@ -109,6 +111,14 @@ func (r *Repository) AdminUserCounts(userID string) (AdminUserCounts, error) {
 	}
 	for _, query := range queries {
 		if err := r.db.Model(query.model).Where(query.where, userID).Count(query.value).Error; err != nil {
+			return AdminUserCounts{}, err
+		}
+	}
+	for entryType, target := range map[model.CreditLedgerType]*int64{
+		model.CreditLedgerPaymentTopup: &counts.RechargeMicrocredits,
+		model.CreditLedgerCheckinBonus: &counts.CheckinMicrocredits,
+	} {
+		if err := r.db.Model(&model.CreditLedgerEntry{}).Where("user_id = ? AND type = ?", userID, entryType).Select("COALESCE(SUM(amount_microcredits), 0)").Scan(target).Error; err != nil {
 			return AdminUserCounts{}, err
 		}
 	}

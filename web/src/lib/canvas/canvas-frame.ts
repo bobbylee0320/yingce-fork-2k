@@ -46,6 +46,16 @@ export function isNodeHiddenByCollapsedFrame(node: CanvasNodeData, nodes: Canvas
     return Boolean(getCollapsedParentFrame(node, nodes));
 }
 
+/** Build minimap input in one pass; parent lookup must stay O(1) on large canvases. */
+export function visibleCanvasMinimapNodes(nodes: CanvasNodeData[]) {
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const collapsedFrameIds = new Set(nodes.filter((node) => isFrameNode(node) && node.metadata?.frame?.collapsed).map((node) => node.id));
+    return nodes.filter((node) => {
+        const parent = node.parentId ? byId.get(node.parentId) : undefined;
+        return !parent || !collapsedFrameIds.has(parent.id);
+    });
+}
+
 export function findFrameDropTarget(nodes: CanvasNodeData[], draggedNodeIds: Set<string>) {
     const dragged = nodes.filter((node) => draggedNodeIds.has(node.id));
     if (!dragged.length) return null;

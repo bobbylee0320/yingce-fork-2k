@@ -277,6 +277,13 @@ async function connectCdp(cdpPort) {
             const rect = el.getBoundingClientRect();
             const style = getComputedStyle(el);
             if (rect.width <= 0 || rect.height <= 0 || style.display === "none" || style.visibility === "hidden" || style.pointerEvents === "none" || Number(style.opacity) <= 0 || el.matches(":disabled") || el.getAttribute("aria-disabled") === "true") return null;
+            // 入场缩放作用在弹窗祖先上，按钮本身的 opacity 和动画可能都是正常值。
+            // 软件渲染可延迟首帧，让初始缩放坐标看似稳定；必须检查整条祖先链。
+            for (let ancestor = el; ancestor; ancestor = ancestor.parentElement) {
+                const ancestorStyle = getComputedStyle(ancestor);
+                if (ancestorStyle.display === "none" || ancestorStyle.visibility === "hidden" || Number(ancestorStyle.opacity) <= 0) return null;
+                if (ancestor.getAnimations().some((animation) => animation.pending || animation.playState === "running")) return null;
+            }
             const x = rect.left + rect.width / 2;
             const y = rect.top + rect.height / 2;
             if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return null;
@@ -289,6 +296,7 @@ async function connectCdp(cdpPort) {
         // 点击落到遮罩上（mask.closable=false）就完全无效（"留在预演台" 曾这样偶发失败）。
         const deadline = Date.now() + 8000;
         let previous = null;
+        let hovered = null;
         let stableSince = 0;
         let box = null;
         while (Date.now() < deadline) {
@@ -296,8 +304,13 @@ async function connectCdp(cdpPort) {
             if (next && previous && next.x === previous.x && next.y === previous.y) {
                 if (!stableSince) stableSince = Date.now();
                 if (Date.now() - stableSince >= 300) {
-                    box = next;
-                    break;
+                    if (hovered && hovered.x === next.x && hovered.y === next.y) {
+                        box = next;
+                        break;
+                    }
+                    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: next.x, y: next.y, button: "left", buttons: 0 });
+                    hovered = next;
+                    stableSince = 0;
                 }
             } else {
                 stableSince = 0;
@@ -309,9 +322,10 @@ async function connectCdp(cdpPort) {
             console.log(`      (click target not interactable: ${label})`);
             return false;
         }
-        const point = { x: box.x, y: box.y, button: "left" };
-        await send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point, buttons: 0 });
+        const point = { x: box.x, y: box.y, button: "left", pointerType: "mouse" };
+        // 移入鼠标后已重新等待动画和坐标稳定，避免 hover 引起的位移造成误点。
         await send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, buttons: 1, clickCount: 1 });
+        await sleep(50);
         await send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, buttons: 0, clickCount: 1 });
         return true;
     };
@@ -727,8 +741,31 @@ async function saveFailureCloseGuard(cdp, baseUrl) {
     const modalShown = await cdp.poll(`!!document.querySelector('.ant-modal-confirm') && (document.body.innerText || "").includes('留在预演台')`, "close confirm modal", 40000);
     assert(modalShown, "F5 close is guarded by a confirm dialog, not silent exit");
 
-    const stayClicked = await cdp.clickText("留在预演台");
-    if (!stayClicked) throw new Error("F: 留在预演台 button not clickable");
+    // 坐标点击成功派发不代表按钮收到了点击：CI 的动画/渲染调度可能让坐标落到遮罩。
+    // 只对未送达的点击有限重试；一旦按钮收到真实点击，就保留原关闭断言，不重试业务操作。
+    await cdp.evaluate(`(() => {
+        const probe = { count: 0 };
+        probe.listener = (event) => {
+            const button = event.target instanceof Element ? event.target.closest('button') : null;
+            if (event.isTrusted && button?.closest('.ant-modal-confirm') && (button.textContent || '').trim() === '留在预演台') probe.count++;
+        };
+        window.__previsStayClickProbe = probe;
+        document.addEventListener('click', probe.listener, true);
+    })()`);
+    let stayClicked = false;
+    try {
+        for (let attempt = 0; attempt < 3 && !stayClicked; attempt++) {
+            const dispatched = await cdp.clickText("留在预演台", ".ant-modal-confirm button");
+            if (!dispatched) throw new Error("F: 留在预演台 button not clickable");
+            stayClicked = await cdp.poll(`window.__previsStayClickProbe.count > 0`, "stay button received trusted click", 1500);
+        }
+        if (!stayClicked) throw new Error("F: 留在预演台 button did not receive a trusted click");
+    } finally {
+        await cdp.evaluate(`(() => {
+            document.removeEventListener('click', window.__previsStayClickProbe.listener, true);
+            delete window.__previsStayClickProbe;
+        })()`);
+    }
     const modalGone = await cdp.poll(
         `![...document.querySelectorAll('.ant-modal-confirm')].some((modal) => {
             const rect = modal.getBoundingClientRect();

@@ -9,6 +9,7 @@ import { alignCanvasNodes, layoutCanvasAuto, layoutCanvasFlow, layoutCanvasNodes
 import { applyCanvasConnectionPromptSync } from "@/lib/canvas/canvas-resource-references";
 import { createCanvasNode, isHiddenBatchChild, removeCanvasNodes } from "@/lib/canvas/canvas-project-domain";
 import { isolateCopiedNodeMetadata, nextCopiedNodeTitle } from "@/lib/canvas/canvas-node-copy";
+import { copyImageLayerSources } from "@/lib/canvas/canvas-image-layers";
 import { CanvasNodeType, type CanvasConnection, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ContextMenuState, type Position } from "@/types/canvas";
 import { cloneCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { isDrawingEngineAvailable, type CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
@@ -363,7 +364,7 @@ export function useCanvasNodeOperations({
     const duplicateNode = useCallback((nodeId: string, duplicateMode: "variant" | "copy" = "variant") => {
         const source = nodesRef.current.find((node) => node.id === nodeId);
         if (!source) return;
-        const sources = isFrameNode(source) ? [source, ...getFrameChildren(source.id, nodesRef.current)] : [source];
+        const sources = isFrameNode(source) ? [source, ...getFrameChildren(source.id, nodesRef.current)] : copyImageLayerSources(source, nodesRef.current);
         const idMap = new Map(sources.map((node, index) => [node.id, `${node.type}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`]));
         const versionRootId = duplicateMode === "variant" && !isFrameNode(source) ? source.metadata?.versionOfNodeId || source.id : undefined;
         const versionLabel = versionRootId ? nextCanvasVersionLabel(versionRootId, nodesRef.current) : undefined;
@@ -428,6 +429,7 @@ export function useCanvasNodeOperations({
         const copyIds = new Set(targetIds);
         nodesRef.current.forEach((node) => {
             if (targetIds.has(node.id) && isFrameNode(node)) getFrameChildIds(node.id, nodesRef.current).forEach((childId) => copyIds.add(childId));
+                if (targetIds.has(node.id) && node.metadata?.imageLayerGroup) node.metadata.imageLayerGroup.layers.forEach((layer) => copyIds.add(layer.nodeId));
         });
         const copiedNodes = nodesRef.current
             .filter((node) => copyIds.has(node.id))

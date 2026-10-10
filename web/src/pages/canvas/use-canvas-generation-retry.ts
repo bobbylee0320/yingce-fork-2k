@@ -3,6 +3,12 @@ import { App } from "antd";
 
 import { buildNodeGenerationContext, hydrateNodeGenerationContext } from "@/components/canvas/canvas-node-generation";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
+import { imageLayerProviderMetadata, layerDecompositionConfig, supportsExperimentalLayerExtraction, supportsLayerDecomposition } from "@/lib/canvas/canvas-image-layers";
+import { imageLayerOutputSize, imageLayerRemovalPrompt } from "@/lib/canvas/canvas-image-layer-plan";
+import { extractImageLayerFromSource } from "@/services/canvas-image-layer-source";
+import { buildSourceImageLayerNodeResult } from "@/lib/canvas/canvas-generation-task-sync";
+import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
+import { resolveImageRequestSize } from "@/services/api/image-validation";
 import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { buildEmotionImageArtifacts, emotionGenerationSize, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "@/lib/canvas/canvas-emotion";
@@ -77,9 +83,49 @@ export function useCanvasGenerationRetry({
 
     return useCallback(
         async (node: CanvasNodeData) => {
+            if (node.metadata?.experimentalLayerPlan) {
+                const complete = node.metadata.experimentalLayerPlan.requests.every((request) => {
+                    const child = nodesRef.current.find((item) => item.id === request.nodeId);
+                    return child?.metadata?.status === "success" && Boolean(child.metadata.content);
+                });
+                if (!complete) {
+                    message.info("请展开图层组，单独重试未通过的图层；已完成图层会保留，不会自动扣费重试");
+                    return;
+                }
+                setNodes((current) =>
+                    current.map((item) =>
+                        item.id === node.id && item.metadata?.experimentalLayerPlan
+                            ? { ...item, metadata: { ...item.metadata, status: "loading", errorDetails: undefined, experimentalLayerPlan: { ...item.metadata.experimentalLayerPlan, errorSignature: undefined, composedSignature: undefined } } }
+                            : item,
+                    ),
+                );
+                return;
+            }
             // Canvas caches may predate the failure. Consult the original task
             // before deciding to submit another paid generation.
             let sourceTask: GenerationTask | undefined;
+            const localExtraction = node.metadata?.layerExtraction;
+            if (localExtraction?.strategy && localExtraction.strategy.method !== "generate") {
+                if (!localExtraction.source || !localExtraction.canvas) { message.error("本层原图资源或区域已丢失，请重新规划；没有提交模型请求"); return; }
+                const controller = startGenerationRequest(node.id, localExtraction.sourceNodeId, node.id);
+                setRunningNodeId(node.id);
+                setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, status: "loading", errorDetails: undefined } } : item));
+                try {
+                    const image = await extractImageLayerFromSource(localExtraction.source, localExtraction.strategy, localExtraction.canvas);
+                    const completed = await buildSourceImageLayerNodeResult(node, image, controller.signal);
+                    if (!nodesRef.current.some((item) => item.id === node.id)) return;
+                    setNodes((current) => current.map((item) => item.id === node.id ? completed : item));
+                    try {
+                        const asset = await ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node: completed, source: "canvas-manual" });
+                        if (!controller.signal.aborted) setNodes((current) => current.map((item) => item.id === node.id && item.metadata?.storageKey === completed.metadata?.storageKey ? { ...item, metadata: { ...item.metadata, assetId: asset.assetId } } : item));
+                    } catch (error) { message.warning(`图层已保存，但素材库写入失败：${error instanceof Error ? error.message : "未知错误"}`); }
+                } catch (error) {
+                    const details = error instanceof Error ? error.message : "原图提取失败";
+                    if (!controller.signal.aborted) message.error(details);
+                    setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, status: "error", errorDetails: details } } : item));
+                } finally { finishGenerationRequest(node.id, controller); setRunningNodeId((current) => current === node.id ? null : current); }
+                return;
+            }
             if (node.metadata?.taskId) {
                 try {
                     sourceTask = await queryGenerationTask(node.metadata.taskId);
@@ -87,6 +133,53 @@ export function useCanvasGenerationRetry({
                     message.error(error instanceof Error ? error.message : "无法核对原任务，请稍后重试");
                     return;
                 }
+            }
+            if ((node.metadata?.layerDecomposition || node.metadata?.layerExtraction) && sourceTask?.status === "succeeded" && node.metadata?.layerExtraction?.rejectedTaskId !== sourceTask.id && node.metadata?.layerExtraction?.phase !== "background-removal-required") {
+                try {
+                    await applyGenerationTaskResult(node.id, sourceTask);
+                } catch (error) {
+                    message.error(error instanceof Error ? error.message : "图层结果恢复失败");
+                }
+                return;
+            }
+            if (node.metadata?.layerExtraction) {
+                const extraction = node.metadata.layerExtraction;
+                const removing = extraction.phase === "background-removal-required" || extraction.phase === "remove-background";
+                const source = removing ? node : nodesRef.current.find((item) => item.id === extraction.sourceNodeId);
+                if ((!source?.metadata?.content && (removing || !extraction.source)) || !extraction.canvas) { message.error("本层源图或画布尺寸已丢失，无法单独重试"); return; }
+                const model = removing ? extraction.backgroundRemovalModel || node.metadata.model : node.metadata.model;
+                if (!model) { message.error("本层未保存可用模型，请重新从源图规划"); return; }
+                const config = layerDecompositionConfig(buildGenerationConfig(effectiveConfig, node, "image"), model, { size: imageLayerOutputSize(effectiveConfig, model, extraction.canvas) });
+                config.transparentBackground = extraction.index > 0 ? "true" : "false";
+                if (!config.size || !supportsExperimentalLayerExtraction(config, model) || !isAiConfigReady(config, model)) { message.error("本层模型无法接收源图或不支持原图比例，请重新选择模型规划"); return; }
+                try {
+                    const profile = modelCapabilityConfigFor(config, model).image;
+                    if (profile) config.size = resolveImageRequestSize(profile, config.quality, config.size)?.value || "auto";
+                } catch (error) { message.error(error instanceof Error ? error.message : "模型尺寸无效"); return; }
+                const parent = nodesRef.current.find((item) => item.id === extraction.groupId);
+                const target = parent?.metadata?.experimentalLayerPlan?.requests.find((request) => request.nodeId === node.id)?.target || node.title;
+                const prompt = removing ? imageLayerRemovalPrompt(target) : nodeGenerationPrompt(node);
+                const reference = !removing && extraction.source ? { id: extraction.sourceNodeId, name: "原图", type: extraction.source.mimeType || "image/png", ...extraction.source } : { id: source!.id, name: `${source!.title || "图层"}.png`, type: source!.metadata!.mimeType || "image/png", dataUrl: source!.metadata!.content!, storageKey: source!.metadata!.storageKey };
+                const controller = startGenerationRequest(node.id, extraction.sourceNodeId, node.id);
+                setRunningNodeId(node.id);
+                try {
+                    if (sourceTask && (sourceTask.status === "queued" || sourceTask.status === "running")) {
+                        bindGenerationTask(node.id, sourceTask);
+                        const completed = await waitForGenerationTask(sourceTask.id, { initialTask: sourceTask, signal: controller.signal, timeoutMs: 25 * 60_000, onTaskUpdate: (task) => bindGenerationTask(node.id, task) });
+                        await applyGenerationTaskResult(node.id, completed);
+                        return;
+                    }
+                    setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, ...buildImageGenerationMetadata("edit", config, 1, [reference]), prompt, status: "loading", errorDetails: undefined, taskId: undefined, layerExtraction: { ...extraction, phase: removing ? "remove-background" : "extract", rejectedTaskId: undefined } } } : item));
+                    const retryContext = sourceTask ? await createGenerationRetryContext(sourceTask.id, node.metadata.attemptGroupId) : {};
+                    await runCanvasGenerationTaskToConsumer({ projectId, nodeId: node.id, mode: "image", prompt, config, referenceImages: [reference], signal: controller.signal, ...retryContext, metadata: { retry: true, sourceNodeId: extraction.sourceNodeId, edit: removing ? "layer-background-removal" : "layer-extraction", ...imageLayerProviderMetadata(config, extraction.index) } }, { bindTask: (task) => bindGenerationTask(node.id, task), consumeTask: (task) => applyGenerationTaskResult(node.id, task) });
+                    // 刷新后的手动恢复一次只发起一项付费调用，后续去背景由用户继续。
+                    setNodes((current) => current.map((item) => item.id === node.id && item.metadata?.layerExtraction?.phase === "background-removal-required" ? { ...item, metadata: { ...item.metadata, status: "error", errorDetails: "提取已完成，需要去背景；点击重新生成只调用本层去背景模型" } } : item));
+                } catch (error) {
+                    const details = error instanceof Error ? error.message : "本层重试失败";
+                    message.error(details);
+                    setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, status: "error", errorDetails: details, layerExtraction: { ...item.metadata!.layerExtraction!, rejectedTaskId: item.metadata?.taskId } } } : item));
+                } finally { finishGenerationRequest(node.id, controller); }
+                return;
             }
             if (sourceTask?.mediaStage && sourceTask.status !== "cancelled") {
                 const controller = startGenerationRequest(node.id, node.id, node.id);
@@ -128,12 +221,17 @@ export function useCanvasGenerationRetry({
                           count: "1",
                       }
                     : { ...sourceGenerationConfig, count: "1" };
+            if (node.metadata?.layerDecomposition) generationConfig = layerDecompositionConfig(generationConfig, generationConfig.model);
+            if (node.metadata?.layerDecomposition && !supportsLayerDecomposition(generationConfig, generationConfig.model)) {
+                message.error("原拆层模型未配置专用拆层协议，无法重试");
+                return;
+            }
             if (!isAiConfigReady(generationConfig, generationConfig.model)) {
                 navigateToSettings({ continueCreation: true });
                 return;
             }
 
-            const retryPromptSource = nodeGenerationPrompt(sourceNode) || nodeGenerationPrompt(node);
+            const retryPromptSource = node.metadata?.layerDecomposition || node.metadata?.layerExtraction ? nodeGenerationPrompt(node) : nodeGenerationPrompt(sourceNode) || nodeGenerationPrompt(node);
             const retryContextPrompt = retryMode === "image" && sourceNode.metadata?.portraitTexture ? buildPortraitTexturePrompt(retryPromptSource, sourceNode.metadata.portraitTexture) : retryPromptSource;
             if (unchangedModeratedPrompt(node.metadata, retryPromptSource)) {
                 message.warning("该提示词未通过内容审核，请先修改提示词再重新生成");
@@ -146,7 +244,7 @@ export function useCanvasGenerationRetry({
                 rawContext =
                     hasSavedImageMetadata && !baseContext.characterReferences.length
                         ? null
-                        : await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, retryMode, retryMode === "video" && supportsVideoReferenceAudio(generationConfig), !promptOnly);
+                        : await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, retryMode, retryMode === "video" && supportsVideoReferenceAudio(generationConfig), !promptOnly, undefined, false);
             } catch (error) {
                 const failure = generationFailureMetadata(error, retryPromptSource);
                 message.error(failure.errorDetails);
@@ -421,6 +519,7 @@ export function useCanvasGenerationRetry({
                     metadata: {
                         retry: true,
                         sourceNodeId: sourceNode.id,
+                        layerDecomposition: Boolean(node.metadata?.layerDecomposition),
                         resolvedCharacterVersions: context?.resolvedCharacterVersions || [],
                         promptTemplateOperation: node.metadata?.promptTemplateOperation,
                         promptTemplateVariables: node.metadata?.promptTemplateVariables,
