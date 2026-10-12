@@ -12,6 +12,7 @@ import { detectVideoAudioTrack, detectVideoAudioTrackFromBlob, detectVideoAudioT
 import { moduleGroupSource } from "./helpers/module-group-source";
 
 const canvasNodeContentSource = moduleGroupSource("components/canvas/canvas-node-content.tsx");
+const canvasNodeMediaContentSource = moduleGroupSource("components/canvas/canvas-node-media-content.tsx");
 const canvasAudioPlayerSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-audio-player.tsx"), "utf8");
 const canvasMentionSource = moduleGroupSource("components/canvas/canvas-resource-mention-textarea.tsx");
 const canvasNodeSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node.tsx"), "utf8");
@@ -59,7 +60,7 @@ describe("large canvas media rendering", () => {
     });
 
     test("decodes canvas images synchronously so zoom re-rasterization never paints blank frames", () => {
-        const retainedImageSource = canvasNodeContentSource.match(/export function RetainedCanvasImage[\s\S]*?\n}\n/)?.[0] || "";
+        const retainedImageSource = canvasNodeMediaContentSource.match(/export function RetainedCanvasImage[\s\S]*?decoding="sync"/)?.[0] || "";
         expect(retainedImageSource).toContain('decoding="sync"');
         expect(retainedImageSource).not.toContain('decoding="async"');
     });
