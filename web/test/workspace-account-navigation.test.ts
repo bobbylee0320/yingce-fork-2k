@@ -20,7 +20,7 @@ describe("workspace account navigation", () => {
 
     test("lets router links navigate before closing the account menu", () => {
         expect(source).toContain("const handleNavigation = () => queueMicrotask(onNavigate);");
-        expect(source).toContain('<Link to="/settings" onClick={handleNavigation}>');
+        expect(source).toContain('<Link to="/settings?section=profile" onClick={handleNavigation}>');
         expect(source).toContain('<Link to="/admin" onClick={handleNavigation}>');
     });
 });
