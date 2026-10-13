@@ -79,10 +79,40 @@ export function WorkspacePopover({ open, onOpenChange, content, children, placem
         }
     }, [open, position]);
 
-    return <>
-        <span ref={anchorRef} style={{ display: "inline-flex", minWidth: 0 }}>{cloneElement(children, { "aria-expanded": open })}</span>
-        {open ? createPortal(<div ref={popupRef} className={[rootClassName, classNames?.root].filter(Boolean).join(" ")} data-workspace-popover style={{ position: "fixed", left: position?.left ?? 0, top: position?.top ?? 0, visibility: position ? "visible" : "hidden", zIndex: "var(--z-popover, 200)", maxWidth: "calc(100vw - 16px)", maxHeight: "calc(100dvh - 16px)", overflow: "auto", background: "var(--user-surface-raised, var(--popover))", color: "var(--user-ink, var(--popover-foreground))", borderRadius: "var(--user-radius-card, 16px)", boxShadow: "var(--elevation-overlay)", padding: rootClassName === "workspace-account-popover" ? "var(--space-2)" : undefined }}>
-            <div className={classNames?.container}><div className={classNames?.content}>{content}</div></div>
-        </div>, document.body) : null}
-    </>;
+    return (
+        <>
+            <span ref={anchorRef} style={{ display: "inline-flex", minWidth: 0 }}>
+                {cloneElement(children, { "aria-expanded": open })}
+            </span>
+            {open
+                ? createPortal(
+                      <div
+                          ref={popupRef}
+                          className={[rootClassName, classNames?.root].filter(Boolean).join(" ")}
+                          data-workspace-popover
+                          style={{
+                              position: "fixed",
+                              left: position?.left ?? 0,
+                              top: position?.top ?? 0,
+                              visibility: position ? "visible" : "hidden",
+                              zIndex: "var(--z-popover, 200)",
+                              maxWidth: "calc(100vw - 16px)",
+                              maxHeight: "calc(100dvh - 16px)",
+                              overflow: "auto",
+                              background: "var(--user-surface-raised, var(--popover))",
+                              color: "var(--user-ink, var(--popover-foreground))",
+                              borderRadius: "var(--user-radius-card, 16px)",
+                              boxShadow: "var(--elevation-overlay)",
+                              padding: rootClassName === "workspace-account-popover" ? "var(--space-2)" : undefined,
+                          }}
+                      >
+                          <div className={classNames?.container}>
+                              <div className={classNames?.content}>{content}</div>
+                          </div>
+                      </div>,
+                      document.body,
+                  )
+                : null}
+        </>
+    );
 }
