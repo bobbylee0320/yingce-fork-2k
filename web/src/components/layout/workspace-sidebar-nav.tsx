@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
+import { UserAvatar } from "@/components/layout/user-avatar";
 import { Kbd } from "@/components/ui/base/kbd";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
@@ -63,14 +64,11 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
 }
 
 function WorkspaceSidebarProfile({ collapsed, user, onExpand, onCollapse }: { collapsed: boolean; user: NonNullable<ReturnType<typeof useUserStore.getState>["user"]> | null; onExpand: () => void; onCollapse: () => void }) {
-    const [failed, setFailed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
-    const avatarUrl = /^https?:\/\//i.test(user?.avatarUrl || "") ? user?.avatarUrl : "";
     const profileName = user?.displayName || user?.username || "未登录";
 
-    useEffect(() => setFailed(false), [avatarUrl]);
     useEffect(() => {
         if (!menuOpen) return;
         const handlePointerDown = (event: PointerEvent) => {
@@ -88,12 +86,10 @@ function WorkspaceSidebarProfile({ collapsed, user, onExpand, onCollapse }: { co
             document.removeEventListener("keydown", handleKeyDown);
         };
     }, [menuOpen]);
-
     if (!user) {
         return <Link to="/login" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="登录" title="登录"><span className="app-workspace-sidebar-profile-avatar"><CircleUserRound aria-hidden /></span>{!collapsed ? <span>游客模式</span> : null}</Link>;
     }
 
-    const avatar = avatarUrl && !failed ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : <CircleUserRound aria-hidden />;
     const content = <WorkspaceAccountCard onNavigate={() => setMenuOpen(false)} onWallet={() => { setMenuOpen(false); openWorkspaceWallet(); }} />;
 
     return (
@@ -102,7 +98,7 @@ function WorkspaceSidebarProfile({ collapsed, user, onExpand, onCollapse }: { co
             <WorkspaceSidebarStorageMeter collapsed={collapsed} />
             <div className={cn("app-workspace-sidebar-profile-row", collapsed && "is-collapsed")}>
                 <button ref={triggerRef} type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="打开账户菜单" aria-expanded={menuOpen} title={profileName} onClick={() => setMenuOpen((open) => !open)}>
-                    <span className="app-workspace-sidebar-profile-avatar">{avatar}</span>
+                    <UserAvatar user={user} className="app-workspace-sidebar-profile-avatar" />
                     {!collapsed ? <span className="app-workspace-sidebar-profile-copy"><strong>{profileName}</strong><span>创作工作台</span></span> : null}
                 </button>
                 {menuOpen ? createPortal(<div ref={menuRef} className="workspace-sidebar-account-menu">{content}</div>, document.body) : null}
