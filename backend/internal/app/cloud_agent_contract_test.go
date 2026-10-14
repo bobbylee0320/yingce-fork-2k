@@ -187,6 +187,14 @@ func TestCloudAgentToolsFollowCanvasCapabilityRegistry(t *testing.T) {
 	if got := functions["generate_media"]["properties"].(map[string]any)["mode"].(map[string]any)["enum"]; !reflect.DeepEqual(got, cloudAgentGenerationModeNames()) {
 		t.Fatalf("generation modes differ from implemented adapters: %v", got)
 	}
+	sizeDescription, _ := functions["generate_media"]["properties"].(map[string]any)["size"].(map[string]any)["description"].(string)
+	if !strings.Contains(sizeDescription, "imageSize/image.size.parameter") || !strings.Contains(sizeDescription, "allowCustom=true") {
+		t.Fatalf("generation size schema does not explain model-specific parameters: %q", sizeDescription)
+	}
+	splitProperties := functions["image_layer_split"]["properties"].(map[string]any)
+	if _, ok := splitProperties["size"]; !ok {
+		t.Fatal("image_layer_split is missing the shared image size field")
+	}
 	if got := CloudAgentCapabilitySetInfo(); got.Hash != canvasCapabilityRegistry.Hash() || got.Version != capability.SetVersion || !reflect.DeepEqual(got.Nodes, canvasCapabilityRegistry.Types()) {
 		t.Fatalf("capability endpoint info differs from registry: %+v", got)
 	}

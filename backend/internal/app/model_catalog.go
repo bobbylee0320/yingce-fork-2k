@@ -30,12 +30,13 @@ type ModelCatalogResponse struct {
 // without changing the binary current availability decision above it.
 // Rate24h is nil for no-data or insufficient-sample windows.
 type PublicModelAvailability struct {
-	Rate24h     *float64                         `json:"rate24h"`
-	SampleCount int                              `json:"sampleCount24h"`
-	Trend7d     []PublicModelAvailabilityDay     `json:"trend7d"`
-	DataState   PublicModelAvailabilityDataState `json:"dataState"`
-	ComputedAt  time.Time                        `json:"computedAt"`
-	DataThrough *time.Time                       `json:"dataThrough,omitempty"`
+	Rate24h       *float64                         `json:"rate24h"`
+	SampleCount   int                              `json:"sampleCount24h"`
+	Trend7d       []PublicModelAvailabilityDay     `json:"trend7d"`
+	RecentResults []bool                           `json:"recentResults"`
+	DataState     PublicModelAvailabilityDataState `json:"dataState"`
+	ComputedAt    time.Time                        `json:"computedAt"`
+	DataThrough   *time.Time                       `json:"dataThrough,omitempty"`
 }
 
 type PublicModelAvailabilityDataState string
@@ -190,6 +191,10 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 	if cm == nil {
 		return PublicChannelModel{}, fmt.Errorf("渠道模型为空")
 	}
+	normalized, err := normalizedChannelModelCapability(cm, s.protocolRegistry())
+	if err != nil {
+		return PublicChannelModel{}, err
+	}
 	// 仓储层已预加载价格档；这里只发布当前启用且价格字段自洽的活动档位。
 	priceTiers := cm.PriceTiers
 
@@ -197,6 +202,11 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 	for _, tier := range priceTiers {
 		if !tier.Enabled || !tier.PriceConfigured || !ValidatePriceTierPrice(&tier, cm.Capability, cm.Protocol) {
 			continue
+		}
+		if normalized != nil && normalized.Image != nil && normalized.Image.Parameters != nil {
+			if validateImageParameterPriceSelector(normalized.Image.Parameters, model.DecodeSKUSelector(tier.SelectorJSON)) != nil {
+				continue
+			}
 		}
 		publicTiers = append(publicTiers, PublicChannelModelPriceTier{
 			ID:                           tier.ID,
@@ -215,10 +225,6 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 	pricingMode, displayPrice, priceLabel := computeChannelModelPriceDisplay(cm, publicTiers)
 
 	var capabilityConfig map[string]any
-	normalized, err := normalizedChannelModelCapability(cm)
-	if err != nil {
-		return PublicChannelModel{}, err
-	}
 	if normalized != nil {
 		capabilityConfig, err = modelCapabilityConfigToMap(normalized)
 		if err != nil {
@@ -231,7 +237,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 		if specErr != nil {
 			return PublicChannelModel{}, fmt.Errorf("投影渠道模型默认参数失败：%w", specErr)
 		}
-		defaultOptions, err = channelModelDefaultOptions(*cm, spec)
+		defaultOptions, err = channelModelDefaultOptions(*cm, spec, s.protocolRegistry())
 		if err != nil {
 			return PublicChannelModel{}, err
 		}
@@ -240,7 +246,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 	return PublicChannelModel{
 		ID:               cm.ID,
 		ModelKey:         cm.ModelKey,
-		ChannelLabel:     cm.ChannelLabel,
+		ChannelLabel:     firstNonEmpty(cm.ChannelLabel, cm.ProviderModelKey, cm.ModelKey),
 		Tags:             cm.Tags,
 		Description:      cm.Description,
 		DisplayName:      cm.DisplayName,
@@ -303,7 +309,7 @@ func (s *Service) channelModelMatchesIntent(cm *model.ChannelModel, intent *Mode
 	if normalizeCapability(cm.Capability) == "audio" {
 		return true, nil
 	}
-	config, err := normalizedChannelModelCapability(cm)
+	config, err := normalizedChannelModelCapability(cm, s.protocolRegistry())
 	if err != nil {
 		return false, err
 	}

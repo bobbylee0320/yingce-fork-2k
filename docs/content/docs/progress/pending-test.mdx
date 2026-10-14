@@ -5,6 +5,40 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 图片与视频电商出品工作室
+
+- 已实现：`/toolbox/image` 与 `/toolbox/video` 保留紧凑工作区入口，移除顶部品牌介绍区；提供创作流程条、重置入口、快捷出品目标和工具选择弹窗。弹窗桌面五列，961px 以下四列、768px 以下两列；选择工具后空提示词自动套用首个预设，已有内容可通过预设入口追加或替换。
+- 已实现：重置后结果区保持空态，旧提交与轮询响应不会重新展示结果；历史任务保留。结果标题、任务列表和详情统一使用模型展示名；生成按钮收窄。模型选择器禁用位移、图标缩放、箭头过渡及弹层进出场动画，键盘聚焦仅滚动菜单。
+- 已实现：服务启动时在事务内补齐 118 个内置工具（69 图片、49 视频）及每个工具 3 个提示词预设，固定 ID、重复启动不覆盖已有管理员编辑和下线状态；不引用其他安装实例的资源 ID。
+- 已验证：`cd web && bun run typecheck`、`bun run lint`、`bun run build` 通过；`git diff --check` 通过。
+- [ ] 用户验收：真实登录态访问 `/toolbox/image` 和 `/toolbox/video`，确认快捷目标卡使用真实工具、图片/视频切换、工具弹层、素材上传和生成提交均正常。
+- [ ] 用户验收：明暗主题、窄屏滚动、不同工具数量、工具封面缺失、生成中/成功/失败结果状态下，确认布局和色彩层级符合预期。
+
+## 千问 AI 平台（QianWenAI MAAS）图像协议插件
+
+- 已实现：新增独立协议插件 `qianwenai-maas-image`，Base URL `https://maas.qianwenaiapi.com`，创建端点 `POST /api/v1/services/aigc/multimodal-generation/generation`，查询 `GET /api/v1/tasks/{{taskId}}`。与百炼的 `dashscope-qwen-image` 报文形状一致，但网关域名不同，不能互相替代。
+- 已验证：manifest 关键字段与百炼多模态模板逐字段对照一致（仅 id/name/baseUrl/endpoint/providerOptions 命名空间按预期不同）；JSON 合法；插件包 `qianwenai-maas-image.yingce-plugin` 已生成。Go 测试已补齐，真实 API 请求未发出。
+- 实现位置：`plugin-packages/qianwenai-maas-image/`、`plugin-packages/generate-catalog.mjs`、`backend/internal/protocol/qianwenai_maas_image_test.go`。
+- [ ] 用户验收：用千问 AI 平台真实 API Key 配置渠道，文生图与图生图各跑一次，确认返回图片能正常落盘；确认渠道 Base URL 填 `https://maas.qianwenaiapi.com`。
+- [ ] 未验证：真实请求未发出，模型 ID（`qwen-image-3.0-pro` 等）是否在平台侧全部开通需按实际账号确认。
+
+
+## 灵感库中文提示词
+
+- 已实现：内置目录与首页画廊的提示词统一为中文；复用来源中文正文，补齐外文翻译；导入时校验原文摘要，缺译或旧译文阻止覆盖。
+- [ ] 用户验收：抽查图片、长视频分镜和模板参数，确认中文表达、时长、镜头要求和参考素材语义符合预期。
+- [ ] 用户验收：本地及线上刷新后，详情、复制、编辑和一键创作均使用中文，收藏与自定义修改保持正常。
+
+## 创作页提交闸门只覆盖提交阶段
+
+- 已修复：`submit()` 的提交闸门原来一直持有到整条生成结束（只在 `finally` 释放，而 `finally` 要等任务出结果才执行），因此上一条还在生成时点发送会被 `tryAcquire()` **静默拒绝**——没有提示也没有反应，表现为「按钮在转、点不动」。重试走同一条 submit 路径，一并被挡住。
+- 已实现：闸门改为令牌制（`tryAcquire()` 返回令牌，`release(token)` 只对持有者生效，避免并发提交互相解锁）；任务一旦建成（`bindTask`）立刻放闸，与已有的 `busy` 释放时机对齐，因此上一条生成中也能继续提交下一条；被拒绝时改为给出提示，不再静默丢弃。
+- 说明：该闸门在 `4f18367`（v1.6.5）就已存在，不是本次改动引入；它只需要防住同一次创建任务被重复触发（连点、回车连击），不该跨越整个生成过程。
+- 实现位置：`web/src/pages/create/creation-submit-gate.ts`、`web/src/pages/create/index.tsx`，单测 `web/test/creation-submit-gate.test.ts`。
+- [x] 验证：`tsc --noEmit`、ESLint、`bun run build` 通过；`bun test` 2204 通过（唯一失败项 `agent-api-reliability` 在纯净上游基线上同样失败，与本改动无关）；闸门单测含「持有者令牌」并发用例。
+- [ ] 用户验收：真实登录态下先提交一条慢任务（视频），在它「生成中」时输入新提示词再提交一条，确认**第二条能正常创建**、两条并行推进、按钮在输入后恢复为「发送」；确认快速连点仍只会创建一条。
+- [ ] 未验证：`busy` 仍是布尔量，两条并发时按钮可能提前约 100ms 变可点（闸门仍会拦住并提示）；提交阶段本身卡住时闸门会一直被占，此时只给提示。
+
 ## 用户登录日志
 
 - 已实现：管理员菜单 `/admin/login-logs`、筛选分页详情、后端认证事件记录、schema v53、失败脱敏和会话/日志原子提交。
@@ -36,6 +70,7 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 - 实现位置：筛选与批量勾选规则抽到 `web/src/pages/admin/components/channel-model-import-selection.ts`，弹窗接线在 `channel-model-manager.tsx`，配套 `web/test/channel-model-import-selection.test.ts`。
 - [x] 验证：`bun test test/channel-model-import-selection.test.ts` 9 项通过（空关键字返回全部、大小写不敏感、首尾空白、无命中返回空、全选并入去重、关键字外勾选保留、无关键字时与旧行为一致）；`tsc --noEmit`、ESLint、`bun run build` 均通过。
 - [ ] 用户验收：需要管理员登录且上游能返回大量模型才能打开该弹窗，因此**未做真实界面验收**。请在真实后台点「拉取模型」确认：搜索框位置与自动聚焦、输入关键字后列表实时收窄、全选/取消选中只影响匹配项、清空后恢复全部、以及几百个模型时的滚动与性能。
+
 
 ## 灵感页路由与导航
 

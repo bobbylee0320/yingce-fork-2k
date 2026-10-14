@@ -11,6 +11,7 @@ export type CapabilityImageSize = {
     presets?: CapabilityImageSizePreset[];
 };
 export type CapabilitySpec = {
+    imageParameters?: import("@/lib/image-parameters").ImageParameter[];
     version: 1;
     capability: "text" | "image" | "video" | "audio";
     operations?: string[];
@@ -183,6 +184,7 @@ export type PublicChannelModelAvailability = {
     rate24h: number | null;
     sampleCount24h: number;
     trend7d: PublicChannelModelAvailabilityDay[];
+    recentResults?: boolean[];
     dataState: "ready" | "insufficient" | "no_data";
     computedAt: string;
     dataThrough?: string;

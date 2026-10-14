@@ -8,6 +8,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -15,15 +16,10 @@ import (
 	"time"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
-type CapabilityImageSizePreset struct {
-	Size   string `json:"size"`
-	Tier   string `json:"tier"`
-	Ratio  string `json:"ratio"`
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
-}
+type CapabilityImageSizePreset = ImageSizePreset
 
 type CapabilityImageSize struct {
 	Parameter   string                      `json:"parameter,omitempty"`
@@ -32,12 +28,13 @@ type CapabilityImageSize struct {
 }
 
 type CapabilitySpec struct {
-	Version    int                         `json:"version"`
-	Capability string                      `json:"capability"`
-	Operations []string                    `json:"operations,omitempty"`
-	Inputs     map[string]InputConstraint  `json:"inputs,omitempty"`
-	Options    map[string]OptionConstraint `json:"options,omitempty"`
-	ImageSize  *CapabilityImageSize        `json:"imageSize,omitempty"`
+	ImageParameters []protocol.ImageParameter   `json:"imageParameters"`
+	Version         int                         `json:"version"`
+	Capability      string                      `json:"capability"`
+	Operations      []string                    `json:"operations,omitempty"`
+	Inputs          map[string]InputConstraint  `json:"inputs,omitempty"`
+	Options         map[string]OptionConstraint `json:"options,omitempty"`
+	ImageSize       *CapabilityImageSize        `json:"imageSize,omitempty"`
 }
 
 type InputConstraint struct {
@@ -78,18 +75,30 @@ func ModelRequestIntentFromTaskInput(input map[string]any, taskType string, oper
 	if options, ok := input["capabilityOptions"].(map[string]any); ok {
 		explicitOptions = true
 		for key, value := range options {
-			name := canonicalCapabilityOptionName(key)
-			// auto/any 表示调用方不指定质量；不能把它当作模型必须声明的
+			name := canonicalModelOptionName(capability, key)
+			// auto/any 表示调用方不指定质量或图片分辨率；不能把它当作模型必须声明的
 			// 枚举值，否则未列出 auto 的模型会被错误判定为参数不支持。
-			if name == "quality" {
+			if name == "quality" || name == "imageResolution" {
 				if normalized, ok := value.(string); ok && (strings.EqualFold(strings.TrimSpace(normalized), "auto") || strings.EqualFold(strings.TrimSpace(normalized), "any")) {
 					continue
 				}
 			}
-			intent.Options[name] = normalizeModelRequestOption(name, value)
+			if capability == "image" {
+				intent.Options[name] = value
+			} else {
+				intent.Options[name] = normalizeModelRequestOption(name, value)
+			}
 		}
 	}
 	if config, ok := input["config"].(map[string]any); ok && !explicitOptions {
+		if capability == "image" {
+			if parameters, ok := config["imageParameters"].(map[string]any); ok {
+				for name, value := range parameters {
+					intent.Options[name] = value
+				}
+				return intent
+			}
+		}
 		for key, value := range config {
 			switch key {
 			case "channelId", "apiFormat", "interfaceType", "baseUrl", "apiKey", "secretKey", "headers", "model", "capabilityConfig":
@@ -107,7 +116,7 @@ func ModelRequestIntentFromTaskInput(input map[string]any, taskType string, oper
 
 func normalizeModelRequestOption(name string, value any) any {
 	canonicalName := canonicalCapabilityOptionName(name)
-	if canonicalName == "quality" || canonicalName == "size" {
+	if canonicalName == "quality" || canonicalName == "size" || canonicalName == "imageResolution" {
 		if text, ok := value.(string); ok {
 			return strings.ToLower(strings.TrimSpace(text))
 		}
@@ -143,9 +152,16 @@ func normalizeModelRequestOption(name string, value any) any {
 	}
 }
 
+type CapabilityIssue struct {
+	Kind   string `json:"kind"`
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
+}
+
 type CapabilityMatch struct {
-	Matched bool     `json:"matched"`
-	Reasons []string `json:"reasons,omitempty"`
+	Matched bool              `json:"matched"`
+	Reasons []string          `json:"reasons,omitempty"`
+	Issues  []CapabilityIssue `json:"issues,omitempty"`
 }
 
 type cachedLogicalModel struct {
@@ -170,12 +186,15 @@ type routeCatalogSnapshot struct {
 }
 
 type RoutedModel struct {
-	LogicalModel model.LogicalModel
-	Revision     model.LogicalModelRevision
-	Route        model.LogicalModelRoute
-	ChannelModel model.ChannelModel
-	PriceTier    *model.ChannelModelPriceTier
-	Defaults     map[string]any
+	LogicalModel   model.LogicalModel
+	Revision       model.LogicalModelRevision
+	Route          model.LogicalModelRoute
+	ChannelModel   model.ChannelModel
+	CapabilitySpec CapabilitySpec
+	PriceTier      *model.ChannelModelPriceTier
+	Defaults       map[string]any
+	// Intent 是已归一的公开生成意图（比例口径），与线路执行编码分离。
+	Intent ModelRequestIntent
 }
 
 func DecodeCapabilitySpec(raw string) (CapabilitySpec, error) {
@@ -227,7 +246,7 @@ func NormalizeCapabilitySpec(spec CapabilitySpec) (CapabilitySpec, error) {
 	spec.Inputs = normalizedInputs
 	normalizedOptions := make(map[string]OptionConstraint, len(spec.Options))
 	for rawName, constraint := range spec.Options {
-		name := canonicalCapabilityOptionName(rawName)
+		name := canonicalModelOptionName(spec.Capability, rawName)
 		if strings.TrimSpace(name) == "" {
 			return spec, BadAuthRequest("能力参数名称不能为空")
 		}
@@ -254,6 +273,11 @@ func NormalizeCapabilitySpec(spec CapabilitySpec) (CapabilitySpec, error) {
 		normalizedOptions[name] = constraint
 	}
 	spec.Options = normalizedOptions
+	if spec.Capability == "image" && spec.ImageParameters != nil {
+		if err := protocol.ValidateImageParameters(spec.ImageParameters); err != nil {
+			return spec, BadAuthRequest(err.Error())
+		}
+	}
 	return spec, nil
 }
 
@@ -262,49 +286,204 @@ func decodeLogicalDefaults(raw string, spec CapabilitySpec) (map[string]any, err
 	if err := json.Unmarshal([]byte(raw), &defaults); err != nil {
 		return nil, err
 	}
+	if spec.Capability == "image" && spec.ImageParameters != nil {
+		current := imageParameterDefaults(spec.ImageParameters)
+		for _, p := range spec.ImageParameters {
+			if value, ok := defaults[p.Name]; ok && p.IsEnabled() && p.Accepts(imageParameterValue(p, value)) {
+				current[p.Name] = imageParameterValue(p, value)
+			}
+		}
+		defaults = current
+	}
 	return normalizeLogicalDefaults(spec, defaults)
 }
 
 func MatchCapability(spec CapabilitySpec, intent ModelRequestIntent) CapabilityMatch {
 	reasons := make([]string, 0)
+	issues := make([]CapabilityIssue, 0)
+	addIssue := func(kind, name, reason string) {
+		reasons = append(reasons, reason)
+		issues = append(issues, CapabilityIssue{Kind: kind, Name: name, Reason: reason})
+	}
+	if spec.Capability == "image" && spec.ImageParameters != nil {
+		values := make(map[string]any, len(intent.Options))
+		for name, value := range intent.Options {
+			values[name] = value
+		}
+		// Size may already be encoded as a pixel preset by an older client.
+		parameters := append([]protocol.ImageParameter(nil), spec.ImageParameters...)
+		for index := range parameters {
+			parameters[index].Required = false
+		}
+		if value, ok := values["size"]; ok && capabilityImageSizePresetMatches(spec, value, values) {
+			delete(values, "size")
+			parameters = make([]protocol.ImageParameter, 0, len(spec.ImageParameters))
+			for _, p := range spec.ImageParameters {
+				if p.Name != "size" {
+					p.Required = false
+					parameters = append(parameters, p)
+				}
+			}
+		}
+		if _, err := resolveImageParameterValues(parameters, values); err != nil {
+			var modelErr *ModelError
+			if errors.As(err, &modelErr) && modelErr != nil {
+				field, _ := modelErr.Details["field"].(string)
+				message, _ := modelErr.Details["message"].(string)
+				if field != "" {
+					if message == "" {
+						message = modelErr.Error()
+					}
+					addIssue("image_parameter", field, message)
+				} else {
+					addIssue("image_parameter", "imageParameters", err.Error())
+				}
+			} else {
+				addIssue("image_parameter", "imageParameters", err.Error())
+			}
+		}
+	}
 	if normalizeCapability(intent.Capability) != normalizeCapability(spec.Capability) {
-		reasons = append(reasons, "能力类型不匹配")
+		addIssue("capability", "capability", "能力类型不匹配")
 	}
 	if operation := normalizeCapabilityValue(intent.Operation); operation != "" && len(spec.Operations) > 0 && !containsNormalized(spec.Operations, operation) {
-		reasons = append(reasons, "不支持操作 "+intent.Operation)
+		addIssue("operation", "operation", "不支持操作 "+intent.Operation)
 	}
 	for inputType, count := range intent.Inputs {
 		if count < 0 {
-			reasons = append(reasons, "输入数量不能小于 0")
+			addIssue("input", inputType, "输入数量不能小于 0")
 			continue
 		}
 		constraint, declared := spec.Inputs[inputType]
 		if !declared {
 			if count > 0 {
-				reasons = append(reasons, "不支持 "+capabilityInputLabel(inputType)+"输入")
+				addIssue("input", inputType, "不支持 "+capabilityInputLabel(inputType)+"输入")
 			}
 			continue
 		}
 		if count < constraint.Min || count > constraint.Max {
-			reasons = append(reasons, fmt.Sprintf("%s数量需在 %d-%d 之间", capabilityInputLabel(inputType), constraint.Min, constraint.Max))
+			addIssue("input", inputType, fmt.Sprintf("%s数量需在 %d-%d 之间", capabilityInputLabel(inputType), constraint.Min, constraint.Max))
 		}
 	}
 	for inputType, constraint := range spec.Inputs {
 		if intent.Inputs[inputType] < constraint.Min {
-			reasons = append(reasons, fmt.Sprintf("至少需要 %d 个%s", constraint.Min, capabilityInputLabel(inputType)))
+			addIssue("input", inputType, fmt.Sprintf("至少需要 %d 个%s", constraint.Min, capabilityInputLabel(inputType)))
 		}
 	}
 	for name, value := range intent.Options {
-		constraint, declared := spec.Options[canonicalCapabilityOptionName(name)]
+		canonical := canonicalModelOptionName(spec.Capability, name)
+		if inactiveCapabilityOptionValue(canonical, value) {
+			continue
+		}
+		constraint, declared := spec.Options[canonical]
 		if !declared {
-			reasons = append(reasons, "不支持参数 "+capabilityOptionLabel(name))
+			addIssue("option", canonical, "不支持参数 "+capabilityOptionLabel(name))
 			continue
 		}
 		if !matchOptionConstraint(name, constraint, value) {
-			reasons = append(reasons, "参数 "+capabilityOptionLabel(name)+"超出支持范围")
+			addIssue("option", canonical, "参数 "+capabilityOptionLabel(name)+"超出支持范围")
 		}
 	}
-	return CapabilityMatch{Matched: len(reasons) == 0, Reasons: reasons}
+	return CapabilityMatch{Matched: len(reasons) == 0, Reasons: reasons, Issues: issues}
+}
+
+// Image size intent and provider encoding share explicit preset mappings.
+// 公开意图按比例口径表达，线路执行编码可能是像素。两者只依据当前规格的显式 presets
+// 互为别名，不做宽高数值猜测。
+
+// resolveModelRequestIntent 产出匹配、计价与线路选择共用的唯一公开生成意图。
+func resolveModelRequestIntent(spec CapabilitySpec, intent ModelRequestIntent, defaults map[string]any) ModelRequestIntent {
+	intent.Options = mergeIntentDefaults(intent.Options, defaults)
+	return normalizeImageSizeIntent(spec, intent)
+}
+
+func normalizeImageSizeIntent(spec CapabilitySpec, intent ModelRequestIntent) ModelRequestIntent {
+	if normalizeCapability(intent.Capability) != "image" || spec.ImageSize == nil || intent.Options == nil {
+		return intent
+	}
+	value, ok := intent.Options["size"].(string)
+	if !ok || strings.TrimSpace(value) == "" {
+		return intent
+	}
+	tier := stringValue(intent.Options["imageResolution"])
+	if _, hasIndependentResolution := spec.Options["imageResolution"]; hasIndependentResolution {
+		if strings.EqualFold(tier, "auto") || strings.EqualFold(tier, "any") {
+			tier = ""
+		}
+		if tier == "" {
+			return intent
+		}
+	} else if spec.ImageParameters == nil {
+		tier = stringValue(intent.Options["quality"])
+	}
+	preset, ok := declaredImageSizePreset(spec.ImageSize.Presets, value, tier, "")
+	if !ok {
+		return intent
+	}
+	options := make(map[string]any, len(intent.Options))
+	for key, option := range intent.Options {
+		options[key] = option
+	}
+	if spec.ImageSize.Parameter == "size" {
+		options["size"] = strings.TrimSpace(preset.Size)
+	} else {
+		options["size"] = normalizeDeclaredImageRatio(preset.Ratio)
+	}
+	intent.Options = options
+	return intent
+}
+
+// capabilityImageSizePresetMatches lets routing compare the public image-size
+// intent with either route encoding. Only an explicit tier + preset mapping is
+// an alias; numeric similarity is never inferred.
+func capabilityImageSizePresetMatches(spec CapabilitySpec, value any, options map[string]any) bool {
+	size := spec.ImageSize
+	if size == nil || len(size.Presets) == 0 {
+		return false
+	}
+	text, ok := value.(string)
+	if !ok {
+		return false
+	}
+	var tier any
+	if spec.ImageParameters == nil {
+		tier = options["quality"]
+	}
+	if _, independent := spec.Options["imageResolution"]; independent {
+		resolution := stringValue(options["imageResolution"])
+		if resolution == "" || strings.EqualFold(resolution, "auto") || strings.EqualFold(resolution, "any") {
+			return false
+		}
+		tier = resolution
+	}
+	_, matched := declaredImageSizePreset(size.Presets, text, stringValue(tier), "")
+	return matched
+}
+
+// inactiveCapabilityOptionValue 判断取值是否表示“未请求该参数”。
+// 空值和图片质量/分辨率的 auto/any 不构成请求；其他非空字符串、true、非零数字仍视为真实要求。
+func inactiveCapabilityOptionValue(name string, value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case bool:
+		return !typed
+	case string:
+		normalized := strings.TrimSpace(typed)
+		if normalized == "" {
+			return true
+		}
+		return (name == "quality" || name == "imageResolution") && (strings.EqualFold(normalized, "auto") || strings.EqualFold(normalized, "any"))
+	case float64:
+		return typed == 0
+	case float32:
+		return typed == 0
+	case int:
+		return typed == 0
+	case int64:
+		return typed == 0
+	}
+	return false
 }
 
 func capabilityInputLabel(name string) string {
@@ -328,6 +507,8 @@ func capabilityOptionLabel(name string) string {
 		return "画面尺寸"
 	case "quality":
 		return "生成质量"
+	case "imageResolution":
+		return "图片分辨率"
 	case "transparentBackground":
 		return "透明背景"
 	case "count":
@@ -461,10 +642,17 @@ func canonicalCapabilityOptionName(value string) string {
 	}
 }
 
+func canonicalModelOptionName(capability, value string) string {
+	if capability == "image" {
+		return strings.TrimSpace(value)
+	}
+	return canonicalCapabilityOptionName(value)
+}
+
 func isCapabilityOptionFor(capability string, name string) bool {
 	switch normalizeCapability(capability) {
 	case "image":
-		return name == "size" || name == "quality" || name == "transparentBackground" || name == "count"
+		return name == "size" || name == "quality" || name == "imageResolution" || name == "transparentBackground" || name == "count"
 	case "video":
 		return name == "size" || name == "videoSeconds" || name == "vquality" || name == "videoGenerateAudio" || name == "videoWatermark"
 	case "audio":

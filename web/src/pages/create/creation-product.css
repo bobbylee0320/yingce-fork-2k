@@ -98,10 +98,9 @@
     transform: translateY(-1px);
     box-shadow: 0 8px 18px color-mix(in srgb, var(--user-ink) 8%, transparent);
 }
-.app-user-workspace .creation-chat-control > svg:first-child,
-.app-user-workspace .creation-model-picker .canvas-model-picker-trigger-icon { transition: transform var(--user-motion), color var(--user-motion); color: currentColor; }
-.app-user-workspace .creation-chat-control:hover > svg:first-child,
-.app-user-workspace .creation-model-picker:hover .canvas-model-picker-trigger-icon { transform: scale(1.06); }
+.app-user-workspace .creation-chat-control > svg:first-child { transition: transform var(--user-motion), color var(--user-motion); color: currentColor; }
+.app-user-workspace .creation-model-picker .canvas-model-picker-trigger-icon { color: currentColor; }
+.app-user-workspace .creation-chat-control:hover > svg:first-child { transform: scale(1.06); }
 .app-user-workspace .creation-chat-control.is-clear:hover { background: color-mix(in srgb, var(--status-error, #c45b5b) 12%, var(--user-surface)) !important; color: var(--status-error, #c45b5b) !important; }
 .app-user-workspace .creation-launchpad .creation-reference-add-button:hover:not(:disabled) {
     border-style: solid;

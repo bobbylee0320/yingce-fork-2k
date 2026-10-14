@@ -75,6 +75,8 @@ type providerConfig struct {
 	Model                 string                 `json:"model"`
 	Size                  string                 `json:"size"`
 	Quality               string                 `json:"quality"`
+	ImageResolution       string                 `json:"imageResolution"`
+	ImageParameters       map[string]any         `json:"imageParameters,omitempty"`
 	TransparentBackground string                 `json:"transparentBackground"`
 	Count                 string                 `json:"count"`
 	VideoSeconds          string                 `json:"videoSeconds"`
@@ -112,6 +114,8 @@ type providerMedia struct {
 	DataURL    string `json:"dataUrl"`
 	URL        string `json:"url"`
 	StorageKey string `json:"storageKey"`
+	Role       string `json:"role,omitempty"`
+	SlotKey    string `json:"slotKey,omitempty"`
 	MimeType   string `json:"mimeType"`
 	Bytes      int64  `json:"bytes"`
 	Width      int    `json:"width"`

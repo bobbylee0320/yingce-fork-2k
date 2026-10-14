@@ -135,6 +135,9 @@ prepare_environment() {
     step "生成 PostgreSQL 随机密码和部署配置"
     local database_password
     database_password="$(openssl rand -hex 32)"
+    CANVAS_BACKEND_IMAGE="${IMAGE_REPOSITORY}-backend:${CANVAS_IMAGE_TAG}"
+    CANVAS_WEB_IMAGE="${IMAGE_REPOSITORY}-web:${CANVAS_IMAGE_TAG}"
+    CANVAS_YINGCE_AGENT_IMAGE="${IMAGE_REPOSITORY}-yingce-agent:${CANVAS_IMAGE_TAG}"
     umask 077
     cat >.env <<EOF
 POSTGRES_DB=open_ai_canvas
@@ -185,6 +188,9 @@ install_host_updater() {
     curl -fsSL "$UPDATER_INSTALL_URL" -o "$installer"
     INSTALL_DIR="$INSTALL_DIR" bash "$installer"
     rm -f "$installer"
+
+    step "重建 backend 以启用在线更新"
+    docker compose --env-file .env -f "$COMPOSE_FILE" up -d --no-deps --force-recreate --wait --wait-timeout 600 backend
 }
 
 start_services() {

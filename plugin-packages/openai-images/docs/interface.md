@@ -83,6 +83,10 @@
 
 无参考图走 JSON generations；有参考图或蒙版走 JSON edits，并按官方 images 数组传入多张 image_url。quality 的 1k/2k/4k 映射为 OpenAI low/medium/high。
 
+## 动态图片参数
+
+`contributes.providers[].imageParameters` 是渠道模型、前台模型与生成界面共用的参数合同。`name` 为稳定身份，`type`、`values`、`min/max/step`、`default` 描述输入；`models` 限定适用上游模型，`enabled` 为初始启用状态。只有 `pricing: true` 的启用字段允许作为价格条件；其他参数仍参与生成。渠道可收窄范围，绑定与计价资格由插件拥有。`binding` 映射到统一请求或插件自己的 `providerOptions` 命名空间。
+
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
 
@@ -93,7 +97,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "openai-images",
   "name": "OpenAI Images",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "OpenAI / 影策",
   "description": "OpenAI Images 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -127,11 +131,77 @@
           "agent"
         ],
         "baseUrl": "https://api.openai.com",
-        "requiresPublicMediaUrls": true,
+        "requiresPublicMediaUrls": false,
         "auth": {
           "type": "bearer",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅 / 尺寸",
+            "type": "string",
+            "binding": "aspectRatio",
+            "encoding": "pixels",
+            "pricing": true
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "binding": "resolution",
+            "enabled": false,
+            "pricing": true
+          },
+          {
+            "name": "quality",
+            "label": "图片质量",
+            "type": "string",
+            "binding": "quality",
+            "pricing": true
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 100,
+            "step": 1,
+            "default": 1
+          },
+          {
+            "name": "transparentBackground",
+            "label": "透明背景",
+            "type": "boolean",
+            "binding": "transparentBackground",
+            "default": false,
+            "enabled": false
+          },
+          {
+            "name": "outputFormat",
+            "label": "输出格式",
+            "type": "string",
+            "binding": "providerOptions.openai-image.output_format",
+            "values": [
+              "png",
+              "jpeg",
+              "webp"
+            ],
+            "default": "png",
+            "enabled": false
+          },
+          {
+            "name": "outputCompression",
+            "label": "压缩质量",
+            "type": "integer",
+            "binding": "providerOptions.openai-image.output_compression",
+            "min": 0,
+            "max": 100,
+            "step": 1,
+            "enabled": false
+          }
+        ],
         "parameters": [
           {
             "name": "model",
@@ -365,81 +435,31 @@
                 }
               }
             },
+            "resolution": {
+              "$omitEmpty": {
+                "$ref": "request.resolution"
+              }
+            },
             "quality": {
               "$omitEmpty": {
-                "$switch": {
-                  "cases": [
-                    {
-                      "when": {
-                        "$in": [
-                          {
-                            "$lower": {
-                              "$trim": {
-                                "$ref": "request.quality"
-                              }
-                            }
-                          },
-                          [
-                            "1k"
-                          ]
-                        ]
+                "$if": {
+                  "condition": {
+                    "$in": [
+                      {
+                        "$lower": {
+                          "$trim": {
+                            "$ref": "request.quality"
+                          }
+                        }
                       },
-                      "then": "low"
-                    },
-                    {
-                      "when": {
-                        "$in": [
-                          {
-                            "$lower": {
-                              "$trim": {
-                                "$ref": "request.quality"
-                              }
-                            }
-                          },
-                          [
-                            "2k"
-                          ]
-                        ]
-                      },
-                      "then": "medium"
-                    },
-                    {
-                      "when": {
-                        "$in": [
-                          {
-                            "$lower": {
-                              "$trim": {
-                                "$ref": "request.quality"
-                              }
-                            }
-                          },
-                          [
-                            "4k"
-                          ]
-                        ]
-                      },
-                      "then": "high"
-                    },
-                    {
-                      "when": {
-                        "$in": [
-                          {
-                            "$lower": {
-                              "$trim": {
-                                "$ref": "request.quality"
-                              }
-                            }
-                          },
-                          [
-                            "",
-                            "auto"
-                          ]
-                        ]
-                      },
-                      "then": null
-                    }
-                  ],
-                  "default": {
+                      [
+                        "",
+                        "auto"
+                      ]
+                    ]
+                  },
+                  "then": null,
+                  "else": {
                     "$ref": "request.quality"
                   }
                 }

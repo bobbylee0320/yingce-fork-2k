@@ -7,6 +7,12 @@ services:
       args:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
 
+  yingce-agent:
+    image: open-ai-canvas-yingce-agent:server
+    build:
+      context: .
+      dockerfile: yingce-agent/Dockerfile
+
   backend:
     image: open-ai-canvas-backend:server
     build:

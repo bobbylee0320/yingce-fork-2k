@@ -104,6 +104,11 @@ POSTGRES_USER=open_ai_canvas
 POSTGRES_PASSWORD=${database_password}
 DATABASE_URL=postgresql://open_ai_canvas:${database_password}@postgres:5432/open_ai_canvas?sslmode=disable
 CANVAS_HTTP_PORT=${CANVAS_HTTP_PORT}
+CANVAS_IMAGE_TAG=source
+CANVAS_BACKEND_IMAGE=open-ai-canvas-backend:server
+CANVAS_WEB_IMAGE=open-ai-canvas-web:server
+CANVAS_YINGCE_AGENT_IMAGE=open-ai-canvas-yingce-agent:server
+YINGCE_AGENT_TOKEN=$(openssl rand -hex 32)
 CANVAS_REGISTRATION_ENABLED=false
 CANVAS_ALLOW_PRIVATE_UPSTREAMS=false
 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=
@@ -112,9 +117,9 @@ EOF
 }
 
 start_services() {
-    step "从源码构建网页与后端镜像"
+    step "从源码构建网页、后端和 Agent 镜像"
     # 标准一键部署已下载完整仓库，直接本地构建可避免公开项目被 GHCR 包可见性阻断。
-    docker compose --env-file .env -f "$COMPOSE_FILE" -f "$BUILD_COMPOSE_FILE" build backend web
+    docker compose --env-file .env -f "$COMPOSE_FILE" -f "$BUILD_COMPOSE_FILE" build migrate backend web yingce-agent
 
     step "启动 PostgreSQL、Redis、后端和网页服务"
     docker compose --env-file .env -f "$COMPOSE_FILE" -f "$BUILD_COMPOSE_FILE" up -d --remove-orphans --wait --wait-timeout 600

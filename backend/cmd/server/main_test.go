@@ -5,8 +5,33 @@ import (
 	"testing"
 	"time"
 
+	"yingce/backend/internal/database"
+	"yingce/backend/internal/repository"
+	"yingce/backend/internal/service"
+
 	"github.com/gin-gonic/gin"
 )
+
+func TestEnsureBuiltinWorkbenchCatalogStartupWiring(t *testing.T) {
+	db, err := database.Open(database.Config{Driver: "sqlite", DSN: "file:workbench-startup?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	svc := service.New(repository.New(db), t.TempDir())
+	if err := ensureBuiltinWorkbenchCatalog(svc); err != nil {
+		t.Fatal(err)
+	}
+	tools, err := repository.New(db).WorkbenchTools("image", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tools) == 0 {
+		t.Fatal("startup initializer did not publish image workbench tools")
+	}
+}
 
 func TestAllowedOriginWildcard(t *testing.T) {
 	t.Setenv("CANVAS_CORS_ORIGINS", "*")
