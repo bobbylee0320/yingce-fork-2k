@@ -84,7 +84,7 @@ jobs:
             platforms: linux/amd64,linux/arm64
             runner: ubuntu-24.04
     env:
-      IMAGE: ghcr.io/${{ needs.prepare.outputs.owner }}/${{ matrix.image }}
+      IMAGE: ghcr.io/${{ needs.prepare.outputs.owner }}/${{ github.event.repository.fork && format('{0}-{1}', github.event.repository.name, matrix.image) || matrix.image }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -128,6 +128,24 @@ jobs:
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Invalid image digest" >&2; exit 1; }
           mkdir -p "$RUNNER_TEMP/digests"
           touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+      - name: Export Fork VPS image
+        if: github.event.repository.fork && matrix.arch != 'arm64'
+        env:
+          IMAGE_REF: ${{ env.IMAGE }}:sha-${{ github.sha }}-${{ matrix.arch }}
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/vps-image"
+          docker pull --platform linux/amd64 "$IMAGE_REF"
+          docker save "$IMAGE_REF" | gzip -1 > "$RUNNER_TEMP/vps-image/image.tar.gz"
+          cd "$RUNNER_TEMP/vps-image"
+          sha256sum image.tar.gz > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: github.event.repository.fork && matrix.arch != 'arm64'
+        with:
+          name: vps-${{ matrix.image }}-amd64
+          path: ${{ runner.temp }}/vps-image/*
+          if-no-files-found: error
+          retention-days: 2
       - uses: actions/upload-artifact@v4
         with:
           name: digests-${{ matrix.image }}-${{ matrix.arch }}
@@ -167,7 +185,7 @@ jobs:
       - name: Promote verified digests
         env:
           GH_TOKEN: ${{ github.token }}
-          IMAGE: ghcr.io/${{ needs.prepare.outputs.owner }}/${{ matrix.image }}
+          IMAGE: ghcr.io/${{ needs.prepare.outputs.owner }}/${{ github.event.repository.fork && format('{0}-{1}', github.event.repository.name, matrix.image) || matrix.image }}
           VERSION_TAG: ${{ needs.prepare.outputs.image_tag }}
           DIGEST_DIR: ${{ runner.temp }}/digests
           EXPECTED_DIGESTS: ${{ matrix.image == 'open-ai-canvas-backend' && '2' || '1' }}
