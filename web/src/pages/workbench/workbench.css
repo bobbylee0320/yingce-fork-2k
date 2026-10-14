@@ -773,7 +773,9 @@
     font-weight: 640;
     letter-spacing: 0.02em;
     white-space: nowrap;
-    transition: transform 160ms ease, box-shadow 160ms ease;
+    transition:
+        transform 160ms ease,
+        box-shadow 160ms ease;
 }
 
 .workbench-submit.ant-btn > svg {
@@ -1255,7 +1257,10 @@
     background: color-mix(in srgb, var(--wb-surface) 90%, var(--wb-panel-glow));
     color: inherit;
     text-align: left;
-    transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+    transition:
+        border-color 160ms ease,
+        background-color 160ms ease,
+        box-shadow 160ms ease;
 }
 
 .workbench-tool-card:hover {
@@ -1832,7 +1837,10 @@
     font-size: 11px;
     font-weight: 620;
     cursor: pointer;
-    transition: background-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+    transition:
+        background-color 160ms ease,
+        transform 160ms ease,
+        box-shadow 160ms ease;
 }
 
 .workbench-flow-reset:hover {
@@ -2018,7 +2026,9 @@
     font-size: 12px;
     font-weight: 620;
     cursor: pointer;
-    transition: background-color 160ms ease, transform 160ms ease;
+    transition:
+        background-color 160ms ease,
+        transform 160ms ease;
 }
 
 .workbench-goal-heading > button:hover {
@@ -2052,7 +2062,10 @@
     font-size: 12px;
     font-weight: 560;
     cursor: pointer;
-    transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+    transition:
+        background-color 160ms ease,
+        color 160ms ease,
+        box-shadow 160ms ease;
 }
 
 .workbench-preset-chip:hover {
@@ -2088,7 +2101,9 @@
     color: var(--wb-text);
     text-align: left;
     cursor: pointer;
-    transition: transform 180ms ease, background-color 180ms ease;
+    transition:
+        transform 180ms ease,
+        background-color 180ms ease;
 }
 
 .workbench-goal-card:hover,
@@ -2156,7 +2171,9 @@
 .workbench-goal-arrow {
     color: var(--wb-text-soft);
     font-size: 16px;
-    transition: transform 180ms ease, color 180ms ease;
+    transition:
+        transform 180ms ease,
+        color 180ms ease;
 }
 
 .workbench-goal-card:hover .workbench-goal-arrow {
@@ -2262,7 +2279,9 @@
     width: min(100%, 520px, 44svh);
     border-radius: 22px;
     background: linear-gradient(145deg, color-mix(in srgb, var(--user-primary, var(--wb-accent-creative)) 8%, var(--wb-muted)), var(--wb-muted));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wb-edge) 55%, transparent), 0 16px 40px color-mix(in srgb, var(--user-ink) 8%, transparent);
+    box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--wb-edge) 55%, transparent),
+        0 16px 40px color-mix(in srgb, var(--user-ink) 8%, transparent);
 }
 
 .workbench-empty-mark {
@@ -2351,7 +2370,9 @@
     border: 0;
     border-radius: 18px;
     background: linear-gradient(145deg, color-mix(in srgb, var(--wb-surface) 98%, var(--wb-panel-glow)), color-mix(in srgb, var(--wb-muted) 86%, var(--wb-surface)));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--user-primary, var(--wb-accent-creative)) 10%, var(--wb-edge)), 0 12px 30px color-mix(in srgb, var(--user-ink) 5%, transparent);
+    box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--user-primary, var(--wb-accent-creative)) 10%, var(--wb-edge)),
+        0 12px 30px color-mix(in srgb, var(--user-ink) 5%, transparent);
 }
 
 .workbench-prompt-surface textarea.ant-input,

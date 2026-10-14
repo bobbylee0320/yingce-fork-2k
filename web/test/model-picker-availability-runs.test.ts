@@ -1,10 +1,7 @@
 import { expect, test } from "bun:test";
 
 async function pickerSources() {
-    const [component, styles] = await Promise.all([
-        Bun.file(new URL("../src/components/model-picker.tsx", import.meta.url)).text(),
-        Bun.file(new URL("../src/styles/shared/model-picker.css", import.meta.url)).text(),
-    ]);
+    const [component, styles] = await Promise.all([Bun.file(new URL("../src/components/model-picker.tsx", import.meta.url)).text(), Bun.file(new URL("../src/styles/shared/model-picker.css", import.meta.url)).text()]);
     return { component, styles };
 }
 

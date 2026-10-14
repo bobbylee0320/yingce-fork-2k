@@ -340,7 +340,9 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                 audioCount: references.filter((reference) => reference.kind === "audio").length,
                 characterCount: 0,
             },
-            ...(kind === "image" ? { imageSize: ratio, options: { size: ratio, quality, ...(imageProfile?.resolution.supported ? { imageResolution } : {}), count: selectedCount } } : { videoSeconds: seconds, options: { size: ratio, videoSeconds: Number(seconds), vquality: videoQuality } }),
+            ...(kind === "image"
+                ? { imageSize: ratio, options: { size: ratio, quality, ...(imageProfile?.resolution.supported ? { imageResolution } : {}), count: selectedCount } }
+                : { videoSeconds: seconds, options: { size: ratio, videoSeconds: Number(seconds), vquality: videoQuality } }),
         }),
         [capability, imageProfile, imageResolution, kind, prompt, quality, ratio, references, seconds, selectedCount, videoQuality],
     );
@@ -950,7 +952,15 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
             ) : (
                 <div className="workbench-tool-grid">
                     {filteredTools.map((item) => (
-                        <ToolCard key={item.id} tool={item} selected={item.id === tool?.id} onClick={() => { chooseTool(item); setToolLibraryOpen(false); }} />
+                        <ToolCard
+                            key={item.id}
+                            tool={item}
+                            selected={item.id === tool?.id}
+                            onClick={() => {
+                                chooseTool(item);
+                                setToolLibraryOpen(false);
+                            }}
+                        />
                     ))}
                     {!filteredTools.length ? <div className="workbench-picker-state">没有找到匹配的创作工具</div> : null}
                 </div>
@@ -1007,14 +1017,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                                     <ChevronDown className={toolLibraryOpen ? "is-open" : ""} />
                                 </button>
                             </div>
-                            <Modal
-                                title="选择创作工具"
-                                open={toolLibraryOpen}
-                                onCancel={() => setToolLibraryOpen(false)}
-                                footer={null}
-                                width="min(1120px, calc(100vw - 32px))"
-                                className="workbench-picker-modal"
-                            >
+                            <Modal title="选择创作工具" open={toolLibraryOpen} onCancel={() => setToolLibraryOpen(false)} footer={null} width="min(1120px, calc(100vw - 32px))" className="workbench-picker-modal">
                                 {toolLibrary}
                             </Modal>
                             {!tool && tools.length ? (
@@ -1027,10 +1030,14 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                                                 <span>选择一个出品目标，参数和提示词会更快就位</span>
                                             </div>
                                         </div>
-                                        <button type="button" onClick={() => setToolLibraryOpen(true)}>查看更多 <ChevronDown /></button>
+                                        <button type="button" onClick={() => setToolLibraryOpen(true)}>
+                                            查看更多 <ChevronDown />
+                                        </button>
                                     </div>
                                     <div className="workbench-goal-grid">
-                                        {quickTools.map((item) => <QuickGoalCard key={item.id} tool={item} kind={kind} onClick={() => chooseTool(item)} />)}
+                                        {quickTools.map((item) => (
+                                            <QuickGoalCard key={item.id} tool={item} kind={kind} onClick={() => chooseTool(item)} />
+                                        ))}
                                     </div>
                                 </section>
                             ) : null}
@@ -1222,7 +1229,9 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                                                 audioCount: references.filter((reference) => reference.kind === "audio").length,
                                                 characterCount: 0,
                                             },
-                                            ...(kind === "image" ? { imageSize: ratio, options: { size: ratio, quality, ...(imageProfile?.resolution.supported ? { imageResolution } : {}), count: selectedCount } } : { videoSeconds: seconds, options: { size: ratio, videoSeconds: Number(seconds), vquality: videoQuality } }),
+                                            ...(kind === "image"
+                                                ? { imageSize: ratio, options: { size: ratio, quality, ...(imageProfile?.resolution.supported ? { imageResolution } : {}), count: selectedCount } }
+                                                : { videoSeconds: seconds, options: { size: ratio, videoSeconds: Number(seconds), vquality: videoQuality } }),
                                         }}
                                         variant="creation"
                                         fullWidth
@@ -1246,9 +1255,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                                 )}
                                 <div className="workbench-submit-estimate" aria-live="polite">
                                     <span className="workbench-submit-estimate-label">{estimateLabel || "预估可用积分"}</span>
-                                    {selectedModel ? (
-                                        <span className="workbench-submit-estimate-model">使用 {modelDisplayName(config, selectedModel)}</span>
-                                    ) : null}
+                                    {selectedModel ? <span className="workbench-submit-estimate-model">使用 {modelDisplayName(config, selectedModel)}</span> : null}
                                 </div>
                                 <Button
                                     className="workbench-submit"

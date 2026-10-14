@@ -62,10 +62,7 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
         },
         {
             heading: "资产与历史",
-            items: [
-                { ...toolItem("assets", "/assets"), title: "资产" },
-                ...(features.taskCenterEnabled ? [{ id: "tasks", title: "创作历史", icon: ImageIcon, to: "/tasks" }] : []),
-            ],
+            items: [{ ...toolItem("assets", "/assets"), title: "资产" }, ...(features.taskCenterEnabled ? [{ id: "tasks", title: "创作历史", icon: ImageIcon, to: "/tasks" }] : [])],
         },
     ];
 
@@ -125,13 +122,27 @@ function WorkspaceSidebarProfile({ collapsed, user, onExpand, onCollapse }: { co
             <div className={cn("app-workspace-sidebar-profile-row", collapsed && "is-collapsed")}>
                 <button ref={triggerRef} type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="打开账户菜单" aria-expanded={menuOpen} title={profileName} onClick={() => setMenuOpen((open) => !open)}>
                     <UserAvatar user={user} className="app-workspace-sidebar-profile-avatar" />
-                    {!collapsed ? <span className="app-workspace-sidebar-profile-copy"><strong>{profileName}</strong><span>创作工作台</span></span> : null}
+                    {!collapsed ? (
+                        <span className="app-workspace-sidebar-profile-copy">
+                            <strong>{profileName}</strong>
+                            <span>创作工作台</span>
+                        </span>
+                    ) : null}
                 </button>
-                {menuOpen ? createPortal(<div ref={menuRef} className="workspace-sidebar-account-menu">{content}</div>, document.body) : null}
+                {menuOpen
+                    ? createPortal(
+                          <div ref={menuRef} className="workspace-sidebar-account-menu">
+                              {content}
+                          </div>,
+                          document.body,
+                      )
+                    : null}
                 {!collapsed ? <SystemAnnouncementCenter userId={user.id} className="app-workspace-sidebar-notification" /> : <span className="app-workspace-sidebar-notification-spacer" aria-hidden />}
-                {!collapsed ? <button type="button" className="app-workspace-sidebar-collapse-toggle" aria-label="收起侧栏" title="收起侧栏" onClick={onCollapse}>
-                    <PanelLeftClose className="size-4" strokeWidth={1.7} />
-                </button> : null}
+                {!collapsed ? (
+                    <button type="button" className="app-workspace-sidebar-collapse-toggle" aria-label="收起侧栏" title="收起侧栏" onClick={onCollapse}>
+                        <PanelLeftClose className="size-4" strokeWidth={1.7} />
+                    </button>
+                ) : null}
             </div>
             {collapsed ? (
                 <button type="button" className="app-workspace-sidebar-collapse-toggle is-collapsed" aria-label="展开侧栏菜单" title="展开侧栏菜单" onClick={onExpand}>
