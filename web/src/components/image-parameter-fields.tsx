@@ -4,7 +4,7 @@ import { ImageSizePresetsEditor } from "./image-size-presets-editor";
 import { ImageSizePicker } from "./image-size-picker";
 import { IMAGE_RESOLUTIONS, imageSingleSizeTier, imageSizeConfigWithPresets, imageSizePresets } from "@/lib/image-size-presets";
 import { Select } from "@/components/ui/base/select";
-import { imageHostControls, imageParameterAccepts, imageParameterRequest, parseImageParameters, projectImageParameters, updateImageParameterSize, type ImageParameter, type ImageParameterValue } from "@/lib/image-parameters";
+import { imageHostControls, imageParameterAccepts, imageParameterRequest, parseImageParameters, updateImageParameterSchema, updateImageParameterSize, type ImageParameter, type ImageParameterValue } from "@/lib/image-parameters";
 import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -190,8 +190,9 @@ export function ImageParameterSchemaEditor({ definitions, parameters, disabled, 
             {parameters.map((field) => {
                 const definition = definitions.find((p) => p.name === field.name) || field;
                 const isResolution = field.name === "imageResolution" && field.type === "string";
-                const resolutionChoices = isResolution ? (definition.values?.length ? definition.values : IMAGE_RESOLUTIONS.filter((tier) => imageParameterAccepts(definition, tier))) : [];
-                const quickResolutionChoices = isResolution && (!definition.values?.length || definition.values.some((value) => IMAGE_RESOLUTIONS.includes(String(value).toLowerCase()))) ? resolutionChoices : [];
+                const baseTiers = ["1k", "1.5k", "2k", "4k"];
+                const resolutionChoices = isResolution ? (definition.values?.length ? [...new Set([...definition.values.map(String), "1.5k"])] : baseTiers.filter((tier) => imageParameterAccepts(definition, tier))) : [];
+                const quickResolutionChoices = isResolution ? (resolutionChoices.length ? resolutionChoices : baseTiers) : [];
                 const updateValues = (items: string[]) => {
                     const values = [
                         ...new Set(
@@ -310,9 +311,10 @@ export function ImageParameterSizeEditor({ profile, definition, disabled, onChan
     const tiers = grouped ? profile.resolution.values : [singleTier ?? ""];
     const updateField = (patch: Partial<ImageParameter>) =>
         onChange(
-            projectImageParameters(
+            updateImageParameterSchema(
                 profile,
                 profile.parameters!.map((p) => (p.name === "size" ? { ...p, ...patch } : p)),
+                [definition],
             ),
         );
     const updateSize = (size: ImageCapabilityConfig["size"]) => {

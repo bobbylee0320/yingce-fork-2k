@@ -164,7 +164,7 @@ export function ImageSizePicker({
                             <button
                                 type="button"
                                 key={value}
-                                aria-pressed={value === imageResolution}
+                                aria-pressed={value === imageResolution || (imageResolution === undefined && size !== "auto" && active?.tier === value)}
                                 disabled={Boolean(canSelectResolution && !canSelectResolution(value))}
                                 onClick={() => {
                                     const next = value.toLowerCase() as ImageResolutionTier;

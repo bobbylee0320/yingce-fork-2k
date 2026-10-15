@@ -108,7 +108,13 @@ func validateImageCapabilityConfig(value *ImageCapabilityConfig) error {
 			requestValue = preset.Ratio
 		}
 		if !containsCapabilityString(value.Size.Values, requestValue) {
-			return BadAuthRequest("图片预设必须包含在尺寸支持值中")
+			// 允许自定义尺寸的协议（如声明式 Seedream）可自动补齐缺失的预设像素，
+			// 否则预设与支持值顺序不一致会误报 400。
+			if value.Size.AllowCustom {
+				value.Size.Values = append(value.Size.Values, requestValue)
+			} else {
+				return BadAuthRequest("图片预设必须包含在尺寸支持值中")
+			}
 		}
 	}
 	if value.Quality.Supported {

@@ -67,11 +67,14 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
 
 export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabilityConfig, protocol?: string): PriceTierFormValues {
     const selector = { ...(tier.selector || {}) };
-    const legacyResolution = selector.quality?.toLowerCase();
-    const legacyResolutionProtocol = protocol === "grok-image" || protocol === "agnes-image";
-    if (legacyResolutionProtocol && image?.resolution.supported && !image.quality.supported && legacyResolution && image.resolution.values.some((value) => value.toLowerCase() === legacyResolution) && !selector.imageResolution) {
+    // 旧定价把分辨率档位存在 quality / resolution 里；统一迁移到 imageResolution，
+    // 1.5K 也走这条路径，避免重复档位。
+    const legacyResolution = (selector.quality || selector.resolution || selector.imageResolution)?.toLowerCase();
+    const isResolutionTier = Boolean(legacyResolution && (["1k", "1.5k", "2k", "4k"].includes(legacyResolution) || image?.resolution.values.some((value) => value.toLowerCase() === legacyResolution)));
+    if (isResolutionTier && (!image?.quality.supported || image?.resolution.supported) && !selector.imageResolution) {
         selector.imageResolution = legacyResolution;
         delete selector.quality;
+        delete selector.resolution;
     }
     const candidates = image?.parameters ? Object.values(selector) : [selector.operation, selector.imageResolution, selector.quality, selector.resolution, selector.size];
     const hasSpecificMatch = candidates.some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*");
@@ -133,8 +136,14 @@ export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: Pri
             }
             return selector;
         }
-        if (capabilityConfig?.image?.resolution.supported !== false && tier.imageResolution && tier.imageResolution !== "*") selector.imageResolution = tier.imageResolution;
-        if (capabilityConfig?.image?.quality.supported !== false && tier.quality && tier.quality !== "*") selector.quality = tier.quality;
+        if (tier.imageResolution && tier.imageResolution !== "*") {
+            selector.imageResolution = tier.imageResolution;
+        } else if (capabilityConfig?.image?.resolution?.supported && tier.quality && ["1k", "1.5k", "2k", "4k"].includes(tier.quality.toLowerCase())) {
+            // 旧定价把档位存在 quality 时，写入 imageResolution 以匹配新选择器。
+            selector.imageResolution = tier.quality.toLowerCase();
+        } else if (tier.quality && tier.quality !== "*") {
+            selector.quality = tier.quality;
+        }
         if (tier.size && tier.size !== "*") selector.size = tier.size;
     }
     return selector;

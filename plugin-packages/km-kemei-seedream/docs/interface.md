@@ -106,6 +106,48 @@ Pro / Flash 不支持 sequential_image_generation、组图、联网搜索、流�
           "type": "bearer",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅 / 尺寸",
+            "type": "string",
+            "binding": "aspectRatio",
+            "encoding": "pixels",
+            "pricing": true
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "binding": "resolution",
+            "values": [
+              "1k",
+              "1.5k",
+              "2k"
+            ],
+            "default": "2k",
+            "enabled": true,
+            "pricing": true
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 1,
+            "step": 1,
+            "default": 1
+          },
+          {
+            "name": "transparentBackground",
+            "label": "透明背景",
+            "type": "boolean",
+            "binding": "transparentBackground",
+            "default": false,
+            "enabled": false
+          }
+        ],
         "parameters": [
           {
             "name": "model",

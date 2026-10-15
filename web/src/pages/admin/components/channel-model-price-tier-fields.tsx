@@ -8,6 +8,7 @@ import { normalizeUpstreamModelKey } from "./channel-model-price-tier-form";
 import { CreditCostFields } from "./credit-cost-fields";
 import { Select } from "@/components/ui/base/select";
 import { ImageParameterInput } from "@/components/image-parameter-fields";
+import { imageResolutionTiers } from "@/lib/image-size-presets";
 
 export function PriceTierFields({
     index,
@@ -126,9 +127,14 @@ export function PriceTierFields({
                                               </Form.Item>
                                           ))
                                     : null}
-                                {isImage && !image?.parameters && image?.resolution?.supported ? (
+                                {isImage && !image?.parameters && (image?.resolution?.supported || (image && imageResolutionTiers(image).length > 0)) ? (
                                     <Form.Item className="mb-0" name={[index, "imageResolution"]} label="上游分辨率" rules={[{ required: true, message: "请选择上游分辨率" }]}>
-                                        <Select options={[{ label: "任意分辨率", value: "*" }, ...image.resolution.values.map((value) => ({ label: value.toUpperCase(), value }))]} />
+                                        <Select
+                                            options={[
+                                                { label: "任意分辨率", value: "*" },
+                                                ...[...new Set([...(image?.resolution?.supported ? image.resolution.values : imageResolutionTiers(image!)), "1.5k"])].map((value) => ({ label: value.toUpperCase(), value })),
+                                            ]}
+                                        />
                                     </Form.Item>
                                 ) : null}
                                 {isImage && !image?.parameters && image?.quality.supported ? (
@@ -224,6 +230,12 @@ export function PriceTierFields({
 }
 
 function ImagePriceParameterInput({ field, value, onChange }: { field: import("@/lib/image-parameters").ImageParameter; value?: string; onChange?: (value?: string) => void }) {
+    // 分辨率字段始终提供 1.5K：声明式 Seedream 档位包含它，旧定价也需要能选中。
+    if (field.name === "imageResolution") {
+        const standardChoices = ["1k", "1.5k", "2k", "4k"];
+        const values = field.values?.length ? [...new Set([...field.values.map(String), "1.5k"])] : standardChoices;
+        return <Select allowClear placeholder="任意" value={value} options={[{ label: "任意分辨率", value: "*" }, ...values.map((v) => ({ label: v.toUpperCase(), value: v }))]} onChange={onChange} />;
+    }
     const typed = value === undefined || value === "" || value === "*" ? undefined : field.type === "boolean" ? value === "true" : field.type === "number" || field.type === "integer" ? Number(value) : value;
     if (field.type === "boolean")
         return (
