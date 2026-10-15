@@ -310,7 +310,7 @@ func providerPrefersMediaURLs(interfaceType string, input canvasGenerationInput)
 	}
 	switch strings.TrimSpace(interfaceType) {
 	case string(model.ChannelInterfaceChatCompletion), string(model.ChannelInterfaceOpenAIResponse), string(model.ChannelInterfaceClaudeAPI),
-		string(model.ChannelInterfaceGrokImage), string(model.ChannelInterfaceVolcengineArkImage), string(model.ChannelInterfaceVolcengineArkAgentPlanImage),
+		string(model.ChannelInterfaceOpenAIImage), string(model.ChannelInterfaceGrokImage), string(model.ChannelInterfaceVolcengineArkImage), string(model.ChannelInterfaceVolcengineArkAgentPlanImage),
 		string(model.ChannelInterfaceXAIVideo), string(model.ChannelInterfaceNovitaVideo),
 		string(model.ChannelInterfaceMiniMaxVideo), string(model.ChannelInterfaceNewAPIVideo),
 		string(model.ChannelInterfaceNewAPIChannel1), string(model.ChannelInterfaceNewAPIChannel2),

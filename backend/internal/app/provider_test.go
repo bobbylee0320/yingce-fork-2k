@@ -46,6 +46,10 @@ func officialVideoCreateBody(t *testing.T, input canvasGenerationInput) map[stri
 }
 
 func TestProviderMediaHydrationPolicyPrefersObjectURLs(t *testing.T) {
+	openAI := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: string(model.ChannelInterfaceOpenAIImage)}})
+	if openAI.requireURL || !openAI.preferURL {
+		t.Fatalf("openai image policy = %#v", openAI)
+	}
 	prefer := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: string(model.ChannelInterfaceGrokImage)}})
 	if prefer.requireURL || !prefer.preferURL {
 		t.Fatalf("grok image policy = %#v", prefer)
