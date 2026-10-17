@@ -33,7 +33,12 @@ test("large documents keep distant modifications and diff applies exactly", () =
     const remote = base.slice(0, 5) + "甲" + base.slice(5);
     const local = base.slice(0, -5) + "乙" + base.slice(-5);
     expect(mergeCanvasText(base, remote, local)).toBe(remote.slice(0, -5) + "乙" + remote.slice(-5));
-    for (const [before, after] of [["🍎🍏😀", "🍋🍏😃"], ["abcdef", "aBcdeF"], ["", "abc"], ["abc", ""]]) {
+    for (const [before, after] of [
+        ["🍎🍏😀", "🍋🍏😃"],
+        ["abcdef", "aBcdeF"],
+        ["", "abc"],
+        ["abc", ""],
+    ]) {
         let applied = before!;
         for (const edit of canvasTextEdits(before!, after!).reverse()) applied = applied.slice(0, edit.from) + edit.insert + applied.slice(edit.to);
         expect(applied).toBe(after!);
@@ -45,7 +50,18 @@ const rich = (text: string, marks: { type: string }[] = []) => ({ type: "doc", c
 test("rich text concurrent typing retains text, structure and both insertions' formatting", () => {
     const merged = mergeCanvasRichText(rich(""), rich("甲", [{ type: "bold" }]), rich("乙", [{ type: "italic" }]));
     expect(merged.content).toBe("甲乙");
-    expect(merged.richText).toMatchObject({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "甲", marks: [{ type: "bold" }] }, { type: "text", text: "乙", marks: [{ type: "italic" }] }] }] });
+    expect(merged.richText).toMatchObject({
+        type: "doc",
+        content: [
+            {
+                type: "paragraph",
+                content: [
+                    { type: "text", text: "甲", marks: [{ type: "bold" }] },
+                    { type: "text", text: "乙", marks: [{ type: "italic" }] },
+                ],
+            },
+        ],
+    });
 });
 
 test("rich text local deletion preserves concurrent inserted text and remote formatting", () => {

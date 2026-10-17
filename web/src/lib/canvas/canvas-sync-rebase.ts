@@ -45,7 +45,7 @@ function rebaseValue(before: unknown, remote: unknown, local: unknown, verified:
 }
 
 export function rebaseCanvasLocalEdits(baseline: CanvasProject | undefined, remote: CanvasProject, local: CanvasProject): CanvasProject {
-    const merged = { ...rebaseValue(baseline, remote, local, Boolean(baseline)) as CanvasProject };
+    const merged = { ...(rebaseValue(baseline, remote, local, Boolean(baseline)) as CanvasProject) };
     const oldNodes = new Map(baseline?.nodes.map((node) => [node.id, node]));
     const remoteNodes = new Map(remote.nodes.map((node) => [node.id, node]));
     const localNodes = new Map(local.nodes.map((node) => [node.id, node]));
@@ -55,7 +55,7 @@ export function rebaseCanvasLocalEdits(baseline: CanvasProject | undefined, remo
         if (!incoming) return node;
         const edited = localNodes.get(node.id);
         if (baseline && edited) {
-            const text = (before: unknown, other: unknown, current: unknown) => typeof other === "string" && typeof current === "string" && (before === undefined || typeof before === "string") ? mergeCanvasText(before || "", other, current) : current;
+            const text = (before: unknown, other: unknown, current: unknown) => (typeof other === "string" && typeof current === "string" && (before === undefined || typeof before === "string") ? mergeCanvasText(before || "", other, current) : current);
             const metadata = { ...node.metadata };
             for (const field of ["prompt", "composerContent", ...(["text", "script", "markdown"].includes(node.type) ? ["content"] : [])] as const) {
                 const key = field as "prompt" | "composerContent" | "content";
@@ -89,5 +89,13 @@ export function rebaseCanvasLocalEdits(baseline: CanvasProject | undefined, remo
         return { ...node, metadata };
     });
     const ids = new Set(merged.nodes.map((node) => node.id));
-    return { ...merged, id: remote.id, revision: remote.revision, updatedAt: remote.updatedAt, remoteContentHash: remote.remoteContentHash, viewport: local.viewport, connections: merged.connections.filter((connection) => ids.has(connection.fromNodeId) && ids.has(connection.toNodeId)) };
+    return {
+        ...merged,
+        id: remote.id,
+        revision: remote.revision,
+        updatedAt: remote.updatedAt,
+        remoteContentHash: remote.remoteContentHash,
+        viewport: local.viewport,
+        connections: merged.connections.filter((connection) => ids.has(connection.fromNodeId) && ids.has(connection.toNodeId)),
+    };
 }

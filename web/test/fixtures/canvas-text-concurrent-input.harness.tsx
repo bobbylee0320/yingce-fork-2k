@@ -3,7 +3,19 @@ import { Window } from "happy-dom";
 
 const dom = new Window({ url: "http://localhost/" });
 const originals = new Map<string, PropertyDescriptor | undefined>();
-for (const [key, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, HTMLElement: dom.HTMLElement, HTMLTextAreaElement: dom.HTMLTextAreaElement, Element: dom.Element, Node: dom.Node, Text: dom.Text, SVGElement: dom.SVGElement, getComputedStyle: dom.getComputedStyle.bind(dom), IS_REACT_ACT_ENVIRONMENT: true })) {
+for (const [key, value] of Object.entries({
+    window: dom,
+    document: dom.document,
+    navigator: dom.navigator,
+    HTMLElement: dom.HTMLElement,
+    HTMLTextAreaElement: dom.HTMLTextAreaElement,
+    Element: dom.Element,
+    Node: dom.Node,
+    Text: dom.Text,
+    SVGElement: dom.SVGElement,
+    getComputedStyle: dom.getComputedStyle.bind(dom),
+    IS_REACT_ACT_ENVIRONMENT: true,
+})) {
     originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 }
@@ -14,7 +26,8 @@ const { CanvasTextLeaseIndicator } = await import("../../src/components/canvas/u
 const { canvasEditLeases } = await import("../../src/services/canvas-edit-leases");
 
 afterAll(() => {
-    dom.happyDOM.abort(); canvasEditLeases.reset();
+    dom.happyDOM.abort();
+    canvasEditLeases.reset();
     for (const [key, value] of originals) {
         if (value) Object.defineProperty(globalThis, key, value);
         else Reflect.deleteProperty(globalThis, key);
@@ -22,10 +35,22 @@ afterAll(() => {
 });
 
 test("真实提示词组件在中文组词期间接收远端更新，组词完成后保留两端文字且光标跟随", async () => {
-    const host = document.createElement("div"); document.body.append(host);
+    const host = document.createElement("div");
+    document.body.append(host);
     const root = createRoot(host);
     const writes: string[] = [];
-    const render = (value: string) => root.render(<CanvasResourceMentionTextarea value={value} references={[]} onChange={(next) => { writes.push(next); render(next); }} aria-label="prompt" />);
+    const render = (value: string) =>
+        root.render(
+            <CanvasResourceMentionTextarea
+                value={value}
+                references={[]}
+                onChange={(next) => {
+                    writes.push(next);
+                    render(next);
+                }}
+                aria-label="prompt"
+            />,
+        );
     try {
         await act(async () => render("场景："));
         const textarea = host.querySelector("textarea")!;
@@ -44,11 +69,15 @@ test("真实提示词组件在中文组词期间接收远端更新，组词完�
         expect(writes).toEqual(["场景：甲乙"]);
         expect(textarea.selectionStart).toBe(5);
         expect(textarea.readOnly).toBe(false);
-    } finally { await act(async () => root.unmount()); host.remove(); }
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
 });
 
 test("租约争抢只有输入状态，不渲染报错、草稿恢复或手动重试按钮", async () => {
-    const host = document.createElement("div"); document.body.append(host);
+    const host = document.createElement("div");
+    document.body.append(host);
     const root = createRoot(host);
     canvasEditLeases.status("canvas", { revision: 1, serverTime: new Date().toISOString(), leases: [{ nodeId: "node", sessionId: "other-device", expiresAt: new Date(Date.now() + 30000).toISOString() }] });
     try {
@@ -58,5 +87,8 @@ test("租约争抢只有输入状态，不渲染报错、草稿恢复或手动�
         expect(host.textContent).not.toContain("草稿待同步");
         expect(host.textContent).not.toContain("失败");
         expect(host.textContent).not.toContain("重试");
-    } finally { await act(async () => root.unmount()); host.remove(); }
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
 });

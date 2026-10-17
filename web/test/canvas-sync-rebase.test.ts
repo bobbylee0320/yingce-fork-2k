@@ -3,9 +3,14 @@ import { rebaseCanvasLocalEdits } from "../src/lib/canvas/canvas-sync-rebase";
 import type { CanvasProject } from "../src/stores/canvas/use-canvas-store";
 
 const project = (): CanvasProject => ({
-    id: "canvas", title: "Canvas", revision: 1, createdAt: "2026-01-01", updatedAt: "2026-01-01",
+    id: "canvas",
+    title: "Canvas",
+    revision: 1,
+    createdAt: "2026-01-01",
+    updatedAt: "2026-01-01",
     nodes: [{ id: "node", type: "text", title: "Text", position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { content: "Original", prompt: "Original prompt" } }] as CanvasProject["nodes"],
-    connections: [], viewport: { x: 0, y: 0, k: 1 },
+    connections: [],
+    viewport: { x: 0, y: 0, k: 1 },
 });
 
 test("concurrent authored text retains both inputs while unrelated cloud fields merge", () => {

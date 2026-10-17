@@ -42,7 +42,17 @@ let remoteOperationTail: Promise<void> = Promise.resolve();
 let subscriptionsInstalled = false;
 let acknowledgedAssets = new Map<string, Asset>();
 let acknowledgedProjects = new Map<string, CanvasProject>();
-type PendingCanvasMutation = { projectId: string; request: CanvasOperationsRequest; baseline?: CanvasProject; prepared: CanvasProject; localPrepared?: CanvasProject; rebaseSource?: CanvasProject; editVersions?: Record<string, number>; editSession?: string; createdAt: string };
+type PendingCanvasMutation = {
+    projectId: string;
+    request: CanvasOperationsRequest;
+    baseline?: CanvasProject;
+    prepared: CanvasProject;
+    localPrepared?: CanvasProject;
+    rebaseSource?: CanvasProject;
+    editVersions?: Record<string, number>;
+    editSession?: string;
+    createdAt: string;
+};
 const pendingCanvasMutations = new Map<string, PendingCanvasMutation>();
 const pendingCanvasMutationKey = "yingce:canvas-mutation-journal";
 const confirmedCanvasBaselineKey = "yingce:canvas-confirmed-baselines";
@@ -679,10 +689,11 @@ export async function syncRemoteUserData(userId?: string | null) {
 export function installRemoteUserDataAutoSync() {
     if (subscriptionsInstalled) return;
     subscriptionsInstalled = true;
-    if (typeof window !== "undefined") window.addEventListener("online", () => {
-        if (remoteUserDataPhase === "ready") scheduleRemoteUserDataSync();
-        else if (activeRemoteUserId && remoteUserDataPhase === "failed") void syncRemoteUserData(activeRemoteUserId).catch(() => undefined);
-    });
+    if (typeof window !== "undefined")
+        window.addEventListener("online", () => {
+            if (remoteUserDataPhase === "ready") scheduleRemoteUserDataSync();
+            else if (activeRemoteUserId && remoteUserDataPhase === "failed") void syncRemoteUserData(activeRemoteUserId).catch(() => undefined);
+        });
     useCanvasStore.subscribe((state, previous) => {
         if (state.projects === previous.projects) return;
         const before = new Map(previous.projects.map((project) => [project.id, project]));
@@ -1132,7 +1143,10 @@ export function buildCanvasOperations(base: CanvasProject | undefined, next: Can
 }
 
 class CanvasMutationRejectedError extends Error {
-    constructor(readonly rejection: ApiError, readonly entry: PendingCanvasMutation) {
+    constructor(
+        readonly rejection: ApiError,
+        readonly entry: PendingCanvasMutation,
+    ) {
         super(rejection.message);
     }
 }
@@ -1213,7 +1227,9 @@ async function preserveSyncRecovery(identity: string, value: object) {
     const key = `yingce:canvas-recovery:${identity}:${newCanvasMutationId()}`;
     rememberSyncRecovery(scope, key, value);
     const write = Promise.resolve().then(() => localForageStorageForScope(scope).setItem(key, JSON.stringify({ ...value, savedAt: new Date().toISOString() })));
-    try { await waitForCanvasSync(write, 2_000); } catch {
+    try {
+        await waitForCanvasSync(write, 2_000);
+    } catch {
         // The copy remains exportable in memory when IndexedDB is full/unavailable.
     }
 }
@@ -1266,7 +1282,7 @@ async function reconcileCanvasLocalEdits(id: string, rejected?: PendingCanvasMut
         if (latest !== local) project = { ...rebaseCanvasLocalEdits(local, project, latest), remoteContentHash: hash };
     }
     for (const listener of agentCanvasListeners) listener(project, local, "sync");
-    useCanvasStore.setState((state) => ({ projects: state.projects.map((item) => item.id === id ? project : item) }));
+    useCanvasStore.setState((state) => ({ projects: state.projects.map((item) => (item.id === id ? project : item)) }));
     await flushCanvasStorePersistence();
     ensureSession();
     acknowledgedProjects.set(id, acknowledged);
@@ -1455,9 +1471,11 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
                     }
                     acknowledgedAssets.set(asset.id, remote);
                     verifiedAssets.add(asset.id);
-                    useAssetStore.setState((state) => ({ assets: state.assets.map((item) => item.id === asset.id ? remote : item) }));
+                    useAssetStore.setState((state) => ({ assets: state.assets.map((item) => (item.id === asset.id ? remote : item)) }));
                     continue;
-                } catch (recoveryError) { error = recoveryError; }
+                } catch (recoveryError) {
+                    error = recoveryError;
+                }
             }
             failedAssets.set(asset.id, error);
         }
@@ -1498,7 +1516,7 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
                 // its staged projection once, preserving later local input.
                 const projected = rebaseCanvasLocalEdits(staged.rebaseSource, staged.localPrepared, current);
                 for (const listener of agentCanvasListeners) listener(projected, current, "sync");
-                useCanvasStore.setState((state) => ({ projects: state.projects.map((item) => item.id === source.id ? projected : item) }));
+                useCanvasStore.setState((state) => ({ projects: state.projects.map((item) => (item.id === source.id ? projected : item)) }));
                 await flushCanvasStorePersistence();
                 requireCurrentSession();
                 current = useCanvasStore.getState().openProject(source.id);

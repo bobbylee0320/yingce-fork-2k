@@ -72,7 +72,11 @@ export function AudioSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             if (value !== null) onConfigChange("audioSpeed", normalizeAudioSpeedValue(String(value)));
                         }}
                     />
-                    {doubao ? <p className="text-xs leading-5" style={{ color: theme.node.muted }}>1x 为正常语速。情绪克制、低声不等于慢速；提示词也不要重复要求放慢或拖长尾音。</p> : null}
+                    {doubao ? (
+                        <p className="text-xs leading-5" style={{ color: theme.node.muted }}>
+                            1x 为正常语速。情绪克制、低声不等于慢速；提示词也不要重复要求放慢或拖长尾音。
+                        </p>
+                    ) : null}
                 </fieldset>
                 {doubao ? (
                     <details className="space-y-2 text-xs" style={{ color: theme.node.muted }}>

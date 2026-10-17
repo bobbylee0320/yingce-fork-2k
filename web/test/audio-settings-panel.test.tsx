@@ -8,7 +8,15 @@ import { readNodeGenerationSpec, specFromConfig, synchronizeGenerationSpec } fro
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 
 const theme = Object.values(canvasThemes)[0];
-const config = { ...defaultConfig, interfaceType: "doubao-streaming-tts", model: "seed-audio-1.0", audioModel: "seed-audio-1.0", channels: [createModelChannel({ id: "doubao", models: ["seed-audio-1.0"], interfaceType: "doubao-streaming-tts" })], audioVoice: "", audioSpeed: "" };
+const config = {
+    ...defaultConfig,
+    interfaceType: "doubao-streaming-tts",
+    model: "seed-audio-1.0",
+    audioModel: "seed-audio-1.0",
+    channels: [createModelChannel({ id: "doubao", models: ["seed-audio-1.0"], interfaceType: "doubao-streaming-tts" })],
+    audioVoice: "",
+    audioSpeed: "",
+};
 
 describe("canvas audio settings", () => {
     test("renders Doubao voice input and prompt guidance without unsupported controls", () => {

@@ -17,7 +17,8 @@ function changes(before: ProseMirrorNode, after: ProseMirrorNode) {
         const range = { fromA: change.fromA - start, toA: change.toA + end, fromB: change.fromB - start, toB: change.toB + end };
         const previous = result.at(-1);
         if (previous && previous.toA >= range.fromA && previous.toB >= range.fromB) {
-            previous.toA = Math.max(previous.toA, range.toA); previous.toB = Math.max(previous.toB, range.toB);
+            previous.toA = Math.max(previous.toA, range.toA);
+            previous.toB = Math.max(previous.toB, range.toB);
         } else result.push(range);
     }
     return result;
@@ -48,14 +49,19 @@ export function canvasRichTextChangeMap(before: ProseMirrorNode, after: ProseMir
 export function mergeCanvasText(before: string, remote: string, local: string): string {
     if (local === before || local === remote) return remote;
     if (remote === before) return local;
-    const rawRemote = canvasTextEdits(before, remote), rawLocal = canvasTextEdits(before, local);
+    const rawRemote = canvasTextEdits(before, remote),
+        rawLocal = canvasTextEdits(before, local);
     // Conflicting word replacements must retain each new word, including any
     // baseline letters reused by the diff ("Original" -> "Local" keeps "al").
     const completeWords = (edits: TextEdit[], others: TextEdit[]) => {
         const ranges: { from: number; to: number }[] = [];
         for (const edit of edits) {
             let { from, to } = edit;
-            if (/^[A-Za-z0-9_]+$/.test(edit.insert) && /^[A-Za-z0-9_]+$/.test(before.slice(from, to)) && others.some((other) => other.insert && other.to > other.from && from < other.to && to > other.from && Math.max(to - from, edit.insert.length, other.to - other.from, other.insert.length) > 1)) {
+            if (
+                /^[A-Za-z0-9_]+$/.test(edit.insert) &&
+                /^[A-Za-z0-9_]+$/.test(before.slice(from, to)) &&
+                others.some((other) => other.insert && other.to > other.from && from < other.to && to > other.from && Math.max(to - from, edit.insert.length, other.to - other.from, other.insert.length) > 1)
+            ) {
                 while (from > 0 && /[A-Za-z0-9_]/.test(before[from - 1]!)) from--;
                 while (to < before.length && /[A-Za-z0-9_]/.test(before[to]!)) to++;
             }
@@ -64,7 +70,8 @@ export function mergeCanvasText(before: string, remote: string, local: string): 
             else ranges.push({ from, to });
         }
         return ranges.map(({ from, to }) => {
-            let cursor = from, insert = "";
+            let cursor = from,
+                insert = "";
             for (const edit of edits) {
                 if (edit.from < from || edit.to > to) continue;
                 insert += before.slice(cursor, edit.from) + edit.insert;
@@ -73,7 +80,8 @@ export function mergeCanvasText(before: string, remote: string, local: string): 
             return { from, to, insert: insert + before.slice(cursor, to) };
         });
     };
-    const remoteEdits = completeWords(rawRemote, rawLocal), localEdits = completeWords(rawLocal, rawRemote);
+    const remoteEdits = completeWords(rawRemote, rawLocal),
+        localEdits = completeWords(rawLocal, rawRemote);
     const edits = [...remoteEdits, ...localEdits.filter((edit) => !remoteEdits.some((other) => edit.from === other.from && edit.to === other.to && edit.insert === other.insert))].sort((a, b) => a.from - b.from);
     const output: string[] = [];
     let cursor = 0;
@@ -91,11 +99,13 @@ let richSchema: Schema | undefined;
 // Rebase structured editor slices, rather than merging the plain text and
 // richText copies separately. This retains paragraph structure and marks.
 export function mergeCanvasRichText(before: Record<string, unknown>, remote: Record<string, unknown>, local: Record<string, unknown>) {
-    const schema = richSchema ??= getSchema(createCanvasRichTextExtensions());
+    const schema = (richSchema ??= getSchema(createCanvasRichTextExtensions()));
     const base = schema.nodeFromJSON(before);
     const incoming = schema.nodeFromJSON(remote);
     const edited = schema.nodeFromJSON(local);
-    base.check(); incoming.check(); edited.check();
+    base.check();
+    incoming.check();
+    edited.check();
     const remoteChanges = changes(base, incoming);
     const localChanges = changes(base, edited);
     const remoteMap = new StepMap(remoteChanges.flatMap((change) => [change.fromA, change.toA - change.fromA, change.toB - change.fromB]));
@@ -113,7 +123,8 @@ export function mergeCanvasRichText(before: Record<string, unknown>, remote: Rec
         }
         if (cursor < edit.toA) deletions.push([cursor, edit.toA]);
         for (const [from, to] of deletions.reverse()) {
-            const start = map(from, 1), end = map(to, -1);
+            const start = map(from, 1),
+                end = map(to, -1);
             if (start < end) transform.delete(start, end);
         }
         if (edit.fromB < edit.toB) {
@@ -140,9 +151,11 @@ export function mergeCanvasRichText(before: Record<string, unknown>, remote: Rec
             if (localChanges.some((edit) => from >= edit.fromA && from < edit.toA) || remoteChanges.some((edit) => from >= edit.fromA && from < edit.toA)) continue;
             const localMarks = edited.resolve(localMap.map(from, 1)).nodeAfter?.marks || [];
             for (const type of new Set([...node.marks, ...localMarks].map((mark) => mark.type))) {
-                const old = node.marks.find((mark) => mark.type === type), next = localMarks.find((mark) => mark.type === type);
-                if (old && next && old.eq(next) || !old && !next) continue;
-                const start = map(from, 1), end = map(from + 1, -1);
+                const old = node.marks.find((mark) => mark.type === type),
+                    next = localMarks.find((mark) => mark.type === type);
+                if ((old && next && old.eq(next)) || (!old && !next)) continue;
+                const start = map(from, 1),
+                    end = map(from + 1, -1);
                 if (start >= end) continue;
                 transform.removeMark(start, end, type);
                 if (next) transform.addMark(start, end, next);
