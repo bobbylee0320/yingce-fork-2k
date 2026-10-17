@@ -143,7 +143,7 @@ export default function CanvasPage() {
         try {
             for (const id of selectedIds) await loadCanvasProjectForEditing(id);
             selectedIds.forEach((id) => updateProject(id, { projectId }));
-            await saveRemoteUserDataNow();
+            await saveRemoteUserDataNow(selectedIds);
             message.success(projectId ? "已加入项目" : "已移出项目，画布仍保留");
             setAssociationOpen(false);
         } catch (error) {

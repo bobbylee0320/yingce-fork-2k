@@ -46,15 +46,28 @@ func (s *Service) publicModelAvailability(channels []PublicChannelCatalog, now t
 		return result, nil
 	}
 
+	// 30 秒 TTL 缓存，避免每次模型目录请求都全量扫描 api_call_logs。
+	s.modelAvailabilityMu.RLock()
+	if s.modelAvailabilityCache != nil && time.Since(s.modelAvailabilityAt) < 30*time.Second {
+		cached := make(map[publicModelAvailabilityKey]*PublicModelAvailability, len(s.modelAvailabilityCache))
+		for k, v := range s.modelAvailabilityCache {
+			cached[k] = v
+		}
+		s.modelAvailabilityMu.RUnlock()
+		return cached, nil
+	}
+	s.modelAvailabilityMu.RUnlock()
+
 	from := trendFrom
 	logs, err := s.repo.PublicModelAvailabilityLogs(repository.PublicModelAvailabilityFilter{From: from, To: now, ChannelIDs: channelIDs})
 	if err != nil {
 		return nil, err
 	}
 
-	recentLogs, _ := s.repo.PublicModelRecentLogs(channelIDs, 1000)
+	// 从趋势数据逆序遍历导出最近结果，避免第二次全表扫描。
 	recentMap := make(map[publicModelAvailabilityKey][]bool)
-	for _, log := range recentLogs {
+	for i := len(logs) - 1; i >= 0; i-- {
+		log := logs[i]
 		key := publicModelAvailabilityKey{channelID: log.ChannelID, modelKey: log.Model}
 		if _, ok := known[key]; !ok {
 			continue
@@ -128,6 +141,10 @@ func (s *Service) publicModelAvailability(channels []PublicChannelCatalog, now t
 		}
 		result[key] = item
 	}
+	s.modelAvailabilityMu.Lock()
+	s.modelAvailabilityCache = result
+	s.modelAvailabilityAt = time.Now()
+	s.modelAvailabilityMu.Unlock()
 	return result, nil
 }
 

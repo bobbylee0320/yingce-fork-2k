@@ -3,6 +3,7 @@ module yingce/backend
 go 1.25.0
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/aws/aws-sdk-go v1.45.5
 	github.com/gabriel-vasile/mimetype v1.4.13
 	github.com/gin-gonic/gin v1.12.0

@@ -14,6 +14,7 @@ import { AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretTex
 import { ChannelModelManager } from "../components/channel-model-manager";
 import { ChannelOrderDialog } from "../components/channel-order-dialog";
 import { selectChannelWorkspace } from "./channel-workspace-state";
+import { ProviderCatalogWizard } from "./provider-catalog-wizard";
 import "./channels-page.css";
 import { Select } from "@/components/ui/base/select";
 
@@ -57,6 +58,7 @@ export default function ChannelsPage() {
     const [editingChannel, setEditingChannel] = useState<ModelChannel | null>(null);
     const [saving, setSaving] = useState(false);
     const [duplicatingChannelId, setDuplicatingChannelId] = useState<string | null>(null);
+    const [wizardOpen, setWizardOpen] = useState(false);
     const requestSequence = useRef(0);
     const [form] = Form.useForm<ChannelFormValues>();
     const useGlobalConcurrency = Form.useWatch("useGlobalConcurrency", form) !== false;
@@ -253,7 +255,7 @@ export default function ChannelsPage() {
                             <h2 className="font-semibold">渠道</h2>
                             <span className="admin-channel-count">{hasFilters ? `${visibleChannels.length} / ${channels.length}` : channels.length}</span>
                         </div>
-                        <Button block type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
+                        <Button block type="primary" icon={<Plus className="size-4" />} onClick={() => setWizardOpen(true)}>
                             新增渠道
                         </Button>
                         <AdminSearchInput
@@ -335,6 +337,7 @@ export default function ChannelsPage() {
                                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/50">
                                         <span>{selectedChannel.hasApiKey ? (selectedChannel.hasSecretKey ? "AK/SK 已配置" : "API Key 已配置") : "凭证未配置"}</span>
                                         <span>最大并发：{selectedChannel.concurrencyLimit || "跟随系统"}</span>
+                                        {selectedChannel.catalogProviderId ? <span>来源：服务商目录 · {selectedChannel.catalogProviderId}</span> : null}
                                     </div>
                                 </div>
                                 {channelActions(selectedChannel)}
@@ -427,6 +430,20 @@ export default function ChannelsPage() {
                     </Form.Item>
                 </Form>
             </Modal>
+            <ProviderCatalogWizard
+                open={wizardOpen}
+                onClose={() => setWizardOpen(false)}
+                onCustom={() => {
+                    setWizardOpen(false);
+                    openDrawer();
+                }}
+                onInstalled={async (channel) => {
+                    setWizardOpen(false);
+                    updateUrl({ channel: channel.id, filter: "", status: "all" }, true);
+                    await syncChannels();
+                    await reload();
+                }}
+            />
         </AdminPageFrame>
     );
 }

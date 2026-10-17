@@ -32,7 +32,7 @@ export function CreationAgentEntry() {
                 created.current = { id: result.id, userId };
                 if (result.syncError) throw new Error("画布已缓存在本机，但云端尚未保存。请重试同步后再启动 Agent。");
             } else {
-                await saveRemoteUserDataNow();
+                await saveRemoteUserDataNow(created.current.id);
             }
             if (useUserStore.getState().user?.id !== userId) return;
             navigate(`/canvas/${encodeURIComponent(created.current.id)}?agent=1`);

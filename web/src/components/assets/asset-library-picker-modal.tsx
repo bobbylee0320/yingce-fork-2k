@@ -168,7 +168,7 @@ export function AssetLibraryPickerModal({
     const remoteItems = useMemo<AssetLibraryPickerItem[]>(
         () =>
             (remoteQuery.data?.assets || [])
-                .filter((asset) => asset.kind !== "model" && (asset.kind !== "entity" || allowCharacters))
+                .filter((asset) => asset.kind !== "model" && (asset.kind !== "entity" || (allowCharacters && asset.category === "character")))
                 .map((asset) =>
                     remoteAssetToPickerItem(
                         asset,
@@ -331,7 +331,7 @@ export function AssetLibraryPickerModal({
                 useAssetStore.getState().updateAsset(id, { status: "confirmed" });
             }
             await flushAssetStorePersistence();
-            await saveRemoteUserDataNow();
+            await saveRemoteUserDataNow([]);
             setSelected(new Set());
             message.success(`已还原 ${archivedSelectedIds.length} 个素材至素材库`);
             setCategory("all");

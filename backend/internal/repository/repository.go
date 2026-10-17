@@ -34,7 +34,10 @@ var ErrProjectUnitShotsChanged = errors.New("镜头已被修改，请刷新后�
 var ErrCanvasRevisionConflict = errors.New("画布已被更新，请刷新后重试")
 
 type Repository struct {
-	db *gorm.DB
+	db                   *gorm.DB
+	canvasEditProofs     []model.CanvasEditProof
+	canvasChangeNotifier func(string, string)
+	canvasChanges        map[canvasChange]struct{}
 }
 
 type UserStorageUsage struct {
@@ -52,15 +55,24 @@ func New(db *gorm.DB) *Repository {
 }
 
 func (r *Repository) WithContext(ctx context.Context) *Repository {
-	return &Repository{db: r.db.WithContext(ctx)}
+	copy := *r
+	copy.db = r.db.WithContext(ctx)
+	return &copy
 }
 
 // Transaction exposes a repository scoped to one database transaction. Domain
 // services use it when a canvas mutation and its receipt must commit together.
 func (r *Repository) Transaction(fn func(*Repository) error) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		return fn(New(tx))
+	changes := make(map[canvasChange]struct{})
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		return fn(&Repository{db: tx, canvasEditProofs: r.canvasEditProofs, canvasChangeNotifier: r.canvasChangeNotifier, canvasChanges: changes})
 	})
+	if err == nil {
+		for change := range changes {
+			r.canvasChanged(change.userID, change.canvasID)
+		}
+	}
+	return err
 }
 
 func (r *Repository) Dialect() string {

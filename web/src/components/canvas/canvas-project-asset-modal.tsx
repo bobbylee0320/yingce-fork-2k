@@ -108,7 +108,7 @@ export function CanvasProjectAssetModal({
                         if (external) return externalAssetToInsertPayload(external);
                         const item = items.find((candidate) => candidate.id === id);
                         if (!item) throw new Error("所选资产已不存在，请重新选择");
-                        if (item.media || item.character || !item.project) return toInsertPayload(item);
+                        if (!item.project?.visual && (item.media || item.character || !item.project)) return toInsertPayload(item);
                         const { asset } = await getRemoteAsset(item.project.id);
                         return toInsertPayload({ ...item, media: asset });
                     }),
@@ -125,19 +125,36 @@ function pickerMediaKind(value?: string): AssetPickerMediaKind {
     return value === "video" || value === "audio" || value === "text" ? value : "image";
 }
 
-function toInsertPayload(item: ProjectPickerItem): InsertAssetPayload {
+export function toInsertPayload(item: ProjectPickerItem): InsertAssetPayload {
     if (item.character?.character) {
         return projectCharacterToInsertPayload(item.character);
     }
     const asset = item.media;
     const project = item.project;
-    if (!asset && project) {
+    if (project && (!asset || project.storageKey)) {
         const resourceId = resourceIdFromStorageKey(project.storageKey);
         const remoteUrl = resourceId ? resourceFileUrl(resourceId) : "";
         if (project.mediaType === "text" && project.previewText) return { kind: "text", content: project.previewText, title: project.title, assetId: project.id };
-        if (project.mediaType === "video" && remoteUrl) return { kind: "video", url: remoteUrl, storageKey: project.storageKey, title: project.title, assetId: project.id };
-        if (project.mediaType === "audio" && remoteUrl) return { kind: "audio", url: remoteUrl, storageKey: project.storageKey, title: project.title, assetId: project.id };
-        if (project.mediaType === "image" && remoteUrl) return { kind: "image", dataUrl: remoteUrl, storageKey: project.storageKey, title: project.title, assetId: project.id };
+        if (project.mediaType === "video" && remoteUrl)
+            return {
+                ...(asset?.kind === "video" && asset.data.storageKey === project.storageKey ? asset.data : { durationMs: project.durationMs }),
+                kind: "video",
+                url: remoteUrl,
+                storageKey: project.storageKey,
+                title: project.title,
+                assetId: project.id,
+            };
+        if (project.mediaType === "audio" && remoteUrl)
+            return {
+                ...(asset?.kind === "audio" && asset.data.storageKey === project.storageKey ? asset.data : { durationMs: project.durationMs }),
+                kind: "audio",
+                url: remoteUrl,
+                storageKey: project.storageKey,
+                title: project.title,
+                assetId: project.id,
+            };
+        if (project.mediaType === "image" && remoteUrl)
+            return { ...(asset?.kind === "image" && asset.data.storageKey === project.storageKey ? asset.data : {}), kind: "image", dataUrl: remoteUrl, storageKey: project.storageKey, title: project.title, assetId: project.id };
         throw new Error(`“${project.title}”缺少可读取的内容`);
     }
     if (!asset) throw new Error("项目资产不可用");

@@ -203,6 +203,7 @@ async function run() {
   let session;
   // 工具进入审批时主动中止本轮；这是暂停，不是失败。
   let pausedForApproval = false;
+  const executedToolCalls = new Set();
   const tools = (request.tools ?? []).map((tool) => ({
     name: tool.name,
     label: tool.label || tool.name,
@@ -210,6 +211,9 @@ async function run() {
     parameters: Type.Unsafe(tool.parameters ?? { type: "object", properties: {} }),
     executionMode: tool.executionMode || "sequential",
     async execute(toolCallId, params, signal) {
+      // SDK 在 execute 之前拒绝的调用也要先写回 Go 的调用游标。
+      await eventChain.current;
+      executedToolCalls.add(toolCallId);
       const result = await bridge(request, "/tool", {
         callId: toolCallId,
         name: tool.name,
@@ -381,6 +385,17 @@ async function run() {
       });
     } else if (event.type === "message_end") {
       const message = event.message;
+      if (message?.role === "toolResult" && message.isError && !pausedForApproval && !executedToolCalls.has(message.toolCallId)) {
+        const error = message.content.filter((part) => part.type === "text").map((part) => part.text).join("\n");
+        if (error.startsWith("Validation failed for tool ")) {
+          enqueueEvent({
+            type: "tool_validation_failed",
+            callId: message.toolCallId,
+            toolName: message.toolName,
+            error: error.split("\n\nReceived arguments:")[0],
+          });
+        }
+      }
       if (message?.role !== "assistant") return;
       if (pausedForApproval || message.stopReason === "aborted") return;
       if (message.stopReason === "error" || message.errorMessage) {

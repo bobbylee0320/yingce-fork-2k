@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { formatModelMargin, previewModelRepricing, modelRepriceRows, modelRepricePayload, parseSaleInput, saleInputValue } from "../src/pages/admin/components/channel-model-pricing";
+import { formatModelMarkup, previewModelRepricing, modelRepriceRows, modelRepricePayload, parseSaleInput, saleInputValue } from "../src/pages/admin/components/channel-model-pricing";
 import type { ChannelModel } from "../src/services/api/wallet";
 
 const item = {
@@ -22,9 +22,9 @@ const item = {
     ],
 } as ChannelModel;
 
-test("20% margin uses cost / 0.8, not markup, and leaves inputs unchanged", () => {
+test("20% markup uses cost × 1.2 and leaves inputs unchanged", () => {
     const result = previewModelRepricing([item], 20);
-    expect(result[0]!.priceTiers[0]!.unitPriceMicrocredits).toBe(1_250_000);
+    expect(result[0]!.priceTiers[0]!.unitPriceMicrocredits).toBe(1_200_000);
     expect(item.priceTiers[0]!.unitPriceMicrocredits).toBe(9);
     expect(result[0]!.priceTiers[0]!.costPricing).toEqual(item.priceTiers[0]!.costPricing);
 });
@@ -32,19 +32,19 @@ test("20% margin uses cost / 0.8, not markup, and leaves inputs unchanged", () =
 test("token prices are independent and zero costs remain free", () => {
     const token = { ...item, priceTiers: [{ ...item.priceTiers[0]!, billingMode: "token" as const }] };
     const tier = previewModelRepricing([token], 20)[0]!.priceTiers[0]!;
-    expect(tier.inputTokenPriceMicrocredits).toBe(2_500_000);
-    expect(tier.outputTokenPriceMicrocredits).toBe(5_000_000);
+    expect(tier.inputTokenPriceMicrocredits).toBe(2_400_000);
+    expect(tier.outputTokenPriceMicrocredits).toBe(4_800_000);
     expect(tier.cachedTokenPriceMicrocredits).toBe(0);
-    expect(formatModelMargin(0, 0)).toBe("—");
+    expect(formatModelMarkup(0, 0)).toBe("—");
 });
 
 test("video token adjusts only output; per-second adjusts unit price", () => {
     const video = { ...item, capability: "video" as const, priceTiers: [{ ...item.priceTiers[0]!, billingMode: "token" as const }] };
     const tier = previewModelRepricing([video], 20)[0]!.priceTiers[0]!;
-    expect(tier.outputTokenPriceMicrocredits).toBe(5_000_000);
+    expect(tier.outputTokenPriceMicrocredits).toBe(4_800_000);
     expect(tier.inputTokenPriceMicrocredits).toBe(0);
     video.priceTiers[0]!.billingMode = "per_second";
-    expect(previewModelRepricing([video], 20)[0]!.priceTiers[0]!.unitPriceMicrocredits).toBe(1_250_000);
+    expect(previewModelRepricing([video], 20)[0]!.priceTiers[0]!.unitPriceMicrocredits).toBe(1_200_000);
 });
 
 test("half-up rounding at microcredit precision and disabled tiers stay untouched", () => {
@@ -82,11 +82,11 @@ test("rows are present before a percentage is set and final manual prices surviv
     expect(initial).toHaveLength(1);
     expect(initial[0]!.sale).toBe("0.000009");
     const recalculated = modelRepriceRows(previewModelRepricing([input], 20));
-    expect(recalculated[0]!.sale).toBe("1.25");
+    expect(recalculated[0]!.sale).toBe("1.2");
     recalculated[0]!.sale = "1.37";
     recalculated[0]!.manual = true;
     expect(modelRepricePayload([input], recalculated)).toEqual([{ modelId: "m", priceVersion: 4, priceTiers: [{ id: "t", priceVersion: 8, prices: { unitPriceMicrocredits: 1_370_000 } }] }]);
-    expect(modelRepriceRows(previewModelRepricing([input], 50, 2))[0]!.sale).toBe("2");
+    expect(modelRepriceRows(previewModelRepricing([input], 50, 2))[0]!.sale).toBe("1.5");
     expect(modelRepriceRows(previewModelRepricing([input], 20, 0))[0]!.sale).toBe("1");
 });
 
@@ -95,7 +95,7 @@ test("manual token edits affect only their own field and invalid input never sil
     const rows = modelRepriceRows(previewModelRepricing([token], 20));
     rows[1]!.sale = "7.123456";
     const prices = modelRepricePayload([token], rows)[0]!.priceTiers[0]!.prices;
-    expect(prices).toEqual({ inputTokenPriceMicrocredits: 2_500_000, outputTokenPriceMicrocredits: 7_123_456, cachedTokenPriceMicrocredits: 0 });
+    expect(prices).toEqual({ inputTokenPriceMicrocredits: 2_400_000, outputTokenPriceMicrocredits: 7_123_456, cachedTokenPriceMicrocredits: 0 });
     for (const invalid of [null, "", "-1", "1.1234567", "1e3", "NaN", "9007199254.740992"]) expect(() => parseSaleInput(invalid)).toThrow();
     for (const value of [0, 1, 10_000_000, Number.MAX_SAFE_INTEGER]) expect(parseSaleInput(saleInputValue(value))).toBe(value);
     rows[1]!.sale = null;
@@ -103,7 +103,7 @@ test("manual token edits affect only their own field and invalid input never sil
 });
 
 test("reject invalid rates, incomplete costs, invalid amounts and overflow", () => {
-    for (const margin of [null, NaN, Infinity, -1, 100, 20.001]) expect(() => previewModelRepricing([item], margin)).toThrow();
+    for (const margin of [null, NaN, Infinity, -1, 1000.01, 20.001]) expect(() => previewModelRepricing([item], margin)).toThrow();
     for (const cost of [undefined, NaN, -1, 1_000_000_000_001]) {
         const invalid = { ...item, priceTiers: [{ ...item.priceTiers[0]!, costPricing: { ...item.priceTiers[0]!.costPricing!, unitPriceMicrocredits: cost as number } }] };
         expect(() => previewModelRepricing([item, invalid], 20)).toThrow();
@@ -111,7 +111,7 @@ test("reject invalid rates, incomplete costs, invalid amounts and overflow", () 
     expect(() => previewModelRepricing([{ ...item, priceTiers: [] }], 20)).toThrow();
     expect(() => previewModelRepricing([{ ...item, priceTiers: [{ ...item.priceTiers[0]!, costPricing: undefined }] }], 20)).toThrow();
     expect(() => previewModelRepricing([{ ...item, priceTiers: [{ ...item.priceTiers[0]!, priceConfigured: false }] }], 20)).toThrow();
-    const huge = { ...item, priceTiers: [{ ...item.priceTiers[0]!, costPricing: { ...item.priceTiers[0]!.costPricing!, unitPriceMicrocredits: 1_000_000_000_000 } }] };
+    const huge = { ...item, priceTiers: [{ ...item.priceTiers[0]!, billingMode: "token" as const, costPricing: { ...item.priceTiers[0]!.costPricing!, inputTokenPriceMicrocredits: 1_000_000_000_000 } }] };
     expect(() => previewModelRepricing([huge], 99.99)).toThrow();
 });
 

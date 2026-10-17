@@ -557,6 +557,8 @@ func (s *Service) cloudAgentPiEvent(ctx context.Context, userID, runID string, p
 		return s.handleMessageEnd(userID, runID, data)
 	case "session_snapshot":
 		return s.handlePiSessionSnapshot(userID, runID, data)
+	case "tool_validation_failed":
+		return s.handlePiToolValidationFailure(userID, runID, data)
 	case "compaction_start", "compaction_end":
 		kind, eventPayload, ok := cloudAgentPiCompactionEvent(eventType, data)
 		if !ok {

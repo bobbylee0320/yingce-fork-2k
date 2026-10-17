@@ -12,37 +12,7 @@ func cloudAgentGenerationSpec(a cloudAgentMediaArgs, refs map[string]any, resolv
 	if a.LogicalModelID != "" {
 		selection = &contract.ModelSelection{Kind: "logical", LogicalModelID: a.LogicalModelID}
 	}
-	options := contract.Options{}
-	if a.Mode == "image" || a.Mode == "video" {
-		// A blank option means "use the selected model's declared default". Do
-		// not turn absence into an explicit empty value: task admission is where
-		// the model capability contract resolves defaults and validates support.
-		if strings.TrimSpace(a.Size) != "" {
-			options.Size = &a.Size
-		}
-	}
-	if a.Mode == "video" {
-		if a.Duration > 0 {
-			options.DurationSeconds = &a.Duration
-		}
-		options.GenerateAudio = a.VideoGenerateAudio
-		options.Watermark = a.VideoWatermark
-		if a.Quality != "" {
-			options.Resolution = &a.Quality
-		}
-	} else if a.Mode == "image" {
-		count := 1
-		options.Count = &count
-		if a.ImageResolution != "" {
-			options.ImageResolution = &a.ImageResolution
-		}
-		if a.ImageParameters != "" {
-			options.ImageParameters = &a.ImageParameters
-		}
-		if a.Quality != "" {
-			options.Quality = &a.Quality
-		}
-	}
+	options := cloudAgentMediaOptions(a)
 	if resolvedConfig != nil {
 		config := options.TaskConfig()
 		for key, value := range resolvedConfig {
@@ -95,4 +65,35 @@ func cloudAgentGenerationSpec(a cloudAgentMediaArgs, refs map[string]any, resolv
 	}
 	spec := contract.GenerationSpec{Version: contract.GenerationVersion, Mode: a.Mode, Prompt: a.Prompt, ModelSelection: selection, Options: options, ReferenceBindings: bindings, TextInputMode: "prompt-only"}
 	return spec, spec.Validate()
+}
+
+func cloudAgentMediaOptions(a cloudAgentMediaArgs) contract.Options {
+	options := contract.Options{}
+	// Absence stays absent until capability admission resolves model defaults.
+	if (a.Mode == "image" || a.Mode == "video") && strings.TrimSpace(a.Size) != "" {
+		options.Size = &a.Size
+	}
+	if a.Mode == "video" {
+		if a.Duration > 0 {
+			options.DurationSeconds = &a.Duration
+		}
+		options.GenerateAudio = a.VideoGenerateAudio
+		options.Watermark = a.VideoWatermark
+		if a.Quality != "" {
+			options.Resolution = &a.Quality
+		}
+	} else if a.Mode == "image" {
+		count := 1
+		options.Count = &count
+		if a.ImageResolution != "" {
+			options.ImageResolution = &a.ImageResolution
+		}
+		if a.ImageParameters != "" {
+			options.ImageParameters = &a.ImageParameters
+		}
+		if a.Quality != "" {
+			options.Quality = &a.Quality
+		}
+	}
+	return options
 }

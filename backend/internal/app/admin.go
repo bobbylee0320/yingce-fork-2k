@@ -113,6 +113,7 @@ type PublicModelChannel struct {
 	Headers          []OutboundHeader          `json:"headers,omitempty"`
 	HasAPIKey        bool                      `json:"hasApiKey"`
 	HasSecretKey     bool                      `json:"hasSecretKey"`
+	CatalogProvider  string                    `json:"catalogProviderId,omitempty"`
 	CreatedAt        time.Time                 `json:"createdAt"`
 	UpdatedAt        time.Time                 `json:"updatedAt"`
 }
@@ -275,6 +276,7 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		Headers:          headers,
 		HasAPIKey:        strings.TrimSpace(channel.APIKey) != "",
 		HasSecretKey:     strings.TrimSpace(channel.SecretKey) != "",
+		CatalogProvider:  catalogProviderForAdmin(channel, admin),
 		CreatedAt:        channel.CreatedAt,
 		UpdatedAt:        channel.UpdatedAt,
 	}

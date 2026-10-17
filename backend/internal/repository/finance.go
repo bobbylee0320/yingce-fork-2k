@@ -60,11 +60,16 @@ func (r *Repository) GrantCreditsOnce(userID string, entryType model.CreditLedge
 }
 
 func (r *Repository) CreditAccount(userID string) (*model.CreditAccount, error) {
-	account := model.CreditAccount{UserID: userID}
-	if err := r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&account).Error; err != nil {
+	var account model.CreditAccount
+	err := r.db.First(&account, "user_id = ?", userID).Error
+	if err == nil {
+		return &account, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
-	if err := r.db.First(&account, "user_id = ?", userID).Error; err != nil {
+	account = model.CreditAccount{UserID: userID}
+	if err := r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&account).Error; err != nil {
 		return nil, err
 	}
 	return &account, nil
@@ -111,7 +116,11 @@ func (r *Repository) CreditLedgerReferenceExists(referenceKey string) (bool, err
 }
 
 func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *model.BillingOrder, activeTaskLimit int) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
+	return r.Transaction(func(repo *Repository) error {
+		tx := repo.db
+		if err := New(tx).requireExclusiveCanvasAgent(task); err != nil {
+			return err
+		}
 		if err := r.requireActiveLogicalModelForTask(tx, task); err != nil {
 			return err
 		}
@@ -121,19 +130,35 @@ func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *mo
 		if err := reserveBillingOrder(tx, order); err != nil {
 			return err
 		}
-		return tx.Create(task).Error
+		if err := tx.Create(task).Error; err != nil {
+			return err
+		}
+		if task.Operation == "cloud_agent" && task.ProjectID != "" {
+			repo.canvasChanged(task.UserID, task.ProjectID)
+		}
+		return nil
 	})
 }
 
 func (r *Repository) CreateTaskWithActiveLimit(task *model.Task, activeTaskLimit int) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
+	return r.Transaction(func(repo *Repository) error {
+		tx := repo.db
+		if err := New(tx).requireExclusiveCanvasAgent(task); err != nil {
+			return err
+		}
 		if err := r.requireActiveLogicalModelForTask(tx, task); err != nil {
 			return err
 		}
 		if err := enforceActiveTaskLimit(tx, task.UserID, activeTaskLimit); err != nil {
 			return err
 		}
-		return tx.Create(task).Error
+		if err := tx.Create(task).Error; err != nil {
+			return err
+		}
+		if task.Operation == "cloud_agent" && task.ProjectID != "" {
+			repo.canvasChanged(task.UserID, task.ProjectID)
+		}
+		return nil
 	})
 }
 

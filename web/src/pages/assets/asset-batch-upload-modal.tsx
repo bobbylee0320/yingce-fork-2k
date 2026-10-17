@@ -58,7 +58,7 @@ export function AssetBatchUploadModal({ open, defaultFolderId, folders, onClose,
         await Promise.all(Array.from({ length: Math.min(4, pending.length) }, () => worker()));
         await flushAssetStorePersistence();
         try {
-            await saveRemoteUserDataNow();
+            await saveRemoteUserDataNow([]);
         } catch (error) {
             message.warning(localSavedRemotePendingMessage("部分素材已保存在本地", error));
         }

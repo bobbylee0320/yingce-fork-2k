@@ -396,12 +396,13 @@ async function runChunkedUpload(file: Blob, name: string, kind: "image" | "video
         data.append("chunk", blob);
         // raw 二进制直传，与后端按裸 body 逐片落盘对齐（勿设手动 Content-Type，让 axios 处理）。
         await http.put<{ index: number }>(`/resources/uploads/${encodeURIComponent(session.uploadId)}/chunks/${index}`, blob, {
+            timeout: 60_000,
             headers: { "Content-Type": "application/octet-stream" },
             onUploadProgress: onProgress ? ({ loaded }) => onProgress(start + Math.min(loaded, blob.size), file.size) : undefined,
         });
         onProgress?.(Math.min(end, file.size), file.size);
     }
-    const complete = await http.post<{ resource: RemoteResource }>(`/resources/uploads/${encodeURIComponent(session.uploadId)}/complete`);
+    const complete = await http.post<{ resource: RemoteResource }>(`/resources/uploads/${encodeURIComponent(session.uploadId)}/complete`, undefined, { timeout: 60_000 });
     return complete.resource;
 }
 
@@ -434,7 +435,7 @@ export async function importResourceFromUrl(url: string, kind: "image" | "video"
 
 function uploadRequestConfig(idempotencyKey?: string) {
     const value = idempotencyKey?.trim();
-    return value ? { headers: { "X-Idempotency-Key": value } } : undefined;
+    return { timeout: 60_000, ...(value ? { headers: { "X-Idempotency-Key": value } } : {}) };
 }
 
 export function getResource(id: string): Promise<RemoteResource> {
@@ -470,7 +471,7 @@ export function refreshResource(id: string): Promise<RemoteResource> {
     const generation = accessGeneration;
     const scope = getActiveUserScope();
     const cacheKey = resourceCacheKey(id);
-    return http.get<{ resource: RemoteResource }>(`/resources/${encodeURIComponent(id)}`).then((data) => {
+    return http.get<{ resource: RemoteResource }>(`/resources/${encodeURIComponent(id)}`, { timeout: 15_000 }).then((data) => {
         assertResourceRequestCurrent(generation, scope);
         resourceCache.set(cacheKey, data.resource);
         missingResourceIds.delete(cacheKey);
@@ -542,6 +543,7 @@ async function flushResourceAccessBatch() {
         const data = await http.post<{ items: ResourceAccessBatchItem[] }>(
             "/resources/access",
             entries.map((entry) => entry.payload),
+            { timeout: 15_000 },
         );
         await Promise.all(
             entries.map(async (entry, index) => {
@@ -663,7 +665,7 @@ export async function getResourceBlob(storageKey: string) {
     // session-bound, so a Blob read must include it even when the URL is
     // relative to the platform origin.
     const credentials = access.delivery === "platform-local" || access.delivery === "platform-proxy" ? "include" : "omit";
-    const response = await fetch(resolveResourceAccessURL(access.url), { credentials, mode: "cors" });
+    const response = await fetch(resolveResourceAccessURL(access.url), { credentials, mode: "cors", signal: AbortSignal.timeout(60_000) });
     if (!response.ok) throw new Error(`资源读取失败（${response.status}）`);
     return response.blob();
 }

@@ -54,8 +54,9 @@ func (r *Repository) CanvasSnapshot(userID, canvasID, id string) (*model.CanvasS
 // Snapshot creation, reference protection and retention commit with the content.
 func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapshot *model.CanvasSnapshot, resourceIDs, currentResourceIDs []string, cutoff time.Time, limit int, force bool) error {
 	next := *project
-	err := r.db.Transaction(func(tx *gorm.DB) error {
-		if err := New(tx).UpsertCanvasProject(&next); err != nil {
+	err := r.Transaction(func(repo *Repository) error {
+		tx := repo.db
+		if err := repo.UpsertCanvasProject(&next); err != nil {
 			return err
 		}
 		capture := false

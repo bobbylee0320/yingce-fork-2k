@@ -82,7 +82,7 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
     const [search, setSearch] = useState("");
     const debouncedSearch = useDebouncedValue(search, 250);
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(12);
+    const [pageSize, setPageSize] = useState(30);
 
     const [detail, setDetail] = useState<CreationInspiration | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -475,7 +475,7 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                                 );
                             })}
                         </div>
-                        <PaginationBar current={currentPage} pageSize={pageSize} total={visible.length} pageSizeOptions={[12, 24, 48]} alwaysShow onChange={handlePageChange} />
+                        <PaginationBar current={currentPage} pageSize={pageSize} total={visible.length} pageSizeOptions={[30, 60, 90]} alwaysShow onChange={handlePageChange} />
                     </>
                 ) : (
                     <WorkspaceState

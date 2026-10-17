@@ -352,7 +352,8 @@ func whereTimeRange(query *gorm.DB, column string, from, to time.Time) *gorm.DB 
 		return query.Where("1 = 0")
 	}
 	if query.Dialector.Name() == "sqlite" {
-		return query.Where("unixepoch("+column+") >= ? AND unixepoch("+column+") < ?", from.Unix(), to.Unix())
+		epochColumn := column + "_epoch"
+		return query.Where(epochColumn+" >= ? AND "+epochColumn+" < ?", from.Unix(), to.Unix())
 	}
 	return query.Where(column+" >= ? AND "+column+" < ?", from, to)
 }

@@ -25,8 +25,10 @@ type ModelChannel struct {
 	ProxyURL   string `json:"proxyUrl" gorm:"size:512"`
 	ModelsJSON string `json:"modelsJson" gorm:"type:text"`
 	// RetiredModelsJSON 记录已被一个模型家族吸收的上游 SKU，防止目录拉取时重新创建重复记录。
-	RetiredModelsJSON string         `json:"-" gorm:"type:text"`
-	HeadersJSON       string         `json:"-" gorm:"type:text"`
+	RetiredModelsJSON string `json:"-" gorm:"type:text"`
+	HeadersJSON       string `json:"-" gorm:"type:text"`
+	// CatalogProviderID 记录渠道由哪个目录服务商一键接入；空表示自定义渠道。只用于来源展示。
+	CatalogProviderID string         `json:"catalogProviderId" gorm:"size:64;not null;default:'';index"`
 	CreatedAt         time.Time      `json:"createdAt"`
 	UpdatedAt         time.Time      `json:"updatedAt"`
 	DeletedAt         gorm.DeletedAt `json:"-" gorm:"index"`
@@ -61,6 +63,8 @@ type ChannelModel struct {
 	CapabilityConfigJSON         string               `json:"-" gorm:"type:text"`
 	CapabilityVersion            int64                `json:"capabilityVersion"`
 	CapabilityConfig             map[string]any       `json:"capabilityConfig,omitempty" gorm:"-"`
+	// CatalogModelKey 记录来自服务商目录的推荐模型 key，便于排查来源。
+	CatalogModelKey string `json:"catalogModelKey" gorm:"size:120;not null;default:''"`
 	// PriceTiers 是系统渠道模型的价格真相。标量价格仅为旧调用与历史数据兼容，
 	// 新的创作端报价必须按所选规格命中一个价格档。
 	PriceTiers []ChannelModelPriceTier `json:"priceTiers" gorm:"-"`
@@ -118,13 +122,13 @@ type ApiCallLog struct {
 	Source                 string        `json:"source" gorm:"index;size:64"`
 	Capability             string        `json:"capability" gorm:"index;size:32"`
 	Operation              string        `json:"operation" gorm:"size:64"`
-	RequestKind            string        `json:"requestKind" gorm:"index;size:24"`
+	RequestKind            string        `json:"requestKind" gorm:"index;size:24;index:idx_api_logs_kind_status_created,priority:1"`
 	Billable               bool          `json:"billable" gorm:"index"`
 	APIFormat              string        `json:"apiFormat" gorm:"size:24"`
 	Method                 string        `json:"method" gorm:"size:16"`
 	Path                   string        `json:"path"`
 	Model                  string        `json:"model" gorm:"size:120;index:idx_api_logs_model_created,priority:1"`
-	Status                 ApiCallStatus `json:"status" gorm:"index;size:24;index:idx_api_logs_status_created,priority:1"`
+	Status                 ApiCallStatus `json:"status" gorm:"index;size:24;index:idx_api_logs_status_created,priority:1;index:idx_api_logs_kind_status_created,priority:2"`
 	StatusCode             int           `json:"statusCode"`
 	DurationMs             int64         `json:"durationMs"`
 	PollCount              int           `json:"pollCount"`
@@ -149,5 +153,17 @@ type ApiCallLog struct {
 	RequestBody            string        `json:"requestBody,omitempty" gorm:"type:text"`
 	ResponseBody           string        `json:"responseBody,omitempty" gorm:"type:text"`
 	StartedAt              time.Time     `json:"startedAt"`
-	CreatedAt              time.Time     `json:"createdAt" gorm:"index;index:idx_api_logs_user_created,priority:2;index:idx_api_logs_channel_created,priority:2;index:idx_api_logs_model_created,priority:2;index:idx_api_logs_status_created,priority:2"`
+	CreatedAt              time.Time     `json:"createdAt" gorm:"index;index:idx_api_logs_user_created,priority:2;index:idx_api_logs_channel_created,priority:2;index:idx_api_logs_model_created,priority:2;index:idx_api_logs_status_created,priority:2;index:idx_api_logs_kind_status_created,priority:3"`
+	CreatedAtEpoch         int64         `json:"-" gorm:"index:idx_api_logs_created_epoch"`
+}
+
+func (a *ApiCallLog) BeforeCreate(tx *gorm.DB) error {
+	if a.CreatedAtEpoch == 0 {
+		if a.CreatedAt.IsZero() {
+			a.CreatedAtEpoch = time.Now().Unix()
+		} else {
+			a.CreatedAtEpoch = a.CreatedAt.Unix()
+		}
+	}
+	return nil
 }

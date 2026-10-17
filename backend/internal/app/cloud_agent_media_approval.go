@@ -43,6 +43,8 @@ func (s *Service) updateCloudAgentMediaApproval(repo *repository.Repository, run
 		return BadAuthRequest("仅图片或视频生成审批支持修改模型和规格")
 	}
 	args.LogicalModelID, args.ChannelID, args.ChannelModelKey = settings.LogicalModelID, settings.ChannelID, settings.ChannelModelKey
+	// These settings now come directly from the user, not the Agent's proposal.
+	args.ConfigurationChange = nil
 	args.Size, args.ImageResolution, args.Quality = settings.Size, settings.ImageResolution, settings.Quality
 	args.ImageParameters = settings.ImageParameters
 	if args.Mode == "video" {
@@ -86,6 +88,18 @@ func (s *Service) updateCloudAgentMediaApproval(repo *repository.Repository, run
 	if err := validateCloudAgentResolvedMediaOptions(requested, resolved); err != nil {
 		return err
 	}
+	if err := applyCloudAgentResolvedMediaDefaults(&req, plan, task); err != nil {
+		return err
+	}
+	if err := validateCloudAgentMediaBudget(plan.Args, state); err != nil {
+		return err
+	}
+	args = plan.Args
+	raw, err = json.Marshal(args)
+	if err != nil {
+		return err
+	}
+	call.Function.Arguments = string(raw)
 	name, err := s.cloudAgentMediaModelName(args)
 	if err != nil {
 		return err
@@ -149,6 +163,13 @@ func validateCloudAgentResolvedMediaOptions(requested, resolvedInput map[string]
 	}
 	for _, key := range []string{"size", "imageResolution", "videoSeconds", "vquality", "quality", "count", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload"} {
 		requestedValue := stringValue(requested[key])
+		if stringValue(resolvedInput["mode"]) == "image" && (key == "quality" || key == "imageResolution") && inactiveCapabilityOptionValue(key, requestedValue) {
+			continue
+		}
+		// 图片目录保留比例，任务配置保存按预设换算的像素；审批可以提交任一种表达。
+		if key == "size" && stringValue(resolvedInput["mode"]) == "image" && requestedValue != "" && strings.EqualFold(requestedValue, stringValue(resolvedConfig[key])) {
+			continue
+		}
 		if key == "quality" && requestedValue != "" {
 			if _, declared := resolvedOptions[key]; !declared && !strings.EqualFold(requestedValue, stringValue(resolvedOptions["imageResolution"])) {
 				return creationConflict("所选图片模型未声明质量参数，请使用模型声明的图片分辨率或质量选项")

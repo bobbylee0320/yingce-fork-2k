@@ -488,6 +488,9 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 				if err := applyCloudAgentResolvedMediaDefaults(&req, prepared, preparedTask); err != nil {
 					return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 				}
+				if err := validateCloudAgentMediaBudget(prepared.Args, state); err != nil {
+					return s.cloudAgentMediaError(run, state, "admission", false, false, err)
+				}
 				mediaRequest, plan = req, prepared
 			}
 			modelName, err = s.cloudAgentMediaModelName(plan.Args)

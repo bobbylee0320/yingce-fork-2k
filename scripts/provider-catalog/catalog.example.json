@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2025-06-18T08:00:00+08:00",
+  "tags": [
+    { "id": "official", "label": "官方直连", "tone": "blue" },
+    { "id": "relay", "label": "中转站", "tone": "violet" },
+    { "id": "video", "label": "视频", "tone": "amber" },
+    { "id": "image", "label": "图片", "tone": "pink" },
+    { "id": "text", "label": "文本", "tone": "cyan" },
+    { "id": "cheap", "label": "低价", "tone": "green" }
+  ],
+  "providers": [
+    {
+      "id": "example-relay",
+      "name": "示例中转站",
+      "tags": ["relay", "video", "text", "cheap"],
+      "logo": "/v1/logos/example-relay.svg",
+      "summary": "OpenAI 兼容接口，视频按次计费，文本按 Token 计费",
+      "website": "https://relay.example.com",
+      "rank": 10,
+      "startsAt": "2025-06-01T00:00:00+08:00",
+      "endsAt": "2025-07-01T00:00:00+08:00",
+      "connection": {
+        "baseUrl": "https://api.relay.example.com/v1"
+      },
+      "keyGuide": {
+        "url": "https://relay.example.com/register?aff=yingce",
+        "steps": ["注册并完成实名", "控制台 → 令牌 → 新建令牌", "复制 sk- 开头的密钥"],
+        "keyPattern": "^sk-[A-Za-z0-9]{20,}$",
+        "promo": "通过影策注册首充送 10 元"
+      },
+      "models": [
+        {
+          "modelKey": "seedance-1-pro",
+          "providerModelKey": "doubao-seedance-1-0-pro",
+          "displayName": "Seedance 1.0 Pro",
+          "capability": "video",
+          "protocol": "newapi",
+          "description": "1080p 首尾帧，适合短剧镜头",
+          "priceTiers": [
+            { "selector": { "operation": "text_to_video", "vquality": "720p", "videoSeconds": "5" }, "billingMode": "fixed_request", "cost": 0.8 },
+            { "selector": { "operation": "text_to_video", "vquality": "1080p", "videoSeconds": "5" }, "billingMode": "fixed_request", "cost": 1.2 }
+          ]
+        },
+        {
+          "modelKey": "deepseek-v3",
+          "displayName": "DeepSeek V3",
+          "capability": "text",
+          "protocol": "chat-completion",
+          "priceTiers": [
+            { "billingMode": "token", "inputPerMillion": 2, "outputPerMillion": 8, "cachedPerMillion": 0.5 }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -78,10 +78,16 @@ export function suppressBeforeUnloadGuard(durationMs = 3_000) {
     beforeUnloadSuppressedUntil = Date.now() + Math.max(0, durationMs);
 }
 
+export function hasUnpersistedCanvasInput(projects: readonly Pick<SyncProjectProgress, "localPhase">[]) {
+    return projects.some((item) => item.localPhase === "pending" || item.localPhase === "error");
+}
+
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     window.addEventListener("beforeunload", (event) => {
         if (Date.now() < beforeUnloadSuppressedUntil) return;
-        if (useSyncProgressStore.getState().isAnySyncing()) {
+        // Cloud recovery must not trap navigation when the local draft is safe.
+        // Only genuinely unpersisted local input warrants a leave-page warning.
+        if (hasUnpersistedCanvasInput(Object.values(useSyncProgressStore.getState().syncingProjects))) {
             event.preventDefault();
             event.returnValue = "画布正在同步至云端，请勿关闭页面。";
             return "画布正在同步至云端，请勿关闭页面。";

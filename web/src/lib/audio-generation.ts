@@ -133,6 +133,7 @@ export function normalizeAudioFormatValue(value: string) {
 }
 
 export function normalizeAudioSpeedValue(value: string) {
+    if (!String(value ?? "").trim()) return "1";
     const speed = Number(value);
     if (!Number.isFinite(speed)) return "1";
     return String(Math.max(0.25, Math.min(4, Number(speed.toFixed(2)))));

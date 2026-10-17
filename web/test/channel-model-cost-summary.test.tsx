@@ -45,11 +45,11 @@ const item: ChannelModel = {
 };
 const render = (tiers: ChannelModelPriceTier[], capability: ChannelModel["capability"] = "image") => renderToStaticMarkup(<ChannelModelCostSummary item={{ ...item, capability, priceTiers: tiers }} />);
 
-test("fixed and per-second specifications show cost, sale and margin", () => {
+test("fixed and per-second specifications show cost, sale and markup", () => {
     const fixed = render([tier]);
     expect(fixed).toContain("默认规格");
     expect(fixed).toContain("1.25 / 99");
-    expect(fixed).toContain("积分 / 次 · 利润率 98.74%");
+    expect(fixed).toContain("积分 / 次 · 加价 7,820%");
     expect(render([{ ...tier, billingMode: "per_second" }])).toContain("积分 / 秒");
 });
 
@@ -73,14 +73,14 @@ test("missing and unconfigured costs never fall back to sale prices or zero", ()
         const html = render([{ ...tier, costPricing }]);
         expect(html).toContain("未配置成本");
         expect(html).toContain("未配置成本 / 99");
-        expect(html).toContain("利润率 —");
+        expect(html).toContain("加价 —");
     }
 });
 
 test("explicit free costs remain zero even if sale pricing is unconfigured", () => {
     const html = renderToStaticMarkup(<ChannelModelCostSummary item={{ ...item, priceConfigured: false, priceTiers: [{ ...tier, priceConfigured: false, costPricing: { ...tier.costPricing!, unitPriceMicrocredits: 0 } }] }} />);
     expect(html).toContain("0 / 未配置售价");
-    expect(html).toContain("利润率 —");
+    expect(html).toContain("加价 —");
     expect(html).not.toContain("未配置成本");
 });
 
@@ -88,7 +88,7 @@ test("invalid or missing numeric costs are not silently displayed as free", () =
     for (const unitPriceMicrocredits of [NaN, Infinity, -1, undefined]) {
         const html = render([{ ...tier, costPricing: { ...tier.costPricing!, unitPriceMicrocredits: unitPriceMicrocredits as number } }]);
         expect(html).toContain("— / 99");
-        expect(html).toContain("利润率 —");
+        expect(html).toContain("加价 —");
     }
 });
 
@@ -107,13 +107,13 @@ test("disabled tiers are excluded and empty costs are explicit", () => {
 
 test("model list uses the cost component without gating it on user prices", async () => {
     const source = await Bun.file(new URL("../src/pages/admin/components/channel-model-manager.tsx", import.meta.url)).text();
-    expect(source).toContain('title: "规格成本价 / 销售价 / 利润率"');
+    expect(source).toContain('title: "规格成本价 / 销售价 / 加价"');
     expect(source).toContain("<ChannelModelCostSummary item={item} />");
     expect(source).not.toContain("billingSummary(item)");
 });
 
-test("zero revenue is undefined, free costs have 100% margin and losses stay negative", () => {
-    expect(render([{ ...tier, unitPriceMicrocredits: 0 }])).toContain("利润率 —");
-    expect(render([{ ...tier, unitPriceMicrocredits: 1_000_000 }])).toContain("利润率 -25%");
-    expect(render([{ ...tier, costPricing: { ...tier.costPricing!, unitPriceMicrocredits: 0 } }])).toContain("利润率 100%");
+test("zero cost is undefined and losses stay negative", () => {
+    expect(render([{ ...tier, unitPriceMicrocredits: 0 }])).toContain("加价 -100%");
+    expect(render([{ ...tier, unitPriceMicrocredits: 1_000_000 }])).toContain("加价 -20%");
+    expect(render([{ ...tier, costPricing: { ...tier.costPricing!, unitPriceMicrocredits: 0 } }])).toContain("加价 —");
 });

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { changeAgentPanelLayout, clampAgentPanelLayout, defaultAgentPanelLayout, restoreAgentPanelLayout } from "@/lib/canvas/agent-panel-layout";
 import { agentErrorPresentation, agentSubmissionErrorTitle } from "@/lib/canvas/agent-error-presentation";
 import { ApiError } from "@/services/api/request";
@@ -50,6 +52,30 @@ describe("Agent window layout", () => {
     });
 });
 
+describe("Agent submission sync preflight contract", () => {
+    it("scopes submit and approval saves to the active canvas before Agent POST", () => {
+        const source = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-cloud-agent-panel.tsx"), "utf8");
+        expect(source.match(/await prepareCanvasForCloudAction\(canvasId\)/g)).toHaveLength(2);
+        expect(source).toContain('if (decision === "approve") {');
+        expect(source).not.toContain("cloudNodeIds");
+        expect(source).toContain("submitDisabled={otherAgentRunning");
+        expect(source).toContain("重新读取记录");
+        expect(source).toContain("requestSent = true;\n            const result = submission.parentRunId ? await sendAgentMessage");
+        expect(source).toContain("agentSubmissionErrorTitle(cause, accepted, requestSent)");
+    });
+
+    it("reports a sync failure as unsent while keeping POST ambiguity idempotent", () => {
+        expect(agentSubmissionErrorTitle(new Error("canvas sync failed"), false, false)).toBe("消息尚未发送，输入已保留");
+        expect(agentSubmissionErrorTitle(new TypeError("network failed"), false, true)).toBe("未收到服务端确认；重试将核对原请求，不重复创建");
+    });
+
+    it("syncs project assets without syncing any canvas", () => {
+        const source = readFileSync(resolve(import.meta.dir, "../src/services/project-asset-sync.ts"), "utf8");
+        expect(source).toContain("await saveRemoteUserDataNow([]);");
+        expect(source).not.toContain("await saveRemoteUserDataNow();");
+    });
+});
+
 describe("Agent error semantics", () => {
     it("uses HTTP status rather than matching error wording", () => {
         expect(agentErrorPresentation(new ApiError("Not found", { status: 404 })).title).toBe("Agent 接口或资源不存在");
@@ -71,6 +97,7 @@ describe("Agent error semantics", () => {
     it("distinguishes confirmed server failures from missing responses", () => {
         expect(agentSubmissionErrorTitle(new ApiError("系统处理失败", { status: 500 }), false)).toBe("服务端已返回错误；重试将核对原请求，不重复创建");
         expect(agentSubmissionErrorTitle(new ApiError("参数错误", { status: 400 }), false)).toBe("请求已被服务端拒绝");
+        expect(agentSubmissionErrorTitle(new TypeError("network failed"), false, false)).toBe("消息尚未发送，输入已保留");
         expect(agentSubmissionErrorTitle(new TypeError("network failed"), false)).toBe("未收到服务端确认；重试将核对原请求，不重复创建");
         expect(agentSubmissionErrorTitle(undefined, true)).toBe("运行已接收，但本地提交记录清理失败");
     });

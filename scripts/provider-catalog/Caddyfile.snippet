@@ -1,0 +1,10 @@
+# 追加到 156.225.18.215 的 /etc/caddy/Caddyfile，然后 `caddy validate` + `systemctl reload caddy`。
+# 目录文件：/srv/yingce-catalog/v1/catalog.json（root 可写，644）
+# Logo：    /srv/yingce-catalog/v1/logos/*.svg
+ai.yingce.tv {
+	encode zstd gzip
+	root * /srv/yingce-catalog
+	header /v1/catalog.json Cache-Control "public, max-age=60"
+	header /v1/catalog.json Content-Type "application/json; charset=utf-8"
+	file_server
+}

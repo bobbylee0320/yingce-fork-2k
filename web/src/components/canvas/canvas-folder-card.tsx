@@ -39,7 +39,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
         try {
             await loadCanvasProjectForEditing(project.id);
             renameProject(project.id, editingTitle);
-            await saveRemoteUserDataNow();
+            await saveRemoteUserDataNow(project.id);
         } catch (error) { message.error(error instanceof Error ? error.message : "重命名失败"); }
     };
     const exportProject = async () => {

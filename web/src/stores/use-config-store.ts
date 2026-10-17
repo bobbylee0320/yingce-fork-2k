@@ -89,6 +89,8 @@ export type ModelChannel = {
     hasSecretKey?: boolean;
     concurrencyLimit?: number;
     proxyUrl?: string;
+    // 仅管理端：渠道由哪个目录服务商一键接入，空表示自定义渠道。
+    catalogProviderId?: string;
     modelCosts?: Array<{
         model: string;
         displayName?: string;

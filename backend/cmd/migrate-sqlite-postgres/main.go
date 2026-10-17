@@ -444,6 +444,7 @@ func migrations() []tableMigration {
 		migrateTable[model.ProductionTaskLink]("production_task_links"),
 		migrateTable[model.CanvasProject]("canvas_projects"),
 		migrateTable[model.CanvasMutationReceipt]("canvas_mutation_receipts"),
+		migrateTable[model.CanvasEditLease]("canvas_edit_leases"),
 		migrateTable[model.CanvasSnapshot]("canvas_snapshots"),
 		migrateTable[model.CanvasSnapshotResource]("canvas_snapshot_resources"),
 		migrateTable[model.CanvasShare]("canvas_shares"),

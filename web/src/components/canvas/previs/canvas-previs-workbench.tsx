@@ -565,7 +565,7 @@ export function CanvasPrevisWorkbench({
         const asset = useAssetStore.getState().assets.find((item): item is ModelAsset => item.id === assetId && item.kind === "model");
         if (asset) addModelAsset(asset);
         try {
-            await saveRemoteUserDataNow();
+            await saveRemoteUserDataNow([]);
             message.success("3D 模型已加入场景和素材库");
         } catch (error) {
             message.warning(localSavedRemotePendingMessage("3D 模型已加入场景和本机素材库", error));

@@ -1,0 +1,176 @@
+.canvas-collaboration-layer {
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    pointer-events: none;
+    z-index: var(--z-node-active);
+    --collaboration-color: var(--foreground-muted);
+    --collaboration-surface: var(--popover);
+}
+
+.canvas-collaboration-graphics {
+    position: absolute;
+    inset: 0;
+    contain: strict;
+    overflow: clip;
+}
+.canvas-collaboration-device--0 {
+    --collaboration-color: var(--foreground-muted);
+}
+.canvas-collaboration-device--1 {
+    --collaboration-color: var(--cn-type-audio);
+}
+.canvas-collaboration-device--2 {
+    --collaboration-color: var(--cn-type-script);
+}
+.canvas-collaboration-device--3 {
+    --collaboration-color: var(--cn-type-frame);
+}
+.canvas-collaboration-device--4 {
+    --collaboration-color: var(--cn-type-character);
+}
+.canvas-collaboration-device--5 {
+    --collaboration-color: var(--cn-type-drawing);
+}
+.canvas-collaboration-device--6 {
+    --collaboration-color: var(--cn-type-video);
+}
+
+.canvas-collaboration-members {
+    position: absolute;
+    top: var(--space-3);
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: auto;
+    color: var(--foreground);
+    font-size: var(--fs-caption);
+}
+
+.canvas-collaboration-members > summary {
+    display: flex;
+    min-height: 30px;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--r-full);
+    background: var(--collaboration-surface);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.canvas-collaboration-members > summary::-webkit-details-marker {
+    display: none;
+}
+.canvas-collaboration-members > summary > svg {
+    flex: 0 0 auto;
+    color: var(--muted-foreground);
+}
+.canvas-collaboration-members > summary:hover {
+    background: color-mix(in srgb, var(--foreground) 6%, var(--collaboration-surface));
+}
+.canvas-collaboration-members > summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: var(--space-1);
+}
+.canvas-collaboration-member-dots {
+    display: flex;
+    gap: var(--space-half);
+}
+.canvas-collaboration-member-dots > i {
+    width: var(--space-1-half);
+    height: var(--space-1-half);
+    border-radius: var(--r-full);
+    background: var(--collaboration-color);
+}
+.canvas-collaboration-member-panel {
+    position: absolute;
+    top: calc(100% + var(--space-2));
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(240px, calc(100vw - var(--space-8)));
+    padding: var(--space-3);
+    border-radius: var(--r-xl);
+    background: var(--collaboration-surface);
+    box-shadow: var(--elevation-overlay);
+}
+.canvas-collaboration-member-heading {
+    padding: var(--space-1) var(--space-1) var(--space-2);
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+}
+.canvas-collaboration-member-panel ul {
+    max-height: 240px;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+.canvas-collaboration-member-panel li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 36px;
+    padding: var(--space-1);
+}
+.canvas-collaboration-member-avatar {
+    display: grid;
+    width: var(--space-6);
+    height: var(--space-6);
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--collaboration-color) 14%, transparent);
+    color: color-mix(in srgb, var(--collaboration-color) 70%, var(--foreground));
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+.canvas-collaboration-member-panel small {
+    margin-left: auto;
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+}
+.canvas-collaboration-member-panel p {
+    margin: var(--space-2) var(--space-1) 0;
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+}
+
+.canvas-collaboration-cursor {
+    position: absolute;
+    top: 0;
+    left: 0;
+    color: var(--collaboration-color);
+    will-change: transform;
+}
+.canvas-collaboration-cursor[hidden] {
+    display: none;
+}
+.canvas-collaboration-cursor > svg {
+    display: block;
+    fill: currentColor;
+    stroke: var(--collaboration-surface);
+    stroke-width: 1.5;
+}
+.canvas-collaboration-cursor-label {
+    position: absolute;
+    top: var(--space-4);
+    left: var(--space-3);
+    padding: var(--space-half) var(--space-2);
+    border-radius: var(--r-full);
+    background: var(--collaboration-surface);
+    color: color-mix(in srgb, var(--collaboration-color) 65%, var(--foreground));
+    font-size: var(--fs-label);
+    font-weight: 500;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+.canvas-collaboration-drag {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border: 1px solid var(--collaboration-color);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--collaboration-color) 5%, transparent);
+}

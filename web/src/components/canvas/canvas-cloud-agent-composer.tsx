@@ -178,6 +178,7 @@ export function AgentChatComposer({
     attachments = [],
     disabled,
     sending,
+    submitDisabled,
     running,
     placeholder,
     theme,
@@ -198,6 +199,7 @@ export function AgentChatComposer({
     attachments?: CloudAgentChatAttachment[];
     disabled?: boolean;
     sending?: boolean;
+    submitDisabled?: boolean;
     running?: boolean;
     placeholder: string;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -236,7 +238,7 @@ export function AgentChatComposer({
     const skillReferences = useMemo(() => buildSkillMentionReferences(availableSlashSkills), [availableSlashSkills]);
     const composerReferences = useMemo(() => [...references, ...skillReferences, ...attachmentReferences].filter((reference, index, all) => all.findIndex((item) => item.id === reference.id) === index), [attachmentReferences, references, skillReferences]);
     const canStop = Boolean(running && onStop);
-    const canSubmit = !disabled && !sending && Boolean(prompt.trim() || attachments.length);
+    const canSubmit = !disabled && !submitDisabled && !sending && Boolean(prompt.trim() || attachments.length);
     const reducedMotion = useReducedMotion();
     const activeSlashIndex = Math.min(Math.max(slashIndex, 0), Math.max(slashCandidates.length - 1, 0));
 

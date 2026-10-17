@@ -275,7 +275,7 @@ func TestValidateCanvasMediaAssetsRejectsMismatchedAsset(t *testing.T) {
 	raw := json.RawMessage(`{"nodes":[{"type":"image","metadata":{"assetId":"asset-wrong","storageKey":"resource:resource-canvas"}}]}`)
 
 	err := svc.validateCanvasMediaAssets("user-1", raw)
-	if err == nil || !strings.Contains(err.Error(), "不一致") {
+	if appErr, ok := err.(*AppError); !ok || appErr.Reason != "canvas_media_assets_pending" {
 		t.Fatalf("validateCanvasMediaAssets() error = %v", err)
 	}
 }

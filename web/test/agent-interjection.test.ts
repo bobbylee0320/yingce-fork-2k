@@ -15,8 +15,11 @@ test("运行中不再锁死输入框，发送走插话而不是新建轮次", as
     // 乐观落进时间线时带插话标记，与「开新一轮」的消息在界面上区分开
     expect(panel).toContain('interjection: "sent"');
 
-    // 输入框的禁用条件里不能再有 running —— 只保留「连不上事件流」「历史/待确认未水合」这类真不能发的状态
-    expect(panel).toContain('disabled={Boolean(run && connectionStatus !== "connected")');
+    // 连接或记录未确认仅禁止发送，不冻结消息草稿输入。
+    expect(panel).toContain('submitDisabled={otherAgentRunning || Boolean(run && connectionStatus !== "connected")');
+    const composer = panel.match(/<AgentChatComposer[\s\S]*?submitDisabled=\{([^\n]+)\}/)?.[1];
+    expect(composer).toBeDefined();
+    expect(composer).not.toMatch(/\bbusy\b|\brunning\b/);
     // 停止按钮由 running 驱动，发送按钮由我们自己的请求驱动，两者不再互斥
     expect(panel).toContain("sending={busy}");
     expect(panel).toContain("running={running}");
@@ -34,7 +37,7 @@ test("输入框运行中同时给出「发送（插话）」与「停止」", as
 
     // 关键改动：canStop 不再等于 sending —— 否则运行中两个动作只能二选一
     expect(composer).toContain("const canStop = Boolean(running && onStop);");
-    expect(composer).toContain("const canSubmit = !disabled && !sending && Boolean(prompt.trim() || attachments.length);");
+    expect(composer).toContain("const canSubmit = !disabled && !submitDisabled && !sending && Boolean(prompt.trim() || attachments.length);");
     expect(composer).not.toContain("const canStop = Boolean(sending && onStop);");
     expect(composer).toContain('aria-label="停止本轮"');
     // 插话/未送达要有可见标记

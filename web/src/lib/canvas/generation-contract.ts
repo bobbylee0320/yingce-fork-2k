@@ -103,7 +103,7 @@ export function readNodeGenerationSpec(node: Pick<CanvasNodeData, "type" | "meta
             if (!(field.modes as readonly string[]).includes(mode)) continue;
             if (!(field.node in metadata)) continue;
             const value = metadata[field.node];
-            if (value === undefined || value === null || value === "") delete options[field.name];
+            if (value === undefined || value === null || (value === "" && field.name !== "audioVoice")) delete options[field.name];
             else options[field.name] = optionValue(value, field.kind, field.node);
         }
     }
@@ -166,7 +166,7 @@ export function specFromConfig(mode: GenerationSpec["mode"], prompt: string, con
     for (const field of GENERATION_OPTION_FIELDS) {
         if (!(field.modes as readonly string[]).includes(mode)) continue;
         const value = config[field.task as keyof AiConfig];
-        if (value !== undefined && value !== null && value !== "") options[field.name] = optionValue(value, field.kind, field.task);
+        if (value !== undefined && value !== null && (value !== "" || field.name === "audioVoice")) options[field.name] = optionValue(value, field.kind, field.task);
     }
     return validateGenerationSpec({ version: GENERATION_CONTRACT_VERSION, mode, prompt, modelSelection: selectionForConfig(config), options, referenceBindings, textInputMode });
 }
@@ -193,7 +193,7 @@ export function synchronizeGenerationSpec(node: CanvasNodeData, patch: Partial<C
     for (const field of GENERATION_OPTION_FIELDS) {
         if (!(field.modes as readonly string[]).includes(current.mode) || !Object.prototype.hasOwnProperty.call(patch, field.node)) continue;
         const value = patch[field.node as keyof CanvasNodeMetadata];
-        if (value === undefined || value === null || value === "") delete next.options[field.name as keyof Options];
+        if (value === undefined || value === null || (value === "" && field.name !== "audioVoice")) delete next.options[field.name as keyof Options];
         else next.options[field.name as keyof Options] = optionValue(value, field.kind, field.node) as never;
     }
     if (Object.prototype.hasOwnProperty.call(patch, "composerContent") && typeof patch.composerContent === "string") next.prompt = patch.composerContent;

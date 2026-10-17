@@ -6,9 +6,10 @@ export function formatModelPrice(value: number | undefined) {
     return validPrice(value) ? (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 }) : "—";
 }
 
-export function formatModelMargin(cost: number | undefined, sale: number | undefined) {
-    if (!validPrice(cost) || !validPrice(sale) || sale === 0) return "—";
-    return `${(((sale - cost) * 100) / sale).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}%`;
+// 加价率 = (售价 − 成本) ÷ 成本；成本为 0 时无意义。
+export function formatModelMarkup(cost: number | undefined, sale: number | undefined) {
+    if (!validPrice(cost) || !validPrice(sale) || cost === 0) return "—";
+    return `${(((sale - cost) * 100) / cost).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}%`;
 }
 
 export function modelPriceFields(tier: ChannelModelPriceTier, capability: ChannelModel["capability"]) {
@@ -21,13 +22,14 @@ export function modelPriceFields(tier: ChannelModelPriceTier, capability: Channe
     ];
 }
 
-export function previewModelRepricing(items: ChannelModel[], marginPercent: number | null, decimalPlaces = 2): ChannelModel[] {
-    if (marginPercent === null || !Number.isFinite(marginPercent) || marginPercent < 0 || marginPercent > 99.99 || Math.abs(marginPercent * 100 - Math.round(marginPercent * 100)) > 1e-8) {
-        throw new Error("请输入 0% 到 99.99% 的目标利润率，最多两位小数");
+// 售价 = 成本 × (1 + 加价率)，按所选小数位四舍五入。
+export function previewModelRepricing(items: ChannelModel[], markupPercent: number | null, decimalPlaces = 2): ChannelModel[] {
+    if (markupPercent === null || !Number.isFinite(markupPercent) || markupPercent < 0 || markupPercent > 1000 || Math.abs(markupPercent * 100 - Math.round(markupPercent * 100)) > 1e-8) {
+        throw new Error("请输入 0% 到 1000% 的加价率，最多两位小数");
     }
     if (!items.length || items.length > 100) throw new Error("请选择 1 到 100 个模型");
     if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 6) throw new Error("请选择保留 0 到 6 位小数");
-    const denominator = BigInt(10_000 - Math.round(marginPercent * 100));
+    const multiplier = BigInt(10_000 + Math.round(markupPercent * 100));
     const quantum = BigInt(10 ** (6 - decimalPlaces));
     return items.map((item) => {
         if (!item.priceTiers.some((tier) => tier.enabled)) throw new Error(`${item.displayName || item.modelKey} 没有已启用规格`);
@@ -42,8 +44,8 @@ export function previewModelRepricing(items: ChannelModel[], marginPercent: numb
                     const cost = tier.costPricing[key];
                     if (!validPrice(cost) || cost > 1_000_000_000_000) throw new Error(`${name}：成本价无效`);
                     // Round once at the selected credit precision, with exact half-up ties.
-                    const numerator = BigInt(cost) * BigInt(10_000);
-                    const divisor = denominator * quantum;
+                    const numerator = BigInt(cost) * multiplier;
+                    const divisor = BigInt(10_000) * quantum;
                     const sale = Number(((numerator * BigInt(2) + divisor) / (divisor * BigInt(2))) * quantum);
                     if (!validPrice(sale) || (tier.billingMode === "token" && sale > 1_000_000_000_000)) throw new Error(`${name}：调整后售价超过上限`);
                     next[key] = sale;

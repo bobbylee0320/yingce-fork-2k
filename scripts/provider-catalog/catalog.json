@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-16T12:21:44+08:00",
+  "tags": [
+    {
+      "id": "video",
+      "label": "视频",
+      "tone": "blue"
+    }
+  ],
+  "providers": [
+    {
+      "id": "metaso",
+      "name": "秘塔",
+      "tags": [
+        "video"
+      ],
+      "logo": "/v1/logos/metaso.svg",
+      "summary": "MiniMax H3 全模态视频生成",
+      "website": "https://metaso.cn",
+      "rank": 10,
+      "startsAt": "2026-10-16T12:21:44+08:00",
+      "endsAt": "2027-10-16T12:21:44+08:00",
+      "connection": {
+        "baseUrl": "https://metaso.cn/api/minimax"
+      },
+      "keyGuide": {
+        "url": "https://metaso.cn",
+        "steps": [
+          "登录秘塔官网，进入 API 入口",
+          "获取 API Key，复制后粘贴到左侧"
+        ]
+      },
+      "models": [
+        {
+          "modelKey": "MiniMax-H3",
+          "providerModelKey": "MiniMax-H3",
+          "displayName": "MiniMax",
+          "channelLabel": "MiniMax-H3",
+          "icon": "minimax",
+          "tags": [
+            {
+              "text": "满血H3模型",
+              "color": "purple"
+            },
+            {
+              "text": "最快30秒生成",
+              "color": "blue"
+            }
+          ],
+          "description": "支持480P、768P视频30秒生成，2K视频15秒生成",
+          "capability": "video",
+          "protocol": "minimax-video",
+          "capabilityConfig": {
+            "version": 1,
+            "video": {
+              "references": {
+                "promptMaxChars": 8000,
+                "minImages": 0,
+                "maxImages": 9,
+                "maxImageBytes": 31457280,
+                "maxVideos": 3,
+                "maxVideoBytes": 52428800,
+                "maxVideoDurationSeconds": 15,
+                "maxAudios": 3,
+                "maxAudioBytes": 15728640,
+                "maxAudioDurationSeconds": 15
+              },
+              "duration": {
+                "selection": "range",
+                "min": 4,
+                "max": 30,
+                "step": 1,
+                "default": 15
+              },
+              "ratios": [
+                "adaptive",
+                "21:9",
+                "16:9",
+                "4:3",
+                "1:1",
+                "3:4",
+                "9:16"
+              ],
+              "defaultRatio": "16:9",
+              "resolutions": [
+                "480P",
+                "768P",
+                "2K"
+              ],
+              "defaultResolution": "768P",
+              "generateAudio": {
+                "supported": false,
+                "default": false
+              },
+              "watermark": {
+                "supported": true,
+                "default": false
+              },
+              "operations": [
+                "text_to_video",
+                "image_to_video",
+                "extend",
+                "audio_to_video",
+                "reference_to_video"
+              ],
+              "defaultOperation": "text_to_video"
+            }
+          },
+          "priceTiers": [
+            {
+              "selector": {
+                "vquality": "480p"
+              },
+              "billingMode": "per_second",
+              "cost": 0.075
+            },
+            {
+              "selector": {
+                "vquality": "768p"
+              },
+              "billingMode": "per_second",
+              "cost": 0.09
+            },
+            {
+              "selector": {
+                "vquality": "1440p"
+              },
+              "billingMode": "per_second",
+              "cost": 0.18
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

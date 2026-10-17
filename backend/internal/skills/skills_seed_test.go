@@ -12,6 +12,22 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestDoubaoAudioBuiltinUsesSupportedCategory(t *testing.T) {
+	packages, err := loadBuiltinSkillPackages(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range packages {
+		if item.skill.ID == "doubao-audio-prompt" {
+			if item.skill.Tag != "creative" {
+				t.Fatalf("doubao audio category = %q, want creative", item.skill.Tag)
+			}
+			return
+		}
+	}
+	t.Fatal("doubao-audio-prompt builtin is missing")
+}
+
 // 总纲名录里写死的 `cards/…` 路径会被 Agent 直接交给 skill_read_file；
 // 包里缺卡时只会在运行时报「读取参考资料失败」，所以在这里提前拦住。
 func TestBuiltinPackagesShipReferencedCards(t *testing.T) {

@@ -191,7 +191,19 @@ func (r *Repository) ResourceReferenceSnapshotExcludingAssets(userID string, exc
 	}
 
 	var tasks []model.Task
-	if err := r.db.Select("id", "prompt", "status", "input_json", "result_json").Where("user_id = ?", userID).Find(&tasks).Error; err != nil {
+	taskQuery := r.db.Select("id", "prompt", "status", "input_json", "result_json").Where("user_id = ?", userID)
+	if len(resourceIDs) <= 100 {
+		var conditions []string
+		var args []interface{}
+		for _, rid := range resourceIDs {
+			conditions = append(conditions, "input_json LIKE ? OR result_json LIKE ?")
+			args = append(args, "%"+rid+"%", "%"+rid+"%")
+		}
+		if len(conditions) > 0 {
+			taskQuery = taskQuery.Where(strings.Join(conditions, " OR "), args...)
+		}
+	}
+	if err := taskQuery.Find(&tasks).Error; err != nil {
 		return snapshot, err
 	}
 	taskStatuses := make(map[string]model.TaskStatus, len(tasks))
@@ -216,7 +228,19 @@ func (r *Repository) ResourceReferenceSnapshotExcludingAssets(userID string, exc
 	}
 
 	var taskLogs []model.TaskLog
-	if err := r.db.Select("id", "task_id", "message", "payload").Where("user_id = ?", userID).Find(&taskLogs).Error; err != nil {
+	taskLogQuery := r.db.Select("id", "task_id", "message", "payload").Where("user_id = ?", userID)
+	if len(resourceIDs) <= 100 {
+		var conditions []string
+		var args []interface{}
+		for _, rid := range resourceIDs {
+			conditions = append(conditions, "payload LIKE ?")
+			args = append(args, "%"+rid+"%")
+		}
+		if len(conditions) > 0 {
+			taskLogQuery = taskLogQuery.Where(strings.Join(conditions, " OR "), args...)
+		}
+	}
+	if err := taskLogQuery.Find(&taskLogs).Error; err != nil {
 		return snapshot, err
 	}
 	for _, taskLog := range taskLogs {

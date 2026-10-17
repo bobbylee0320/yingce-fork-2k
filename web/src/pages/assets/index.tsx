@@ -57,7 +57,7 @@ const kindOptions = [
     { label: "视频", value: "video" },
     { label: "音频", value: "audio" },
     { label: "3D 模型", value: "model" },
-    { label: "角色", value: "entity" },
+    { label: "资产设定", value: "entity" },
 ];
 
 const categoryOptions = [{ label: "全部分类", value: "all" }, ...ASSET_CATEGORY_OPTIONS];
@@ -366,7 +366,7 @@ export default function AssetsPage() {
 
         await flushAssetStorePersistence();
         try {
-            await saveRemoteUserDataNow();
+            await saveRemoteUserDataNow([]);
             await invalidateAssetLibrary();
             message.success(editingAsset ? "素材已更新" : "素材已保存");
         } catch (error) {
@@ -468,7 +468,7 @@ export default function AssetsPage() {
             for (const id of assetIds) updateAsset(id, { status });
             await flushAssetStorePersistence();
             locallyUpdated = true;
-            await saveRemoteUserDataNow();
+            await saveRemoteUserDataNow([]);
             setSelectedIds((current) => current.filter((id) => !assetIds.includes(id)));
             setArchivingAsset(null);
             setBatchArchiveOpen(false);

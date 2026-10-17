@@ -91,7 +91,11 @@ func TestCloudAgentMediaToolsDeclareExclusiveModelSelection(t *testing.T) {
 			t.Fatalf("incomplete model selection schema: %#v", parameters)
 		}
 		oneOf, ok := parameters["oneOf"].([]map[string]any)
-		if !ok || len(oneOf) != 2 {
+		wantBranches := 2
+		if function["name"] == "generate_media" {
+			wantBranches = 3 // omission is resolved only from a draft or a unique catalog result
+		}
+		if !ok || len(oneOf) != wantBranches {
 			t.Fatalf("model selection must be explicit and mutually exclusive: %#v", parameters["oneOf"])
 		}
 		if got := oneOf[0]["required"]; !strings.Contains(fmt.Sprint(got), "logicalModelId") {
