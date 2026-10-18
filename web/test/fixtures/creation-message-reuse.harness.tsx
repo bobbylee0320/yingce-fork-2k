@@ -22,7 +22,7 @@ test("历史消息的真实复用按钮回传原始 token、附件和参数，�
     };
     let reused: CreationMessage | undefined;
     await act(async () => root.render(<CreationUserMessage item={item} shotNumber={1} onEditUserMessage={(message) => { reused = message; }} />));
-    expect(document.body.textContent).toContain("跟随 @音频1 的节奏");
+    expect(document.body.textContent).toContain("跟随 @对白.mp3 的节奏");
     const button = document.querySelector<HTMLButtonElement>('button[aria-label="复用提示词和引用"]');
     expect(button).not.toBeNull();
     await act(async () => button!.click());
