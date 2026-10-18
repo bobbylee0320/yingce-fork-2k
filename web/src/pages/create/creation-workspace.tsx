@@ -36,6 +36,7 @@ import { countOptions, modeLabels, qualityOptions, resolutionOptions, type Creat
 import "./creation-product.css";
 import "./creation-scrollbars.css";
 import { CreationAttachmentThumbnail, CreationMediaPreviewModal } from "./creation-workspace-messages";
+import { AudioReferencePreview } from "@/components/audio-reference-preview";
 
 export { CreationHistoryDrawer } from "./creation-workspace-history";
 export { CreationMessageView } from "./creation-workspace-messages";
@@ -137,6 +138,7 @@ type ComposerProps = {
 type CreationReferenceFilter = "all" | "image" | "video" | "audio" | "file";
 
 export function CreationComposer(props: ComposerProps) {
+    const [previewAudio, setPreviewAudio] = useState<CreationAttachment | null>(null);
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
@@ -263,8 +265,12 @@ export function CreationComposer(props: ComposerProps) {
         drag.moved = true;
         setTrackState((current) => ({ ...current, isDragging: true, isExpanded: true }));
     };
-    const previewAttachment = (type: "image" | "video", url: string) => {
+    const previewAttachment = (type: "image" | "video" | "audio", url: string, audio?: CreationAttachment) => {
         if (suppressAttachmentClickRef.current || cardDragRef.current?.moved) return;
+        if (type === "audio") {
+            if (audio) setPreviewAudio(audio);
+            return;
+        }
         setPreviewType(type);
         setPreviewUrl(url);
     };
@@ -342,7 +348,7 @@ export function CreationComposer(props: ComposerProps) {
                                     value={item}
                                     layout="position"
                                     drag={trackState.isExpanded && canDragReferences && !interactionBusy}
-                                    className="creation-reference-stack-card"
+                                    className={`creation-reference-stack-card${creationAttachmentKind(item) === "audio" ? " is-audio" : ""}`}
                                     onPointerDown={beginCardDrag}
                                     onPointerMove={moveCardDrag}
                                     onPointerUp={endCardDrag}
@@ -421,6 +427,7 @@ export function CreationComposer(props: ComposerProps) {
             </Button>
         </footer>
         <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
+        {previewAudio ? <AudioReferencePreview name={previewAudio.name} src={previewAudio.url} storageKey={previewAudio.storageKey} onClose={() => setPreviewAudio(null)} /> : null}
         </SpotlightSurface>
     </HoverBorderGradient>;
 
