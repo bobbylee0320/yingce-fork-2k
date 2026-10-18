@@ -157,6 +157,24 @@ test("a failed observer restarts for an existing subscriber when network returns
     }
 });
 
+test("a recovered terminal task is queried again without creating a new task", async () => {
+    let current: GenerationTask = { ...running, status: "failed" };
+    let queries = 0;
+    const seen: string[] = [];
+    const service = createGenerationTaskSubscriptionService({
+        async queryTask() { queries += 1; return current; },
+        async waitTask() { throw new Error("terminal task must not be polled"); },
+    });
+    const unsubscribe = service.subscribe([running.id], (task) => seen.push(task.status));
+    await tick();
+    current = terminal;
+    service.refresh([running.id]);
+    await tick();
+    expect(queries).toBe(2);
+    expect(seen).toEqual(["failed", "succeeded"]);
+    unsubscribe();
+});
+
 test("last subscriber aborts observation and reopening resumes the same task", async () => {
     const signals: AbortSignal[] = [];
     const ids: string[] = [];

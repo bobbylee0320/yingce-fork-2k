@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -63,6 +64,12 @@ func (r *Repository) claimTaskSubmission(task *model.Task) (bool, error) {
 		}
 		if (parent.Status != model.TaskStatusFailed && parent.Status != model.TaskStatusCancelled) || parent.MediaRecoveryJSON != "" || parent.ProviderCancelStatus == model.ProviderCancelStatusRequested || parent.ProviderCancelStatus == model.ProviderCancelStatusUncertain || (parent.LeaseExpiresAt != nil && parent.LeaseExpiresAt.After(time.Now())) {
 			return false, ErrTaskRetryUnconfirmed
+		}
+		if parent.ExecutionDiagnosticJSON != "" {
+			var diagnostic model.TaskExecutionDiagnostic
+			if err := json.Unmarshal([]byte(parent.ExecutionDiagnosticJSON), &diagnostic); err != nil || diagnostic.SubmissionOutcome == "unknown" {
+				return false, ErrTaskRetryUnconfirmed
+			}
 		}
 		if parent.BillingOrderID != "" {
 			var order model.BillingOrder

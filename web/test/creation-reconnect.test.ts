@@ -28,6 +28,12 @@ test("a partial batch is not marked complete while another task is unresolved", 
     const result = reconcileCreationTaskMessages(runtime, [batch], [{ ...running, status: "succeeded", creationResultStorageKeys: ["resource:image"] }]);
     expect(result[0].messages[0].status).toBe("pending");
     expect(result[0]).toBe(batch);
+    const completed = reconcileCreationTaskMessages(runtime, [batch], [
+        { ...running, status: "succeeded", creationResultStorageKeys: ["resource:image-1"] },
+        { ...running, id: "second", status: "succeeded", creationResultStorageKeys: ["resource:image-2"] },
+    ]);
+    expect(completed[0].messages[0].status).toBe("done");
+    expect(completed[0].messages[0].resultStorageKeys).toEqual(["resource:image-1", "resource:image-2"]);
 });
 
 test("lost creation response exposes a stable operation identity and resolving it never creates a task", async () => {
