@@ -4,6 +4,7 @@ import { AppModal } from "@/components/ui/product/app-modal";
 import { Check, ChevronDown, FileText, FolderOpen, HardDrive, Image as ImageIcon, LoaderCircle, Music2, Puzzle, RotateCcw, Search, Trash2, Upload, UserRound, Video } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { listAssetFolders } from "@/services/api/user-data";
 import { useUserStore } from "@/stores/use-user-store";
 
 import { AssetMediaPreview } from "@/components/asset-media-preview";
@@ -144,17 +145,25 @@ export function AssetLibraryPickerModal({
         const timer = window.setTimeout(() => setRemoteKeyword(keyword.trim()), 250);
         return () => window.clearTimeout(timer);
     }, [keyword]);
-    useEffect(() => setRemotePage(1), [category, mediaKind, remoteKeyword, open]);
+    useEffect(() => setRemotePage(1), [category, folderId, mediaKind, remoteKeyword, open]);
+    const foldersQuery = useQuery({
+        queryKey: ["asset-picker-folders", userId],
+        queryFn: ({ signal }) => listAssetFolders(signal),
+        enabled: remoteEnabled && open && sessionHydrated,
+        staleTime: 0,
+    });
     // remoteKind 是调用方写死的能力约束；媒体类型筛选只在没有该约束时参与服务端查询。
     const remoteQueryKind = remoteKind || (mediaKind === "all" ? undefined : mediaKind);
     const remoteQuery = useQuery({
-        queryKey: ["asset-picker", userId, remotePage, remotePageSize, category, remoteKeyword, remoteQueryKind],
+        queryKey: ["asset-picker", userId, remotePage, remotePageSize, category, folderId, remoteKeyword, remoteQueryKind],
         queryFn: ({ signal }) =>
             loadAssetLibraryPage({
                 page: remotePage,
                 pageSize: remotePageSize,
                 kind: remoteQueryKind,
                 category: category === "all" || category === "archived" || category === remoteQueryKind ? undefined : category,
+                folderId: folderId !== "all" && folderId !== "" ? folderId : undefined,
+                uncategorized: folderId === "",
                 status: category === "archived" ? "archived" : "active",
                 query: remoteKeyword,
                 signal,
@@ -194,8 +203,9 @@ export function AssetLibraryPickerModal({
     // 仅在远端空而本地仍有素材、或远端总数>0 但本页全被排除时回退本地，避免合法空搜索被缓存铺满。
     const remoteTotal = remoteQuery.data?.total ?? 0;
     const remoteReady = remoteEnabled && remoteQuery.isSuccess;
-    const preferLocalUnsynced = remoteReady && remoteTotal === 0 && localItems.length > 0;
-    const remoteEntityOnlyPage = remoteReady && remoteItems.length === 0 && remoteTotal > 0;
+    // 指定文件夹后以服务端结果为准，空分类不能被其它分类的本地缓存替代。
+    const preferLocalUnsynced = remoteReady && folderId === "all" && remoteTotal === 0 && localItems.length > 0;
+    const remoteEntityOnlyPage = remoteReady && folderId === "all" && remoteItems.length === 0 && remoteTotal > 0;
     const useRemoteItems = remoteReady && !preferLocalUnsynced && !remoteEntityOnlyPage && (remoteItems.length > 0 || remoteTotal === 0);
     const effectivePagination = useRemoteItems
         ? {
@@ -219,7 +229,9 @@ export function AssetLibraryPickerModal({
     const activeSourceItems = useMemo(() => sourceItems.filter((item) => !item.archived), [sourceItems]);
     const archivedItems = useMemo(() => sourceItems.filter((item) => item.archived), [sourceItems]);
     const mediaKindOptions = useMemo(() => (remoteKind ? [] : Array.from(new Set(mediaKinds))), [mediaKinds, remoteKind]);
-    const sourceFolders = source === "plugin" ? folders : [];
+    const showPersonalFolders = remoteEnabled;
+    const sourceFolders = source === "plugin" ? folders : showPersonalFolders ? foldersQuery.data?.folders || [] : [];
+    const remoteFolderCounts = useRemoteItems ? remoteQuery.data?.folderCounts : undefined;
     const showCategories = source === "local" || !sourceFolders.length;
     const normalCategories = useMemo(
         () =>
@@ -239,7 +251,7 @@ export function AssetLibraryPickerModal({
             } else if (item.archived || (category !== "all" && item.category !== category)) {
                 return false;
             }
-            if (folderId !== "all" && (item.folderId || "") !== folderId) return false;
+            if (folderId !== "all" && (item.folderId ?? item.asset?.folderId ?? "") !== folderId) return false;
             return useRemoteItems || !query || [item.title, item.searchText || "", item.description || ""].join(" ").toLowerCase().includes(query);
         });
     }, [category, folderId, keyword, sourceItems, useRemoteItems]);
@@ -507,14 +519,28 @@ export function AssetLibraryPickerModal({
                                 ))}
                             </>
                         ) : null}
-                        {sourceFolders.length ? (
+                        {showPersonalFolders || sourceFolders.length ? (
                             <>
-                                <span className="asset-picker-nav-label">文件夹</span>
+                                <span className="asset-picker-nav-label">{showPersonalFolders ? "我的分类" : "文件夹"}</span>
                                 <button type="button" className={cn("assets-filter-item", folderId === "all" && "is-active")} aria-pressed={folderId === "all"} onClick={() => setFolderId("all")}>
                                     <span className="assets-filter-item-label">全部文件夹</span>
-                                    <span className="assets-filter-count">{sourceItems.length}</span>
+                                    <span className="assets-filter-count">{remoteFolderCounts ? Object.values(remoteFolderCounts).reduce((sum, count) => sum + count, 0) : sourceItems.length}</span>
                                 </button>
-                                {renderPickerFolders(sourceFolders, activeSourceItems, folderId, setFolderId)}
+                                {showPersonalFolders ? (
+                                    <button type="button" className={cn("assets-filter-item", folderId === "" && "is-active")} aria-pressed={folderId === ""} onClick={() => setFolderId("")}>
+                                        <span className="assets-filter-item-label">未分类</span>
+                                        <span className="assets-filter-count">{remoteFolderCounts?.[""] ?? activeSourceItems.filter((item) => !(item.folderId ?? item.asset?.folderId)).length}</span>
+                                    </button>
+                                ) : null}
+                                {renderPickerFolders(sourceFolders, activeSourceItems, folderId, setFolderId, remoteFolderCounts)}
+                                {showPersonalFolders && foldersQuery.isError ? (
+                                    <div role="alert">
+                                        分类加载失败
+                                        <Button size="small" onClick={() => void foldersQuery.refetch()}>
+                                            重试
+                                        </Button>
+                                    </div>
+                                ) : null}
                             </>
                         ) : null}
                         {showCategories ? (
@@ -626,7 +652,7 @@ export function AssetLibraryPickerModal({
                             </>
                         ) : (
                             <>
-                                {onFolderAction && folderId !== "all" && (folderActionSource !== "local" || source === "local") ? (
+                                {onFolderAction && !showPersonalFolders && folderId !== "all" && (folderActionSource !== "local" || source === "local") ? (
                                     <Button type="text" icon={<FolderOpen />} disabled={working} onClick={() => void runFolderAction()}>
                                         {folderActionLabel}
                                     </Button>
@@ -655,6 +681,7 @@ export function remoteAssetToPickerItem(asset: Asset, known: AssetLibraryPickerI
         kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : asset.kind === "entity" ? "角色" : "文本",
         searchText: (asset.tags ?? []).join(" "),
         ...known,
+        folderId: asset.folderId,
         disabledReason: known?.disabledReason || (!known && !acceptRemoteItems ? "此素材不适用于当前操作" : disabledReason),
         asset,
     };
@@ -714,7 +741,16 @@ function PickerCard({ item, selected, onToggle }: { item: AssetLibraryPickerItem
     );
 }
 
-function renderPickerFolders(folders: AssetLibraryPickerFolder[], items: AssetLibraryPickerItem[], selectedId: string, onSelect: (folderId: string) => void, parentId = "", depth = 0, visited: ReadonlySet<string> = new Set()): ReactNode {
+function renderPickerFolders(
+    folders: AssetLibraryPickerFolder[],
+    items: AssetLibraryPickerItem[],
+    selectedId: string,
+    onSelect: (folderId: string) => void,
+    counts?: Record<string, number>,
+    parentId = "",
+    depth = 0,
+    visited: ReadonlySet<string> = new Set(),
+): ReactNode {
     if (depth >= 8) return null;
     return folders
         .filter((folder) => (folder.parentId || "") === parentId && !visited.has(folder.id))
@@ -732,9 +768,9 @@ function renderPickerFolders(folders: AssetLibraryPickerFolder[], items: AssetLi
                         <span className="assets-filter-item-label" title={folder.name}>
                             {folder.name}
                         </span>
-                        <span className="assets-filter-count">{items.filter((item) => item.folderId === folder.id).length}</span>
+                        <span className="assets-filter-count">{counts?.[folder.id] ?? items.filter((item) => (item.folderId ?? item.asset?.folderId) === folder.id).length}</span>
                     </button>
-                    {renderPickerFolders(folders, items, selectedId, onSelect, folder.id, depth + 1, nextVisited)}
+                    {renderPickerFolders(folders, items, selectedId, onSelect, counts, folder.id, depth + 1, nextVisited)}
                 </span>
             );
         });
