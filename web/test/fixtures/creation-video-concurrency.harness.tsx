@@ -5,7 +5,17 @@ import type { CreationAttachment } from "../../src/pages/create/creation-assets"
 import type { GenerationTask } from "../../src/services/api/task-center";
 
 const dom = new Window({ url: "http://localhost/" });
-for (const [key, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, SVGElement: dom.SVGElement, getComputedStyle: dom.getComputedStyle.bind(dom), IS_REACT_ACT_ENVIRONMENT: true })) {
+for (const [key, value] of Object.entries({
+    window: dom,
+    document: dom.document,
+    navigator: dom.navigator,
+    HTMLElement: dom.HTMLElement,
+    Element: dom.Element,
+    Node: dom.Node,
+    SVGElement: dom.SVGElement,
+    getComputedStyle: dom.getComputedStyle.bind(dom),
+    IS_REACT_ACT_ENVIRONMENT: true,
+})) {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 }
 const { act } = await import("react");
@@ -20,9 +30,19 @@ mock.module("antd", () => ({ ...antd, App: { useApp: () => ({ message: feedback,
 mock.module("react-router", () => ({ useNavigate: () => () => {} }));
 mock.module("../../src/components/ui/base/tooltip", () => ({ Tooltip: ({ children }: any) => children }));
 mock.module("../../src/pages/create/creation-workspace", () => ({
-    CreationComposer: (props: any) => { composer = props; return null; },
-    CreationMessageView: (props: any) => { messageProps.set(props.item.id, props); return null; },
-    CreationEmptySuggest: empty, CreationHistoryDrawer: empty, CreationModeTabs: empty, CreationWorkspaceToolbar: empty, creationAssetCategoryLabels: {},
+    CreationComposer: (props: any) => {
+        composer = props;
+        return null;
+    },
+    CreationMessageView: (props: any) => {
+        messageProps.set(props.item.id, props);
+        return null;
+    },
+    CreationEmptySuggest: empty,
+    CreationHistoryDrawer: empty,
+    CreationModeTabs: empty,
+    CreationWorkspaceToolbar: empty,
+    creationAssetCategoryLabels: {},
 }));
 mock.module("../../src/pages/create/creation-agent-entry", () => ({ CreationAgentEntry: empty }));
 mock.module("../../src/pages/create/creation-login-dialog", () => ({ CreationLoginDialog: empty }));
@@ -34,12 +54,17 @@ let saved: CreationConversation[] = [];
 mock.module("../../src/services/creation-conversation-store", () => ({
     ...conversationStore,
     loadCreationConversations: async () => null,
-    saveCreationConversations: async (value: CreationConversation[]) => { saved = structuredClone(value); },
+    saveCreationConversations: async (value: CreationConversation[]) => {
+        saved = structuredClone(value);
+    },
 }));
 function deferred<T>() {
     let resolve!: (value: T) => void;
     let reject!: (reason: Error) => void;
-    const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+    const promise = new Promise<T>((yes, no) => {
+        resolve = yes;
+        reject = no;
+    });
     return { promise, resolve, reject };
 }
 const requests: Array<{ options: any; result: ReturnType<typeof deferred<any>> }> = [];
@@ -47,7 +72,12 @@ let prepareWait: ReturnType<typeof deferred<void>> | undefined;
 const lifecycle = await import("../../src/services/generation-consumer-lifecycle");
 mock.module("../../src/pages/create/creation-runtime", () => ({
     ...lifecycle,
-    skillRuntime: { prepare: async ({ prompt }: { prompt: string }) => { await prepareWait?.promise; return { prompt, metadata: {} }; } },
+    skillRuntime: {
+        prepare: async ({ prompt }: { prompt: string }) => {
+            await prepareWait?.promise;
+            return { prompt, metadata: {} };
+        },
+    },
     runGenerationOperationOnce: (_id: string, operation: () => unknown) => operation(),
     runBackendGenerationTask: (options: any) => {
         const result = deferred<any>();
@@ -74,21 +104,43 @@ const { buildCreationMentionReferences, expandCreationPrompt } = await import(".
 const profile = defaultModelCapabilityConfig();
 profile.video!.references = { ...profile.video!.references, maxImages: 3, maxVideos: 1, maxAudios: 1 };
 useUserStore.setState({ hydrated: true, user: { id: "test", username: "test", displayName: "test", role: "user", status: "active" } });
-useConfigStore.setState({ config: { ...defaultConfig, videoModel: "test::video", channels: [{ id: "test", name: "test", scope: "system", baseUrl: "/api", apiKey: "", apiFormat: "openai", models: ["video"], modelCosts: [{ model: "video", capability: "video", capabilityConfig: profile }] }] } });
+useConfigStore.setState({
+    config: {
+        ...defaultConfig,
+        videoModel: "test::video",
+        channels: [{ id: "test", name: "test", scope: "system", baseUrl: "/api", apiKey: "", apiFormat: "openai", models: ["video"], modelCosts: [{ model: "video", capability: "video", capabilityConfig: profile }] }],
+    },
+});
 useCreationPreferencesStore.setState({ hydrated: true, preferences: { mode: "video", video: { ratio: "16:9", seconds: "6", videoQuality: "720" } } });
 const { default: CreatePage } = await import("../../src/pages/create/index");
 const root = createRoot(document.body.appendChild(document.createElement("div")));
-afterAll(async () => { await act(async () => root.unmount()); dom.happyDOM.abort(); });
-const flush = async (action: () => unknown = () => {}) => act(async () => { action(); await new Promise((resolve) => setTimeout(resolve, 0)); });
+afterAll(async () => {
+    await act(async () => root.unmount());
+    dom.happyDOM.abort();
+});
+const flush = async (action: () => unknown = () => {}) =>
+    act(async () => {
+        action();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
 const messages = () => saved[0].messages;
 const task = (id: string): GenerationTask => ({ id, type: "canvas_video", status: "running", prompt: id, attempts: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
 
 test("创建返回前可提交下一镜，重复触发不重复提交，乱序结束只更新对应消息", async () => {
     await flush(() => root.render(<CreatePage />));
     expect(composer.mode).toBe("video");
-    const attachments: CreationAttachment[] = [{ id: "image-a", name: "角色.png", type: "image/png", dataUrl: "", previewUrl: "", storageKey: "resource:image-a" }, { id: "audio-a", name: "对白.mp3", type: "audio/mpeg", url: "", previewUrl: "", storageKey: "resource:audio-a" }];
-    await flush(() => { composer.onReorderAttachments(attachments); composer.setPrompt("第一镜 @[attachment:image-a] @[attachment:audio-a]"); });
-    await flush(() => { composer.onSubmit(); composer.onSubmit(); });
+    const attachments: CreationAttachment[] = [
+        { id: "image-a", name: "角色.png", type: "image/png", dataUrl: "", previewUrl: "", storageKey: "resource:image-a" },
+        { id: "audio-a", name: "对白.mp3", type: "audio/mpeg", url: "", previewUrl: "", storageKey: "resource:audio-a" },
+    ];
+    await flush(() => {
+        composer.onReorderAttachments(attachments);
+        composer.setPrompt("第一镜 @[attachment:image-a] @[attachment:audio-a]");
+    });
+    await flush(() => {
+        composer.onSubmit();
+        composer.onSubmit();
+    });
     expect(requests).toHaveLength(1);
     expect(composer.busy).toBe(false);
     expect(composer.generationActive).toBe(true);
@@ -98,7 +150,9 @@ test("创建返回前可提交下一镜，重复触发不重复提交，乱序�
     expect(firstUser.attachments).toEqual(attachments);
     expect(firstUser.references).toHaveLength(2);
 
-    await flush(() => { composer.setPrompt("第二镜"); });
+    await flush(() => {
+        composer.setPrompt("第二镜");
+    });
     await flush(() => composer.onSubmit());
     expect(requests).toHaveLength(2);
     expect(messages()).toHaveLength(4);
@@ -106,7 +160,10 @@ test("创建返回前可提交下一镜，重复触发不重复提交，乱序�
     expect(requests[1].options.referenceImages).toEqual([]);
     expect(requests[0].options.metadata.messageId).not.toBe(requests[1].options.metadata.messageId);
 
-    await flush(() => { requests[1].options.onTaskUpdate(task("second")); requests[0].options.onTaskUpdate(task("first")); });
+    await flush(() => {
+        requests[1].options.onTaskUpdate(task("second"));
+        requests[0].options.onTaskUpdate(task("first"));
+    });
     await flush(() => requests[1].result.resolve({ video: { dataUrl: "https://example.com/second.mp4", storageKey: "resource:second" } }));
     expect(messages()[3].status).toBe("done");
     expect(messages()[1].status).toBe("pending");
@@ -141,7 +198,10 @@ test("创建返回前可提交下一镜，重复触发不重复提交，乱序�
     expect(requests[3].options.prompt).toBe(requests[0].options.prompt);
     expect(requests[3].options.referenceImages).toEqual(requests[0].options.referenceImages);
     expect(requests[3].options.referenceAudios).toEqual(requests[0].options.referenceAudios);
-    await flush(() => { requests[2].result.reject(new Error("结束模拟任务")); requests[3].result.reject(new Error("结束模拟任务")); });
+    await flush(() => {
+        requests[2].result.reject(new Error("结束模拟任务"));
+        requests[3].result.reject(new Error("结束模拟任务"));
+    });
 });
 
 test("准备失败后可继续提交，旧请求的创建通知不解锁新准备", async () => {

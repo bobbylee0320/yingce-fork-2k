@@ -64,7 +64,7 @@ export function CanvasConfigComposer({ nodeId, canvasId, value, inputs, skillRef
                     <p className="mt-1 text-xs opacity-60">{workflow ? "工作流按字段顺序接收连接素材" : "输入 @ 选择已连接素材或技能"}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                    {!simple ? <CanvasPresetPicker mode={generationMode} skillReferences={skillReferences} open={presetsOpen} onOpenChange={setPresetsOpen} onSelect={insertPreset} /> : null}
+                    {!simple ? <CanvasPresetPicker skillReferences={skillReferences} open={presetsOpen} onOpenChange={setPresetsOpen} onSelect={insertPreset} /> : null}
                     <Button size="small" type="text" aria-label="关闭提示词编辑器" icon={<X className="size-4" />} onClick={onClose} />
                 </div>
             </header>
