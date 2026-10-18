@@ -248,16 +248,19 @@ export default function AssetsPage() {
     };
 
     const moveAssetsToFolder = async (assetIds: string[], folderId: string) => {
-        if (!assetIds.length) return;
+        if (!assetIds.length || batchWorking) return;
+        setBatchWorking(true);
         try {
             await moveRemoteAssetsToFolder(assetIds, folderId);
             assetIds.forEach((id) => updateAsset(id, { folderId: folderId || undefined }));
             await flushAssetStorePersistence();
-            setSelectedIds([]);
             await invalidateAssetLibrary();
-            message.success(`已移动 ${assetIds.length} 个素材`);
+            setSelectedIds([]);
+            message.success(`已将 ${assetIds.length} 个素材移至「${folderSelectOptions.find((folder) => folder.value === folderId)?.label || "目标分类"}」`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "移动素材失败");
+        } finally {
+            setBatchWorking(false);
         }
     };
 
@@ -732,6 +735,8 @@ export default function AssetsPage() {
                                     onRestore={() => void changeAssetStatus(selectedIds, "confirmed")}
                                     onArchive={() => setBatchArchiveOpen(true)}
                                     onDelete={() => setBatchDeleteOpen(true)}
+                                    folderOptions={folderSelectOptions}
+                                    onMoveToFolder={(folderId) => void moveAssetsToFolder([...selectedIds], folderId)}
                                 />
                             ) : null}
                             {validAssets.length === 0 && totalAssets === 0 ? (

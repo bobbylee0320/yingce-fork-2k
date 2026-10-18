@@ -1,7 +1,7 @@
 // 素材库的批量操作条、空态、筛选组、详情抽屉与图片放大。
 
-import { Button, Drawer, Tag } from "antd";
-import { Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, Link2, Maximize2, Mic, Plus, RotateCcw, Trash2, ZoomIn, ZoomOut } from "lucide-react";
+import { Button, Drawer, Dropdown, Tag } from "antd";
+import { Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, FolderOpen, Link2, Maximize2, Mic, Plus, RotateCcw, Trash2, ZoomIn, ZoomOut } from "lucide-react";
 import { AudioPlayButton, CharacterAssetCover } from "@/components/assets/asset-rich-cover";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { assetCategoryLabel } from "@/lib/asset-category";
@@ -24,6 +24,8 @@ export function AssetsBatchBar({
     onRestore,
     onArchive,
     onDelete,
+    folderOptions = [],
+    onMoveToFolder,
 }: {
     count: number;
     isTrash?: boolean;
@@ -36,6 +38,8 @@ export function AssetsBatchBar({
     onRestore?: () => void;
     onArchive?: () => void;
     onDelete: () => void;
+    folderOptions?: Array<{ label: string; value: string }>;
+    onMoveToFolder?: (folderId: string) => void;
 }) {
     return (
         <div className="assets-batch-bar" role="toolbar" aria-label="批量操作">
@@ -60,6 +64,17 @@ export function AssetsBatchBar({
                     </>
                 ) : (
                     <>
+                        {onMoveToFolder ? (
+                            <Dropdown
+                                trigger={["click"]}
+                                disabled={!count || busy}
+                                menu={{ items: folderOptions.map((folder) => ({ key: folder.value || "uncategorized", label: folder.label, disabled: !count || busy, onClick: () => onMoveToFolder(folder.value) })) }}
+                            >
+                                <Button size="small" disabled={!count || busy} icon={<FolderOpen className="size-3.5" />}>
+                                    移动到分类
+                                </Button>
+                            </Dropdown>
+                        ) : null}
                         <Button size="small" disabled={!count || busy} icon={<Download className="size-3.5" />} onClick={onExport}>
                             导出
                         </Button>
