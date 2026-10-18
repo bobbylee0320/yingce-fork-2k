@@ -9,7 +9,7 @@ test("creation submit gate rejects a second submit until the first submit releas
     expect(token).not.toBeNull();
     expect(gate.tryAcquire()).toBeNull();
 
-    gate.release(token!);
+    expect(gate.release(token!)).toBe(true);
 
     expect(gate.tryAcquire()).not.toBeNull();
 });
@@ -22,14 +22,14 @@ test("释放令牌只对持有者生效，并发提交不会互相解锁", () =>
     // 第二个提交拿不到锁；它释放自己的“空令牌”不该解开第一个提交。
     const second = gate.tryAcquire();
     expect(second).toBeNull();
-    gate.release(second as unknown as symbol);
+    expect(gate.release(second as unknown as symbol)).toBe(false);
     expect(gate.tryAcquire()).toBeNull();
 
     // 持有者释放后才轮得到下一次提交。
-    gate.release(first!);
+    expect(gate.release(first!)).toBe(true);
     const third = gate.tryAcquire();
     expect(third).not.toBeNull();
     // 已释放过的旧令牌不能解开新持有者的锁。
-    gate.release(first!);
+    expect(gate.release(first!)).toBe(false);
     expect(gate.tryAcquire()).toBeNull();
 });

@@ -121,7 +121,7 @@ export default function CreatePage() {
     const [loginDialogOpen, setLoginDialogOpen] = useState(false);
     const [libraryOpen, setLibraryOpen] = useState(false);
     const externalAssetSources = useExternalAssetSources(libraryOpen);
-    const abortRef = useRef<AbortController | null>(null);
+    const submittingControllersRef = useRef(new Set<AbortController>());
     const composerFocusRef = useRef<HTMLTextAreaElement>(null);
     const threadScrollRef = useRef<HTMLElement>(null);
     const launchpadRef = useRef<HTMLElement>(null);
@@ -284,7 +284,9 @@ export default function CreatePage() {
         };
     }, [userId, userSessionHydrated]);
 
-    useEffect(() => () => abortRef.current?.abort(), []);
+    useEffect(() => () => {
+        for (const controller of submittingControllersRef.current) controller.abort();
+    }, []);
 
     useEffect(() => {
         activeIdRef.current = activeId;
@@ -580,9 +582,11 @@ export default function CreatePage() {
             toast.warning("上一条还在提交中，稍等片刻再发送");
             return;
         }
-        const releaseSubmitGate = () => submitGateRef.current.release(submitToken);
+        const releaseSubmitGate = () => {
+            if (submitGateRef.current.release(submitToken)) setBusy(false);
+        };
         const text = prompt.trim();
-        if (!text || busy || !activeConversation) {
+        if (!text || busy || referenceReplacementBusy || !activeConversation) {
             releaseRetryLock();
             releaseSubmitGate();
             return;
@@ -626,6 +630,9 @@ export default function CreatePage() {
             characterCount: 0,
         });
         const skillReferences = references.flatMap((reference) => (reference.skill ? [reference.skill] : []));
+        const originConversationId = activeConversation.id;
+        const originScope = getActiveUserScope();
+        setBusy(true);
         let runtime: CreationRuntime;
         try {
             runtime = await loadCreationRuntime();
@@ -651,10 +658,14 @@ export default function CreatePage() {
         }
         const expandedPrompt = skillExecution.prompt;
         const referenceMetadata = skillExecution.metadata;
+        if (activeIdRef.current !== originConversationId || getActiveUserScope() !== originScope) {
+            releaseRetryLock();
+            releaseSubmitGate();
+            return;
+        }
         followLatestMessageRef.current = true;
         const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, references, settings });
         const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" && textStreaming ? "streaming" : "pending", settings, ...retryContext });
-        const originConversationId = activeConversation.id;
         const updateOriginAssistant = (updater: (item: CreationMessage) => CreationMessage) => updateConversationMessage(originConversationId, assistantMessage.id, updater);
         const boundTaskIds = new Set<string>();
         const boundTaskIdsByBatchIndex = new Map<number, string>();
@@ -665,13 +676,8 @@ export default function CreatePage() {
             activeGenerationTaskIdsRef.current.add(task.id);
             boundTasks.set(task.id, task);
             updateOriginAssistant((item) => ({ ...item, generationStage: task.stage, generationOperation: task.operation, generationErrorCode: task.errorCode, taskIds: Array.from(new Set([...(item.taskIds || []), task.id])), clientOperationId: task.clientOperationId, retryOf: task.retryOf, attemptGroupId: task.attemptGroupId }));
-            if (abortRef.current === controller) {
-                abortRef.current = null;
-                setBusy(false);
-                // 任务已经建出来了：提交阶段到此结束。立刻放闸，这样上一条还在生成时
-                // 也能继续提交下一条，不必等它跑完。
-                releaseSubmitGate();
-            }
+            submittingControllersRef.current.delete(controller);
+            releaseSubmitGate();
         };
         updateActive((conversation) => ({
             ...conversation,
@@ -682,10 +688,9 @@ export default function CreatePage() {
         setPrompt("");
         setAttachments([]);
         setDraftReferences([]);
-        setBusy(true);
         const controller = new AbortController();
         const requestLifecycle = runtime.beginGenerationConsumer(controller.signal);
-        abortRef.current = controller;
+        submittingControllersRef.current.add(controller);
         const normalizedImage = mode === "image"
             ? imageProfile.parameters
                 ? { size: ratio, quality, imageResolution, imageParameters, count }
@@ -703,6 +708,8 @@ export default function CreatePage() {
                 ? { size: normalizedImage?.size || ratio, quality: normalizedImage?.quality || quality, count: normalizedImage?.count || count, videoSeconds: config.videoSeconds }
                 : {}),
         };
+        // 视频消息已持有本次提示词、引用和配置；网络提交及生成独立继续，输入框可准备下一镜。
+        if (mode === "video") releaseSubmitGate();
         try {
             if (mode === "text") {
                 const result = await runtime.runGenerationOperationOnce(retryContext?.clientOperationId, () => runtime.runBackendGenerationTask({
@@ -800,11 +807,8 @@ export default function CreatePage() {
             for (const taskId of boundTaskIds) activeGenerationTaskIdsRef.current.delete(taskId);
             requestLifecycle.release();
             releaseRetryLock();
+            submittingControllersRef.current.delete(controller);
             releaseSubmitGate();
-            if (abortRef.current === controller) {
-                abortRef.current = null;
-                setBusy(false);
-            }
         }
     };
 
@@ -1123,7 +1127,14 @@ export default function CreatePage() {
                         onCreateVariant={() => createVariant(item, index)}
                         onContinueCanvas={(ids) => void continueOnCanvas(ids)}
                         openingCanvas={openingCanvas}
-                        onEditUserMessage={(text) => { setPrompt(text); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
+                        onEditUserMessage={(message) => {
+                            if (busy || referenceReplacementBusy) {
+                                toast.warning("正在准备提交或替换参考内容，请稍后复用");
+                                return;
+                            }
+                            restoreMessageDraft(message);
+                            window.requestAnimationFrame(() => composerFocusRef.current?.focus());
+                        }}
                     /></div>)}</div></section>
                 </main>
                 <section className="creation-thread-composer"><CreationComposer {...composerProps} variant="thread" /></section>

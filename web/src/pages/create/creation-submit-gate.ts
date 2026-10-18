@@ -17,7 +17,9 @@ export function createCreationSubmitGate() {
         },
         /** 只有仍持有该令牌的调用方才能解锁。 */
         release(token: symbol) {
-            if (owner === token) owner = null;
+            if (owner !== token) return false;
+            owner = null;
+            return true;
         },
     };
 }

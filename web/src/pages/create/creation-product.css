@@ -339,3 +339,10 @@ html:not(.dark) .app-product-overlays .creation-control-popover-surface {
 .creation-home .creation-chat-mention-container {
     min-height: 0 !important;
 }
+
+.creation-home .creation-user-message-actions button.creation-user-message-edit {
+    display: inline-flex;
+    width: auto;
+    gap: var(--space-1);
+    padding-inline: var(--space-2);
+}
