@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { canvasResourceMentionToken } from "../src/lib/canvas/canvas-resource-references";
-import { creationAttachmentKind, creationFileAccepted, creationMediaAspectRatio, creationUploadAccept, type CreationAttachment } from "../src/pages/create/creation-assets";
+import { creationAttachmentFromAsset, creationAttachmentFromImage, creationAttachmentKind, creationFileAccepted, creationMediaAspectRatio, creationUploadAccept, type CreationAttachment } from "../src/pages/create/creation-assets";
 import {
     buildCreationMentionReferences,
     displayCreationPrompt,
@@ -83,15 +83,42 @@ describe("creation references", () => {
         expect(reference.label).toBe("文件1");
     });
 
-    test("音频引用显示文件名，图片仍按引入顺序编号", () => {
+    test("图片和音频引用直接显示文件名", () => {
         const audio: CreationAttachment = { id: "audio", name: "audio.mp3", type: "audio/mpeg", url: "blob:audio", storageKey: "audio:key", previewUrl: "" };
         const references = buildCreationMentionReferences([], [imageAttachment("first"), audio, imageAttachment("second")]);
 
-        expect(references.map((reference) => reference.label)).toEqual(["图片1", "audio.mp3", "图片2"]);
+        expect(references.map((reference) => reference.label)).toEqual(["first.png", "audio.mp3", "second.png"]);
         expect(references[1].mediaUrl).toBe("blob:audio");
         expect(references[1].storageKey).toBe("audio:key");
         expect(displayCreationPrompt("@[attachment:audio]", references)).toBe("@audio.mp3");
         expect(expandCreationPrompt("@[attachment:audio]", references, [audio])).toContain("@audio.mp3：参考音频 1");
+    });
+
+    test("上传图片使用原文件名，素材库图片使用素材名称", () => {
+        const uploaded = { url: "blob:portrait", storageKey: "resource:portrait", width: 640, height: 480, bytes: 128, mimeType: "image/png" };
+        const local = creationAttachmentFromImage(new File([], "赢渊 三视图.png", { type: "image/png" }), uploaded);
+        const library = creationAttachmentFromAsset({ id: "palace", kind: "image", title: "质子府暗室", coverUrl: "", tags: [], createdAt: "", updatedAt: "", data: { dataUrl: "blob:palace", width: 640, height: 480, bytes: 128, mimeType: "image/png" } });
+        const references = buildCreationMentionReferences([], [local, library]);
+        expect(references.map((reference) => reference.label)).toEqual(["赢渊 三视图.png", "质子府暗室"]);
+        expect(references.map((reference) => reference.title)).toEqual(["赢渊 三视图.png", "质子府暗室"]);
+        const prompt = references.map(canvasResourceMentionToken).join(" ");
+        expect(displayCreationPrompt(prompt, references)).toBe("@赢渊 三视图.png @质子府暗室");
+        expect(expandCreationPrompt(prompt, references, [local, library])).toContain("@质子府暗室：参考图片 2");
+    });
+
+    test("同名图片按附件 ID 独立引用，重排或删除不会串图", () => {
+        const attachments = ["first", "second"].map((id) => ({ ...imageAttachment(id), name: "角色.png" }));
+        const references = buildCreationMentionReferences([], attachments);
+        const prompt = references.map(canvasResourceMentionToken).join(" ");
+        const reordered = buildCreationMentionReferences([], [...attachments].reverse());
+        expect(selectedCreationReferences(prompt, reordered)).toHaveLength(2);
+        const remaining = removeCreationReferenceTokens(prompt, [references[0]]);
+        expect(selectedCreationReferences(remaining, reordered).map((reference) => reference.attachmentId)).toEqual(["second"]);
+    });
+
+    test("无文件名时明确标记未命名图片，不重新生成图片编号", () => {
+        const [reference] = buildCreationMentionReferences([], [{ ...imageAttachment("empty"), name: " " }]);
+        expect(reference.label).toBe("未命名图片");
     });
 
     test("同名音频保留独立引用，删除一个不会移除另一个", () => {
@@ -125,10 +152,10 @@ describe("creation references", () => {
         const replacementToken = canvasResourceMentionToken(replacementReference);
 
         expect(result.attachments.map((attachment) => attachment.id)).toEqual(["first", "replacement", "third"]);
-        expect(replacementReference.label).toBe("图片2");
+        expect(replacementReference.label).toBe("replacement.png");
         expect(result.prompt).toBe(`让 ${replacementToken} 靠近 ${replacementToken}`);
         expect(result.prompt).not.toContain(oldToken);
-        expect(displayCreationPrompt(result.prompt, nextReferences)).toBe("让 @图片2 靠近 @图片2");
+        expect(displayCreationPrompt(result.prompt, nextReferences)).toBe("让 @replacement.png 靠近 @replacement.png");
     });
 
     test("删除中间附件后只移除该附件引用，后续附件仍按稳定身份保留", () => {
@@ -144,17 +171,17 @@ describe("creation references", () => {
         expect(nextPrompt).not.toContain(canvasResourceMentionToken(third));
         expect(nextPrompt).toContain(canvasResourceMentionToken(fifth));
         expect(selectedCreationReferences(nextPrompt, nextReferences).map((reference) => reference.attachmentId)).toEqual(["fifth"]);
-        expect(displayCreationPrompt(nextPrompt, nextReferences)).toBe("删除前比较  和 @图片4");
+        expect(displayCreationPrompt(nextPrompt, nextReferences)).toBe("删除前比较  和 @fifth.png");
     });
 
     test("替换会归一化可见标签并去除已存在的重复附件", () => {
         const attachments = [imageAttachment("source"), imageAttachment("target"), imageAttachment("third")];
-        const result = replaceCreationAttachmentReference("让 @图片2 参考 @图片2。", attachments, "target", attachments[0]);
+        const result = replaceCreationAttachmentReference("让 @target.png 参考 @target.png。", attachments, "target", attachments[0]);
         const references = buildCreationMentionReferences([], result.attachments);
         const sourceReference = references.find((reference) => reference.attachmentId === "source")!;
 
         expect(result.attachments.map((attachment) => attachment.id)).toEqual(["third", "source"]);
-        expect(sourceReference.label).toBe("图片2");
+        expect(sourceReference.label).toBe("source.png");
         expect(result.prompt).toBe(`让 ${canvasResourceMentionToken(sourceReference)} 参考 ${canvasResourceMentionToken(sourceReference)}。`);
     });
 

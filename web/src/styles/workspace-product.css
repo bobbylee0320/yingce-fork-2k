@@ -926,7 +926,14 @@
 
 @media (prefers-reduced-motion: reduce) {
     .app-product-workspace *,
-    .app-product-overlays * { animation-duration: 1ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+    .app-product-overlays * {
+        animation-duration: 1ms !important;
+        animation-delay: 0ms !important;
+        animation-iteration-count: 1 !important;
+        /* Keep rc-motion completion without interpolating popup placement. */
+        transition-property: opacity, transform, background-color, border-color, color, box-shadow !important;
+        transition-duration: 1ms !important;
+    }
     .app-product-workspace .product-collection-card:hover,
     .app-product-workspace .library-card:hover,
     .app-product-workspace .task-grid-card:hover,

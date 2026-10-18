@@ -42,7 +42,7 @@ export function createInlineMentionChip(reference: CanvasResourceReference, toke
     chip.dataset.mentionReferenceId = reference.id;
     const isDecorated = reference.kind === "skill" || reference.kind === "tool";
     chip.className = `canvas-resource-inline-mention ${isDecorated ? `is-${reference.kind}` : ""}`;
-    chip.title = reference.kind === "audio" ? `点击试听 ${reference.label}` : "双击放大预览";
+    chip.title = reference.kind === "audio" ? `点击试听 ${reference.label}` : reference.kind === "image" ? `${reference.label}（双击放大预览）` : "双击放大预览";
     if (reference.kind === "audio") {
         chip.setAttribute("role", "button");
         chip.tabIndex = 0;
@@ -69,11 +69,12 @@ export function createInlineMentionChip(reference: CanvasResourceReference, toke
     const label = document.createElement("span");
     label.className = "canvas-resource-inline-label";
     label.textContent = reference.label;
-    if (reference.kind === "audio") {
+    if (reference.kind === "audio" || reference.kind === "image") {
         label.style.minWidth = "0";
         label.style.flexShrink = "1";
         label.style.overflow = "hidden";
         label.style.textOverflow = "ellipsis";
+        label.style.whiteSpace = "nowrap";
     }
     chip.appendChild(label);
 
@@ -155,6 +156,8 @@ export function syncInlineMentionPreviews(editor: HTMLElement, references: Canva
         if (reference.kind === "audio") {
             chip.title = `点击试听 ${reference.label}`;
             chip.setAttribute("aria-label", `试听 ${reference.label}`);
+        } else if (reference.kind === "image") {
+            chip.title = `${reference.label}（双击放大预览）`;
         }
     });
 }

@@ -118,12 +118,13 @@ export function expandCreationPrompt(prompt: string, references: CreationReferen
 function attachmentReference(attachment: CreationAttachment, index: number): CreationReference {
     const kind = creationAttachmentKind(attachment);
     const label = kind === "video" ? "视频" : kind === "audio" ? "音频" : kind === "file" ? "文件" : "图片";
+    const referenceLabel = kind === "image" ? attachment.name.trim() || "未命名图片" : kind === "audio" ? attachment.name.trim() || `${label}${index + 1}` : `${label}${index + 1}`;
     return {
         id: `upload:${attachment.id}`,
         nodeId: `upload:${attachment.id}`,
         kind: kind === "file" ? "text" : kind,
-        label: kind === "audio" ? attachment.name.trim() || `${label}${index + 1}` : `${label}${index + 1}`,
-        title: kind === "audio" ? attachment.name : "当前参考内容",
+        label: referenceLabel,
+        title: kind === "image" || kind === "audio" ? referenceLabel : "当前参考内容",
         mediaUrl: kind === "audio" ? attachment.url : undefined,
         previewUrl: attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url),
         storageKey: attachment.storageKey,

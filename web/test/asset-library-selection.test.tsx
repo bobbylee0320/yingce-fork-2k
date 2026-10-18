@@ -77,4 +77,41 @@ describe("素材库分页多选", () => {
         const busy = renderToStaticMarkup(<AssetsBatchBar {...props} count={3} busy />);
         expect(busy.match(/disabled=""/g)).toHaveLength(5);
     });
+
+    test("批量归类菜单列出已有分类和未分类，回传选择的目标分类", () => {
+        const ids = ["page-1", "page-2"];
+        const onMove = mock((_ids: string[], _folderId: string) => {});
+        const bar = AssetsBatchBar({
+            count: ids.length,
+            allSelected: false,
+            onSelectAll: () => {},
+            onClear: () => {},
+            onExport: () => {},
+            onDelete: () => {},
+            folderOptions: [
+                { label: "未分类", value: "" },
+                { label: "病娇-人物", value: "people" },
+            ],
+            onMoveToFolder: (folderId) => onMove([...ids], folderId),
+        });
+        const dropdown = bar.props.children[1].props.children[2].props.children[0];
+        expect(dropdown.props.menu.items.map((item: { label: string }) => item.label)).toEqual(["未分类", "病娇-人物"]);
+        dropdown.props.menu.items[1].onClick();
+        expect(onMove.mock.calls).toEqual([[ids, "people"]]);
+        dropdown.props.menu.items[0].onClick();
+        expect(onMove.mock.calls[1]).toEqual([ids, ""]);
+    });
+
+    test("批量归类在未选择、处理中禁用，在回收站隐藏", () => {
+        const props = { allSelected: false, onSelectAll: () => {}, onClear: () => {}, onExport: () => {}, onDelete: () => {}, folderOptions: [{ label: "未分类", value: "" }], onMoveToFolder: () => {} };
+        for (const state of [{ count: 0 }, { count: 2, busy: true }]) {
+            const bar = AssetsBatchBar({ ...props, ...state });
+            const dropdown = bar.props.children[1].props.children[2].props.children[0];
+            expect(dropdown.props.disabled).toBe(true);
+            expect(dropdown.props.children.props.disabled).toBe(true);
+            expect(dropdown.props.menu.items[0].disabled).toBe(true);
+        }
+        const trash = renderToStaticMarkup(<AssetsBatchBar {...props} count={2} isTrash />);
+        expect(trash).not.toContain("移动到分类");
+    });
 });
