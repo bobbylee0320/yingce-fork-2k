@@ -17,7 +17,7 @@ export type CanvasResourceReference = {
     label: string;
     title: string;
     previewUrl?: string;
-    /** 仅素材库视频在没有静态封面时使用的首帧回退源。 */
+    /** 视频无静态封面时的首帧源，或音频试听源。 */
     mediaUrl?: string;
     storageKey?: string;
     /** 视频首帧是独立的图片资源，不能用视频 storageKey 解析。 */

@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { createPortal } from "react-dom";
 import { CanvasNodeType } from "@/types/canvas";
+import { AudioReferencePreview } from "@/components/audio-reference-preview";
 
 export const TOOL_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
     Brush,
@@ -41,7 +42,13 @@ export function createInlineMentionChip(reference: CanvasResourceReference, toke
     chip.dataset.mentionReferenceId = reference.id;
     const isDecorated = reference.kind === "skill" || reference.kind === "tool";
     chip.className = `canvas-resource-inline-mention ${isDecorated ? `is-${reference.kind}` : ""}`;
-    chip.title = "双击放大预览";
+    chip.title = reference.kind === "audio" ? `点击试听 ${reference.label}` : "双击放大预览";
+    if (reference.kind === "audio") {
+        chip.setAttribute("role", "button");
+        chip.tabIndex = 0;
+        chip.setAttribute("aria-label", `试听 ${reference.label}`);
+        chip.style.cursor = "pointer";
+    }
     if (reference.kind === "skill") chip.style.setProperty("--canvas-skill-mention-color", skillMentionColor(reference));
     if (reference.kind === "tool") chip.style.setProperty("--canvas-skill-mention-color", skillMentionColor(reference));
 
@@ -62,6 +69,12 @@ export function createInlineMentionChip(reference: CanvasResourceReference, toke
     const label = document.createElement("span");
     label.className = "canvas-resource-inline-label";
     label.textContent = reference.label;
+    if (reference.kind === "audio") {
+        label.style.minWidth = "0";
+        label.style.flexShrink = "1";
+        label.style.overflow = "hidden";
+        label.style.textOverflow = "ellipsis";
+    }
     chip.appendChild(label);
 
     return chip;
@@ -77,11 +90,12 @@ export function skillMentionColor(reference: CanvasResourceReference) {
 }
 
 export function referencePreviewUrl(reference: CanvasResourceReference) {
-    return reference.previewUrl || (reference.kind === "video" ? reference.mediaUrl : "") || "";
+    return (reference.kind === "audio" ? reference.mediaUrl || reference.previewUrl : reference.previewUrl || (reference.kind === "video" ? reference.mediaUrl : "")) || "";
 }
 
 export function InlineReferencePreview({ reference, onClose }: { reference: CanvasResourceReference; onClose: () => void }) {
     const url = referencePreviewUrl(reference);
+    if (reference.kind === "audio") return <AudioReferencePreview name={reference.label} src={url} storageKey={reference.storageKey} onClose={onClose} />;
     if (!url) return null;
     return createPortal(
         <div className="fixed inset-0 z-[var(--z-dialog-popover)] grid place-items-center bg-black/80 p-6" role="dialog" aria-label={`预览${reference.label}`} onClick={onClose}>
@@ -138,6 +152,10 @@ export function syncInlineMentionPreviews(editor: HTMLElement, references: Canva
         }
         const label = chip.querySelector(".canvas-resource-inline-label");
         if (label && label.textContent !== reference.label) label.textContent = reference.label;
+        if (reference.kind === "audio") {
+            chip.title = `点击试听 ${reference.label}`;
+            chip.setAttribute("aria-label", `试听 ${reference.label}`);
+        }
     });
 }
 

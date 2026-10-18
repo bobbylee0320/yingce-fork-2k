@@ -53,6 +53,12 @@
     .creation-canvas-tile { transition: none; }
     .creation-canvas-tile:hover { transform: none; }
 }
+.creation-home .creation-reference-track li.creation-reference-stack-card.is-audio { width: calc(var(--space-16) * 2); flex-basis: calc(var(--space-16) * 2); }
+.creation-home .creation-reference-card-preview.is-audio { cursor: pointer; }
+.creation-home .creation-reference-card-preview.is-audio > .creation-chat-file-icon { position: static; display: flex; width: 100%; height: 100%; opacity: 1; background: transparent; color: var(--creation-muted); }
+.creation-home .creation-reference-card-preview.is-audio .creation-chat-file-icon em { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.creation-home .creation-user-message-attachments button.is-file:has(em) { width: auto; max-width: calc(var(--space-16) * 4); display: flex; gap: var(--space-2); padding-inline: var(--space-2); cursor: pointer; }
+.creation-home .creation-user-message-attachments button.is-file em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: normal; font-size: var(--fs-label); }
 .creation-mode-tabs { position: relative; isolation: isolate; display: grid; width: min(456px, 100%); margin: 0 auto 20px; padding: 4px; border-radius: 18px; background: var(--user-surface-muted); }
 .creation-mode-indicator { position: absolute; z-index: -1; inset: 0; border-radius: 14px; background: var(--user-surface); box-shadow: 0 2px 8px color-mix(in srgb, var(--user-ink) 5%, transparent); }
 .creation-mode-button { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: transparent; color: var(--user-ink-muted); font-size: 14px; font-weight: 600; cursor: pointer; transition: color var(--user-motion), transform var(--user-motion); }

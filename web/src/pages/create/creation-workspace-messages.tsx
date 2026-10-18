@@ -24,6 +24,7 @@ import { resolveImageUrl } from "@/services/image-storage";
 import { Button } from "antd";
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { AppModal } from "@/components/ui/product/app-modal";
+import { AudioReferencePreview } from "@/components/audio-reference-preview";
 
 export function CreationMessageView({
     item,
@@ -122,6 +123,7 @@ export function CreationMessageView({
 }
 
 export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { item: CreationMessage; shotNumber: number; onEditUserMessage: (text: string) => void }) {
+    const [previewAudio, setPreviewAudio] = useState<CreationAttachment | null>(null);
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const copyText = useCopyText();
@@ -159,11 +161,16 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
                                 type="button"
                                 className={!previewable ? "is-file" : undefined}
                                 onClick={() => {
+                                    if (kind === "audio") {
+                                        setPreviewAudio(attachment);
+                                        return;
+                                    }
                                     if (!previewable) return;
                                     setPreviewType(kind === "video" ? "video" : "image");
                                     setPreviewUrl(kind === "video" ? attachment.url || "" : previewUrl);
                                 }}
-                                aria-label={previewable ? `预览 ${attachment.name || "附件"}` : attachment.name || "附件"}
+                                aria-label={kind === "audio" ? `试听 ${attachment.name}` : previewable ? `预览 ${attachment.name || "附件"}` : attachment.name || "附件"}
+                                title={attachment.name}
                                 disabled={previewable && !previewUrl}
                             >
                                 {kind === "video" ? (
@@ -171,7 +178,10 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
                                 ) : kind === "image" ? (
                                     <CachedResourceImage storageKey={attachment.storageKey} src={imageUrl} alt={attachment.name || "附件"} width={44} height={44} loading="lazy" decoding="async" />
                                 ) : kind === "audio" ? (
-                                    <Music2 />
+                                    <>
+                                        <Music2 />
+                                        <em>{attachment.name}</em>
+                                    </>
                                 ) : (
                                     <FileText />
                                 )}
@@ -198,6 +208,7 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
                 </Tooltip>
             </div>
             <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
+            {previewAudio ? <AudioReferencePreview name={previewAudio.name} src={previewAudio.url} storageKey={previewAudio.storageKey} onClose={() => setPreviewAudio(null)} /> : null}
         </article>
     );
 }
@@ -422,10 +433,10 @@ export function CreationMediaPreviewModal({ url, type, onClose }: { url: string;
     );
 }
 
-export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { item: CreationAttachment; onPreview: (type: "image" | "video", url: string) => void; onRemove: (id: string) => void }) {
+export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { item: CreationAttachment; onPreview: (type: "image" | "video" | "audio", url: string, audio?: CreationAttachment) => void; onRemove: (id: string) => void }) {
     const kind = creationAttachmentKind(item);
-    const previewable = kind === "image" || kind === "video";
-    const url = (kind === "video" ? item.url : item.previewUrl) || "";
+    const previewable = kind === "image" || kind === "video" || kind === "audio";
+    const url = (kind === "video" || kind === "audio" ? item.url : item.previewUrl) || "";
     const imageUrl = kind === "image" ? resolveResourceUrl(item.storageKey, item.previewUrl) : "";
     const previewUrl = kind === "image" ? imageUrl : url;
     const content =
@@ -453,11 +464,20 @@ export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { ite
     return (
         <div className="creation-reference-card-content">
             {previewable ? (
-                <button type="button" className="creation-reference-card-preview" onClick={() => onPreview(kind === "video" ? "video" : "image", previewUrl)} aria-label={`放大预览 ${item.name}`} disabled={!previewUrl}>
+                <button
+                    type="button"
+                    className={`creation-reference-card-preview${kind === "audio" ? " is-audio" : ""}`}
+                    onClick={() => onPreview(kind === "audio" ? "audio" : kind === "video" ? "video" : "image", previewUrl, kind === "audio" ? item : undefined)}
+                    aria-label={`${kind === "audio" ? "试听" : "放大预览"} ${item.name}`}
+                    title={item.name}
+                    disabled={!previewUrl && !(kind === "audio" && item.storageKey)}
+                >
                     {content}
-                    <span aria-hidden="true">
-                        <Maximize2 />
-                    </span>
+                    {kind !== "audio" ? (
+                        <span aria-hidden="true">
+                            <Maximize2 />
+                        </span>
+                    ) : null}
                 </button>
             ) : (
                 <div className="creation-reference-card-preview is-file" aria-label={item.name}>

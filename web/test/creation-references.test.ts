@@ -5,6 +5,7 @@ import { creationAttachmentKind, creationFileAccepted, creationMediaAspectRatio,
 import {
     buildCreationMentionReferences,
     displayCreationPrompt,
+    expandCreationPrompt,
     reconcileCreationAttachmentLimit,
     reconcileCreationAttachmentLimits,
     removeCreationReferenceTokens,
@@ -82,11 +83,26 @@ describe("creation references", () => {
         expect(reference.label).toBe("文件1");
     });
 
-    test("不同附件类型分别按自己的引入顺序编号", () => {
+    test("音频引用显示文件名，图片仍按引入顺序编号", () => {
         const audio: CreationAttachment = { id: "audio", name: "audio.mp3", type: "audio/mpeg", url: "blob:audio", storageKey: "audio:key", previewUrl: "" };
         const references = buildCreationMentionReferences([], [imageAttachment("first"), audio, imageAttachment("second")]);
 
-        expect(references.map((reference) => reference.label)).toEqual(["图片1", "音频1", "图片2"]);
+        expect(references.map((reference) => reference.label)).toEqual(["图片1", "audio.mp3", "图片2"]);
+        expect(references[1].mediaUrl).toBe("blob:audio");
+        expect(references[1].storageKey).toBe("audio:key");
+        expect(displayCreationPrompt("@[attachment:audio]", references)).toBe("@audio.mp3");
+        expect(expandCreationPrompt("@[attachment:audio]", references, [audio])).toContain("@audio.mp3：参考音频 1");
+    });
+
+    test("同名音频保留独立引用，删除一个不会移除另一个", () => {
+        const attachments = ["first", "second"].map((id) => ({ ...mediaAttachment(id, "audio/mpeg"), name: "角色 声音.mp3" }));
+        const references = buildCreationMentionReferences([], attachments);
+        const prompt = references.map(canvasResourceMentionToken).join(" ");
+
+        expect(selectedCreationReferences(prompt, references)).toHaveLength(2);
+        const remaining = removeCreationReferenceTokens(prompt, [references[0]]);
+        expect(selectedCreationReferences(remaining, references).map((reference) => reference.attachmentId)).toEqual(["second"]);
+        expect(displayCreationPrompt(remaining, references).trim()).toBe("@角色 声音.mp3");
     });
 
     test("媒体占位按本次选择的画幅展示并为异常值提供模式回退", () => {

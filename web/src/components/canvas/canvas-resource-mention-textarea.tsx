@@ -446,8 +446,15 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         props.onDrop?.(event as unknown as React.DragEvent<HTMLTextAreaElement>);
                     }}
                     onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                        if (readOnly) { onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>); return; }
                         if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229)) return;
+                        const audioReference = referenceForDropTarget(event.target);
+                        if (audioReference?.kind === "audio" && (event.key === "Enter" || event.key === " ")) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setPreviewReference(audioReference);
+                            return;
+                        }
+                        if (readOnly) { onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>); return; }
                         if (autoLinkMatch && event.key === "Tab" && !event.shiftKey && !event.nativeEvent.isComposing && !composingRef.current) {
                             event.preventDefault();
                             insertAutoLink(autoLinkMatch);
@@ -493,10 +500,17 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     }}
                     onMouseDown={(event) => props.onMouseDown?.(event as unknown as React.MouseEvent<HTMLTextAreaElement>)}
                     onPointerDown={(event) => props.onPointerDown?.(event as unknown as React.PointerEvent<HTMLTextAreaElement>)}
+                    onClick={(event) => {
+                        const reference = referenceForDropTarget(event.target);
+                        if (reference?.kind !== "audio") return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setPreviewReference(reference);
+                    }}
                     onDoubleClick={(event) => {
                         const chip = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-mention-reference-id]") : null;
                         const reference = chip ? availableReferences.find((item) => item.id === chip.dataset.mentionReferenceId) : undefined;
-                        if (!reference || !referencePreviewUrl(reference)) return;
+                        if (!reference || reference.kind === "audio" || !referencePreviewUrl(reference)) return;
                         event.preventDefault();
                         event.stopPropagation();
                         setPreviewReference(reference);
