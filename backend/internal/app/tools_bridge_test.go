@@ -50,6 +50,27 @@ func TestToolPreviewOwnershipAndResourceDeletionGuard(t *testing.T) {
 	}
 }
 
+func TestToolUpdatePreservesPreviewAuthorization(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	resource := model.Resource{ID: "foreign-tool-preview", UserID: "bob", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "preview.png"}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	req := ToolMutationRequest{Type: "nine_grid", Label: "personal", Prompt: "white background", Visibility: "private"}
+	tool, err := svc.CreateTool("alice", req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Cover = "/api/resources/foreign-tool-preview/file"
+	if _, err := svc.UpdateTool("alice", tool.ID, req); err == nil {
+		t.Fatal("update accepted foreign preview")
+	}
+	read, err := svc.ToolDetail("alice", tool.ID)
+	if err != nil || read.Cover != "" {
+		t.Fatalf("failed update changed tool: %+v %v", read, err)
+	}
+}
+
 func TestToolAdmissionRejectsBeforeQueueing(t *testing.T) {
 	svc, db, _ := newResourceDeletionTestService(t)
 	_, err := svc.CreateTask("alice", CreateTaskRequest{Type: "canvas_image", Prompt: "@[tool:style:999:x:X]", Input: map[string]any{"mode": "image", "prompt": "@[tool:style:999:x:X]"}})

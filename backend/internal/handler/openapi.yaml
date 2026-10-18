@@ -286,6 +286,19 @@ paths:
   /tools/{id}:
     parameters:
       - {in: path, name: id, required: true, schema: {type: integer, format: int64, minimum: 1}}
+    patch:
+      tags: [canvas]
+      summary: 编辑自己的用户工具，保留 ID 与工具类型
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ToolMutation'}
+      responses:
+        "200": {description: 标准信封 data 为更新后的完整工具}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
     get:
       tags: [canvas]
       summary: 查询可见且启用工具的完整详情

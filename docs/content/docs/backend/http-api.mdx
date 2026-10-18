@@ -482,6 +482,7 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 | GET | `/api/tools` | 分页列表；`scope=public/favorites/custom`，默认 public；可按 `type=style/motion/nine_grid/effect`、tag、search 筛选。page 从 1 开始，pageSize 默认 20、最大 80；返回 tools、totalCount、page、pageSize、hasMore |
 | GET | `/api/tools/:id` | 可见且启用的工具详情，包含 prompt 和 extraInfo；列表不含这两个大字段 |
 | POST | `/api/tools` | 新建自己的工具；type、label、prompt 必填，visibility 默认 private；预览仅支持本人已上传完成的资源，公开工具暂不接受私人预览 |
+| PATCH | `/api/tools/:id` | 编辑自己的用户工具，提交完整可编辑字段；校验与创建一致，ID 和类型不可变，不能编辑内置或他人工具 |
 | POST / DELETE | `/api/tools/:id/favorite` | 幂等收藏 / 取消收藏，仅允许操作可见且启用工具 |
 | DELETE | `/api/tools/:id` | 仅删除自己的用户工具，不能删除内置或他人工具 |
 

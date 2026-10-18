@@ -1,6 +1,7 @@
 package tools_test
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -96,5 +97,96 @@ func TestToolsVisibilityTokensSeedAndReferences(t *testing.T) {
 	db.First(&preserved, 1)
 	if preserved.Label != "keep" {
 		t.Fatal("user tool overwritten")
+	}
+}
+
+func TestPersonalImagePresetCRUDAndOwnership(t *testing.T) {
+	db, err := database.Open(database.Config{Driver: "sqlite", DSN: filepath.Join(t.TempDir(), "presets.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, _ := db.DB()
+	defer sqlDB.Close()
+	if err := database.MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	repo := repository.New(db)
+	svc := tools.New(repo)
+	if err := tools.EnsureBuiltinTools(repo); err != nil {
+		t.Fatal(err)
+	}
+	input := tools.ToolMutationRequest{Type: "nine_grid", Label: "商品白底图", Desc: "保留材质", Prompt: "纯白背景，保持产品形状和材质"}
+	created, err := svc.Create("alice", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Visibility != "private" || created.OwnerID != "alice" {
+		t.Fatalf("created=%+v", created)
+	}
+	list, err := svc.List("alice", tools.ToolListRequest{Scope: "custom", Type: "nine_grid"})
+	if err != nil || list.TotalCount != 1 || list.Tools[0].ID != created.ID {
+		t.Fatalf("list=%+v err=%v", list, err)
+	}
+	input.Label, input.Prompt = "商品暖光图", "暖色侧光，保持产品形状"
+	for _, user := range []string{"", "bob"} {
+		if _, err := svc.Update(user, created.ID, input); err == nil {
+			t.Fatalf("user %q edited private preset", user)
+		}
+	}
+	if _, err := svc.Update("alice", 79, input); err == nil {
+		t.Fatal("builtin preset editable")
+	}
+	invalid := input
+	invalid.Type = "style"
+	if _, err := svc.Update("alice", created.ID, invalid); err == nil {
+		t.Fatal("type change accepted")
+	}
+	invalid = input
+	invalid.Prompt = ""
+	if _, err := svc.Update("alice", created.ID, invalid); err == nil {
+		t.Fatal("empty prompt accepted")
+	}
+	invalid.Prompt = "@[tool:nine_grid:79:x:Grid3x3]"
+	if _, err := svc.Update("alice", created.ID, invalid); err == nil {
+		t.Fatal("nested tool accepted")
+	}
+	if _, err := svc.SetFavorite("alice", created.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := svc.Update("alice", created.ID, input)
+	if err != nil || updated.ID != created.ID || updated.Prompt != input.Prompt || !updated.CreatedAt.Equal(created.CreatedAt) {
+		t.Fatalf("update=%+v err=%v", updated, err)
+	}
+	read, err := svc.Detail("alice", created.ID)
+	if err != nil || read.Prompt != input.Prompt {
+		t.Fatalf("read=%+v err=%v", read, err)
+	}
+	favorites, err := svc.List("alice", tools.ToolListRequest{Scope: "favorites"})
+	if err != nil || favorites.TotalCount != 1 {
+		t.Fatalf("edit lost favorite: %+v %v", favorites, err)
+	}
+	token := fmt.Sprintf("背景要求 @[tool:nine_grid:%d:preset:WandSparkles]", created.ID)
+	expanded, err := svc.ResolveToolMentionTokens("alice", "image", token)
+	if err != nil || expanded != "背景要求 "+input.Prompt {
+		t.Fatalf("expanded=%s err=%v", expanded, err)
+	}
+	if _, err := svc.ResolveToolMentionTokens("bob", "image", token); err == nil {
+		t.Fatal("another account expanded private preset")
+	}
+	public, err := svc.Create("alice", tools.ToolMutationRequest{Type: "nine_grid", Label: "public", Prompt: "public prompt", Visibility: "public"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Update("bob", public.ID, input); err == nil {
+		t.Fatal("public visibility granted editing permission")
+	}
+	if err := svc.Delete("alice", created.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Update("alice", created.ID, input); err == nil {
+		t.Fatal("deleted preset resurrected")
+	}
+	if _, err := svc.ResolveToolMentionTokens("alice", "image", token); err == nil {
+		t.Fatal("deleted preset expanded")
 	}
 }

@@ -76,6 +76,31 @@ func RegisterToolRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, item)
 	})
 
+	r.PATCH("/tools/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		toolID, err := parseToolID(c)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.ToolMutationRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			failService(c, service.BadAuthRequest("请求体格式无效"))
+			return
+		}
+		item, err := svc.UpdateTool(user.ID, toolID, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, item)
+	})
+
 	r.POST("/tools/:id/favorite", func(c *gin.Context) {
 		setToolFavorite(c, svc, true)
 	})

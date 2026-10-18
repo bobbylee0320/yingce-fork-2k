@@ -223,6 +223,35 @@ func (s *Service) Create(userID string, req ToolMutationRequest) (*ToolItem, err
 	return &item, nil
 }
 
+// Update only changes a tool owned by the current user; its type and ID stay stable.
+func (s *Service) Update(userID string, toolID int64, req ToolMutationRequest) (*ToolItem, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, kernel.Unauthorized("请先登录")
+	}
+	if toolID <= 0 {
+		return nil, kernel.BadAuthRequest("工具 ID 无效")
+	}
+	current, err := s.repo.ToolForUser(userID, toolID)
+	if err != nil {
+		return nil, err
+	}
+	if current.OwnerID != userID || current.Source != ToolSourceUser {
+		return nil, kernel.NotFound("工具不存在或不支持编辑")
+	}
+	normalized, err := normalizeToolMutationRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	if normalized.Type != current.Type {
+		return nil, kernel.BadAuthRequest("不能更改已保存工具的类型")
+	}
+	updated, err := s.repo.UpdateUserTool(userID, toolID, normalized)
+	if err != nil {
+		return nil, err
+	}
+	return buildToolItemPtr(*updated, false, nil), nil
+}
+
 // Delete 删除用户自定义工具；内置工具不可删除，同步清理收藏记录。
 func (s *Service) Delete(userID string, toolID int64) error {
 	if userID == "" {
