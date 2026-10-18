@@ -102,8 +102,8 @@ export function listRemoteAssetsPage(options: { page: number; pageSize: number; 
     });
 }
 
-export function listAssetFolders() {
-    return http.get<{ folders: AssetFolder[] }>("/asset-folders");
+export function listAssetFolders(signal?: AbortSignal) {
+    return http.get<{ folders: AssetFolder[] }>("/asset-folders", { signal });
 }
 
 export function createAssetFolder(name: string) {
