@@ -178,7 +178,10 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
                                 ) : kind === "image" ? (
                                     <CachedResourceImage storageKey={attachment.storageKey} src={imageUrl} alt={attachment.name || "附件"} width={44} height={44} loading="lazy" decoding="async" />
                                 ) : kind === "audio" ? (
-                                    <><Music2 /><em>{attachment.name}</em></>
+                                    <>
+                                        <Music2 />
+                                        <em>{attachment.name}</em>
+                                    </>
                                 ) : (
                                     <FileText />
                                 )}
@@ -461,11 +464,20 @@ export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { ite
     return (
         <div className="creation-reference-card-content">
             {previewable ? (
-                <button type="button" className={`creation-reference-card-preview${kind === "audio" ? " is-audio" : ""}`} onClick={() => onPreview(kind === "audio" ? "audio" : kind === "video" ? "video" : "image", previewUrl, kind === "audio" ? item : undefined)} aria-label={`${kind === "audio" ? "试听" : "放大预览"} ${item.name}`} title={item.name} disabled={!previewUrl && !(kind === "audio" && item.storageKey)}>
+                <button
+                    type="button"
+                    className={`creation-reference-card-preview${kind === "audio" ? " is-audio" : ""}`}
+                    onClick={() => onPreview(kind === "audio" ? "audio" : kind === "video" ? "video" : "image", previewUrl, kind === "audio" ? item : undefined)}
+                    aria-label={`${kind === "audio" ? "试听" : "放大预览"} ${item.name}`}
+                    title={item.name}
+                    disabled={!previewUrl && !(kind === "audio" && item.storageKey)}
+                >
                     {content}
-                    {kind !== "audio" ? <span aria-hidden="true">
-                        <Maximize2 />
-                    </span> : null}
+                    {kind !== "audio" ? (
+                        <span aria-hidden="true">
+                            <Maximize2 />
+                        </span>
+                    ) : null}
                 </button>
             ) : (
                 <div className="creation-reference-card-preview is-file" aria-label={item.name}>
