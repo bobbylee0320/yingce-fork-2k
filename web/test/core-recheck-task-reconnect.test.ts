@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { apiClient } from "../src/services/api/request";
-import { createGenerationTaskSubscriptionService, waitForGenerationTask, type GenerationTask } from "../src/services/api/task-center";
+import { apiClient, ApiError } from "../src/services/api/request";
+import { createGenerationTaskSubscriptionService, waitForGenerationTask, TaskObservationError, type GenerationTask } from "../src/services/api/task-center";
 
 const originalWindow = globalThis.window;
 const originalFetch = globalThis.fetch;
@@ -77,14 +77,13 @@ test("text reconnect queries the same task with the last event sequence and dedu
     expect(queries).toEqual(["/tasks/existing-task"]);
 });
 
-test("polling stops after five network failures but can resume the original task without creation", async () => {
-    let offline = true;
+test("polling reconnects the original task after more than five network failures without creation", async () => {
     let queries = 0;
     apiClient.defaults.adapter = async (config) => {
         expect(config.method).toBe("get");
         expect(config.url).toBe("/tasks/existing-task");
         queries += 1;
-        if (offline) throw new Error("offline fixture");
+        if (queries <= 6) throw new ApiError("offline fixture", { status: 502 });
         return {
             config,
             status: 200,
@@ -93,25 +92,33 @@ test("polling stops after five network failures but can resume the original task
             data: { code: 0, data: terminal, msg: "ok" },
         };
     };
-    await expect(
-        waitForGenerationTask(running.id, {
+    const connections: string[] = [];
+    const result = await waitForGenerationTask(running.id, {
             initialTask: running,
             intervalMs: 1,
             timeoutMs: 1000,
-        }),
-    ).rejects.toThrow("offline fixture");
-    expect(queries).toBe(5);
-    offline = false;
-    expect(
-        (
-            await waitForGenerationTask(running.id, {
-                initialTask: running,
-                intervalMs: 1,
-                timeoutMs: 1000,
-            })
-        ).status,
-    ).toBe("succeeded");
-    expect(queries).toBe(6);
+            onConnectionChange: (state) => connections.push(state),
+        });
+    expect(result.status).toBe("succeeded");
+    expect(queries).toBe(7);
+    expect(connections).toEqual([...Array(6).fill("reconnecting"), "connected"]);
+});
+
+test("observation timeout remains an unknown state and does not mean generation failed", async () => {
+    apiClient.defaults.adapter = async () => { throw new ApiError("offline", { status: 503 }); };
+    try {
+        await waitForGenerationTask(running.id, { initialTask: running, intervalMs: 1, timeoutMs: 15 });
+        throw new Error("expected observation timeout");
+    } catch (error) {
+        expect(error).toBeInstanceOf(TaskObservationError);
+        expect((error as TaskObservationError).taskId).toBe(running.id);
+    }
+});
+
+test("abort during reconnection only stops observation", async () => {
+    const controller = new AbortController();
+    apiClient.defaults.adapter = async () => { controller.abort(); throw new ApiError("offline", { status: 502 }); };
+    await expect(waitForGenerationTask(running.id, { initialTask: running, signal: controller.signal, intervalMs: 1 })).rejects.toMatchObject({ name: "AbortError" });
 });
 
 test("a failed observer restarts for an existing subscriber when network returns", async () => {

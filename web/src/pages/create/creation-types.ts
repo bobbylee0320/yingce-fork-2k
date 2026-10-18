@@ -31,6 +31,8 @@ export type CreationMessage = {
     settings?: CreationSettings;
     taskIds?: string[];
     clientOperationId?: string;
+    submissionOperationIds?: string[];
+    generationSyncState?: "reconnecting" | "unconfirmed";
     retryOf?: string;
     attemptGroupId?: string;
     generationStage?: string;

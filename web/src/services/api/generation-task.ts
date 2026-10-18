@@ -44,6 +44,7 @@ type BackendGenerationTaskOptions = {
     signal?: AbortSignal;
     metadata?: Record<string, unknown>;
     onTaskUpdate?: (task: GenerationTask) => void;
+    onConnectionChange?: (state: "connected" | "reconnecting") => void;
     onTextDelta?: (text: string) => void;
     streamText?: boolean;
     enableThinking?: boolean;
@@ -87,6 +88,7 @@ export async function runBackendGenerationTask(
         signal,
         metadata,
         onTaskUpdate,
+        onConnectionChange,
         onTextDelta,
         streamText,
         enableThinking,
@@ -101,7 +103,7 @@ export async function runBackendGenerationTask(
     assertBackendRuntimeConfigured(config, mode);
     const prepared = await prepareGenerationReferences({ config, mode, referenceImages, referenceVideos, referenceAudios, mask });
     throwIfAborted(signal);
-    return createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, signal, metadata, onTaskUpdate, onTextDelta, streamText, enableThinking, clientOperationId, retryOf, attemptGroupId }, prepared, dependencies);
+    return createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, signal, metadata, onTaskUpdate, onConnectionChange, onTextDelta, streamText, enableThinking, clientOperationId, retryOf, attemptGroupId }, prepared, dependencies);
 }
 
 // 分镜等后台生产流程只需要可靠提交任务；任务状态与产物由项目工作区轮询和
@@ -265,11 +267,16 @@ function usesArkVideoAssetReference(config: AiConfig) {
 async function createAndWaitGenerationTask(options: BackendGenerationTaskOptions, prepared: PreparedGenerationReferences, dependencies: GenerationTaskDependencies) {
     const task = await createBackendGenerationTask(options, prepared, dependencies);
     const { signal, onTaskUpdate, onTextDelta } = options;
-    const completed = await dependencies.waitTask(task.id, { signal, initialTask: task, onTaskUpdate, onTextDelta });
+    const completed = await dependencies.waitTask(task.id, { signal, initialTask: task, onTaskUpdate, onTextDelta, onConnectionChange: options.onConnectionChange });
     return parseBackendGenerationResult(completed);
 }
 
 async function createBackendGenerationTask(options: BackendGenerationTaskOptions, prepared: PreparedGenerationReferences, dependencies: GenerationTaskDependencies) {
+    options = { ...options, clientOperationId: options.clientOperationId || dependencies.createId() };
+    const batchIndex = options.metadata?.batchIndex;
+    const retryContext = typeof batchIndex === "number" ? options.retryContextsByBatchIndex?.[batchIndex] : undefined;
+    if (retryContext) options = { ...options, ...retryContext };
+    else if (typeof batchIndex === "number") options = { ...options, clientOperationId: `${options.clientOperationId}:${batchIndex}` };
     const task = await dependencies.createTask(backendGenerationTaskInput(options, prepared));
     options.onTaskUpdate?.(task);
     return task;

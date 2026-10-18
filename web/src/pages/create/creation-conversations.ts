@@ -102,9 +102,15 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
                 changed = true;
                 return { ...message, ...recovery };
             }
-            if (message.role !== "assistant" || message.status !== "pending") return message;
-            const expectedTaskCount = Math.max(0, ...matches.map((task) => task.clientContext?.batchCount || 0));
-            if (!matches.length || (expectedTaskCount > 0 && matches.length < expectedTaskCount) || matches.some((task) => task.status === "queued" || task.status === "running")) return message;
+            if (message.role !== "assistant" || (message.status !== "pending" && message.status !== "error")) return message;
+            const expectedTaskCount = Math.max(message.submissionOperationIds?.length || 0, message.taskIds?.length || 0, ...matches.map((task) => task.clientContext?.batchCount || 0));
+            if (!matches.length || (expectedTaskCount > 0 && matches.length < expectedTaskCount)) return message;
+            if (matches.some((task) => task.status === "queued" || task.status === "running")) {
+                if (message.status === "pending" && !message.generationSyncState) return message;
+                conversationChanged = true;
+                changed = true;
+                return { ...message, status: "pending" as const, error: undefined, generationSyncState: undefined };
+            }
 
             const succeeded = matches.filter((task) => task.status === "succeeded");
             const resultUrls = Array.from(new Set(succeeded.flatMap(creationTaskResultUrls)));
@@ -117,7 +123,7 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
 
             if (resultUrls.length || resultStorageKeys.length) {
                 const content = message.mode === "video" ? "视频已生成" : failedCount ? `${resultStorageKeys.length || resultUrls.length} 张图片已生成，${failedCount} 张失败` : "图片已生成";
-                return { ...message, status: "done" as const, content, ...(resultUrls.length ? { resultUrls } : {}), ...(resultStorageKeys.length ? { resultStorageKeys } : {}), error: undefined, taskIds: nextTaskIds };
+                return { ...message, status: "done" as const, content, ...(resultUrls.length ? { resultUrls } : {}), ...(resultStorageKeys.length ? { resultStorageKeys } : {}), error: undefined, generationSyncState: undefined, taskIds: nextTaskIds };
             }
             if (matches.every((task) => task.status === "cancelled")) {
                 return { ...message, status: "cancelled" as const, content: "已停止", error: undefined, taskIds: nextTaskIds };

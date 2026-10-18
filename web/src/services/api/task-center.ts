@@ -1,5 +1,5 @@
 import { generationErrorMessage } from "@/lib/generation-error";
-import { http, apiBaseURL, type BackendEnvelope } from "@/services/api/request";
+import { http, apiBaseURL, ApiError, type BackendEnvelope } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser, type TaskTextStreamEvent } from "@/services/api/task-text-stream";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
 import { getActiveUserScope } from "@/lib/user-scope";
@@ -128,12 +128,47 @@ export type CreateTaskInput = {
     input?: Record<string, unknown>;
 };
 export function createGenerationTask(input: CreateTaskInput) {
-    return http.post<GenerationTask>("/tasks", input).then((task) => {
+    const metadata = input.input?.metadata as Record<string, unknown> | undefined;
+    const clientOperationId = typeof metadata?.clientOperationId === "string" && metadata.clientOperationId ? metadata.clientOperationId : crypto.randomUUID();
+    const request = { ...input, input: { ...input.input, metadata: { ...metadata, clientOperationId } } };
+    return http.post<GenerationTask>("/tasks", request).catch((error) => {
+        if (error instanceof ApiError && error.retryable) throw new TaskSubmissionUncertainError(clientOperationId);
+        throw error;
+    }).then((task) => {
         recordDiagnosticEvent({ level: "info", category: "task", message: "任务已创建", taskId: task.id, projectId: task.projectId });
         notifyCanvasTaskCreated(task);
         // 创建任务时积分已被预占，不能等任务结束后才刷新可用余额。
         window.dispatchEvent(new CustomEvent("wallet:updated"));
         return task;
+    });
+}
+
+export class TaskSubmissionUncertainError extends Error {
+    constructor(readonly clientOperationId: string) {
+        super("提交结果暂未确认，正在查找原任务，请勿重复提交");
+        this.name = "TaskSubmissionUncertainError";
+    }
+}
+
+export class TaskObservationError extends Error {
+    constructor(readonly taskId: string) {
+        super("暂时无法同步生成进度，正在重新连接，请勿重复提交");
+        this.name = "TaskObservationError";
+    }
+}
+
+export async function resolveGenerationTaskSubmissions(operationIds: string[], signal?: AbortSignal) {
+    const tasks = await http.post<GenerationTask[]>("/tasks/resolve-submissions", { operationIds }, { signal });
+    return tasks.map((task) => {
+        if (!task.inputJson) return task;
+        const metadata = (JSON.parse(task.inputJson) as { metadata?: Record<string, unknown> }).metadata;
+        if (!metadata) return task;
+        return { ...task, clientOperationId: typeof metadata.clientOperationId === "string" ? metadata.clientOperationId : undefined, clientContext: {
+            conversationId: typeof metadata.conversationId === "string" ? metadata.conversationId : undefined,
+            messageId: typeof metadata.messageId === "string" ? metadata.messageId : undefined,
+            batchIndex: typeof metadata.batchIndex === "number" ? metadata.batchIndex : undefined,
+            batchCount: typeof metadata.batchCount === "number" ? metadata.batchCount : undefined,
+        } };
     });
 }
 
@@ -265,6 +300,14 @@ export function createGenerationTaskSubscriptionService(dependencies: Generation
     };
     let listening = false;
     return {
+        refresh(ids: readonly string[]) {
+            for (const id of ids) {
+                const entry = entries.get(id);
+                if (!entry) continue;
+                entry.latest = undefined;
+                observe(id, entry);
+            }
+        },
         subscribe(ids: readonly string[], listener: (task: GenerationTask) => void) {
             if (!listening && typeof window !== "undefined") {
                 window.addEventListener("online", reconnect);
@@ -313,6 +356,10 @@ export function subscribeGenerationTasks(ids: readonly string[], listener: (task
     return generationTaskSubscriptionService.subscribe(ids, listener);
 }
 
+export function refreshGenerationTaskObservations(ids: readonly string[]) {
+    generationTaskSubscriptionService.refresh(ids);
+}
+
 export function appendTaskTextDelta(id: string, content: string) {
     return http.post<TaskTextDelta>(`/tasks/${encodeURIComponent(id)}/text-deltas`, { content });
 }
@@ -330,7 +377,10 @@ export function retryGenerationTask(id: string) {
 }
 
 export function recoverGenerationTaskMedia(id: string) {
-    return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/recover-media`);
+    return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/recover-media`).then((task) => {
+        refreshGenerationTaskObservations([id]);
+        return task;
+    });
 }
 
 export function cancelGenerationTask(id: string) {
@@ -396,6 +446,7 @@ function safeTaskLogErrorCode(value: unknown) {
 }
 
 export type WaitForGenerationTaskOptions = {
+	onConnectionChange?: (state: "connected" | "reconnecting") => void;
 	textEventsSource?: "task" | "agent";
     signal?: AbortSignal;
     intervalMs?: number;
@@ -423,15 +474,14 @@ export async function waitForGenerationTask(id: string, options?: WaitForGenerat
                 lastQueryError = undefined;
                 consecutiveFailures = 0;
                 options?.onTaskUpdate?.(task);
+                options?.onConnectionChange?.("connected");
             } catch (error) {
                 lastQueryError = error;
                 consecutiveFailures += 1;
-                // 连续失败说明查询通道已不可用，继续轮询只会空转到整体超时；
-                // 保留少量容忍度（约 10 秒）以跳过瞬时抖动后直接报错，便于用户尽早处理。
-                if (consecutiveFailures >= 5) {
-                    throw error instanceof Error ? error : new Error(String(error));
-                }
-                await delay(intervalMs, options?.signal);
+                if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+                options?.onConnectionChange?.("reconnecting");
+                if (error instanceof ApiError && !error.retryable) throw new TaskObservationError(id);
+                await delay(Math.min(30_000, intervalMs * 2 ** Math.min(consecutiveFailures - 1, 4)), options?.signal);
                 continue;
             }
             if (task.status === "succeeded") {
@@ -451,7 +501,7 @@ export async function waitForGenerationTask(id: string, options?: WaitForGenerat
         }
         throw error;
     }
-    throw new Error(lastQueryError instanceof Error ? `任务状态同步失败：${lastQueryError.message}` : "任务执行超时，请稍后重试");
+    throw new TaskObservationError(id);
 }
 
 async function waitForGenerationTaskTextEvents(id: string, options: WaitForGenerationTaskOptions) {

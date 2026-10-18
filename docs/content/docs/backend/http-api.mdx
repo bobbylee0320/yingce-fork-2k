@@ -5,6 +5,14 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 生成提交幂等与断线恢复
+
+`POST /api/tasks` 接受 `input.metadata.clientOperationId`。同一用户的同一操作编号只创建一个任务和一笔积分预占；重复请求返回原任务，内容冲突返回 HTTP 409。`retryOf` 必须属于当前用户；原任务仍在运行或已经成功时返回原任务，保存恢复、费用待核对或取消待确认不能通过新建任务绕过。正常另生成一份使用新操作编号，不按提示词内容去重。
+
+`POST /api/tasks/resolve-submissions` 请求体为 `{ "operationIds": ["..."] }`，单次 1–15 个，使用登录 Cookie，只读查询当前用户的提交回执并返回已有任务。缺少回执返回空数组，不代表可以用新编号重复生成；客户端保留原操作，继续核对。接口不发起上游请求、不创建任务、不预占积分。
+
+轮询连接失败、网关错误和前台等待超时不改变任务状态。创作页保留原任务与操作编号，以退避方式重连，刷新页面后恢复查询；只有后端确认终态才能展示生成失败。只读的“刷新状态”与付费的“重新生成”分开，已有视频的保存恢复继续使用 `/tasks/:id/recover-media`。
+
 ## 画布实时会话
 
 `GET /api/canvas-projects/:id/realtime` 使用登录 Cookie 升级为 WebSocket，握手校验当前用户对画布的归属和请求 Origin。首帧 `welcome` 提供服务端分配的 `selfId` 和窗口 Presence；客户端发送 `presence`，服务端推送 `peer`、`leave`、`invalidate` 和 `heartbeat`。Presence 只含有界世界坐标和拖拽矩形，不包含密钥、编辑租约 token、画布正文或实际保存指令。

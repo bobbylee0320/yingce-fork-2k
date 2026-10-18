@@ -47,10 +47,36 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		req.RequestID = RequestID(c)
 		task, err := svc.CreateTask(user.ID, req)
 		if err != nil {
-			fail(c, http.StatusBadRequest, err)
+			var appErr *service.AppError
+			if errors.As(err, &appErr) {
+				failService(c, err)
+			} else {
+				fail(c, http.StatusBadRequest, err)
+			}
 			return
 		}
 		ok(c, task)
+	})
+	r.POST("/tasks/resolve-submissions", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req struct {
+			OperationIDs []string `json:"operationIds"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		tasks, err := svc.ResolveTaskSubmissions(user.ID, req.OperationIDs)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, tasks)
 	})
 	r.POST("/timeline/transcriptions", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

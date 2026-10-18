@@ -117,6 +117,9 @@ func (r *Repository) CreditLedgerReferenceExists(referenceKey string) (bool, err
 
 func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *model.BillingOrder, activeTaskLimit int) error {
 	return r.Transaction(func(repo *Repository) error {
+		if replay, err := repo.claimTaskSubmission(task); err != nil || replay {
+			return err
+		}
 		tx := repo.db
 		if err := New(tx).requireExclusiveCanvasAgent(task); err != nil {
 			return err
@@ -142,6 +145,9 @@ func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *mo
 
 func (r *Repository) CreateTaskWithActiveLimit(task *model.Task, activeTaskLimit int) error {
 	return r.Transaction(func(repo *Repository) error {
+		if replay, err := repo.claimTaskSubmission(task); err != nil || replay {
+			return err
+		}
 		tx := repo.db
 		if err := New(tx).requireExclusiveCanvasAgent(task); err != nil {
 			return err

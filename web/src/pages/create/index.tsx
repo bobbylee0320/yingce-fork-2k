@@ -16,7 +16,7 @@ import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, vid
 import { inferVideoOperation, modelGroupReferenceLimits, resolveCompatibleModel, mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
 import type { BackendGenerationResult } from "@/services/api/generation-task";
 import type { Skill } from "@/services/api/skills";
-import type { GenerationTask } from "@/services/api/task-center";
+import { TaskObservationError, TaskSubmissionUncertainError, type GenerationTask } from "@/services/api/task-center";
 import { loadCreationConversations, pendingCreationTaskIds, removeCreationConversationSnapshot, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
 import { resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
@@ -304,9 +304,11 @@ export default function CreatePage() {
         if (!recoverableTaskIds.length) return;
         let cancelled = false;
         const observationController = new AbortController();
+        const observedTasks = new Map<string, GenerationTask>();
         const applyTasks = async (tasks: GenerationTask[]) => {
+            for (const task of tasks) observedTasks.set(task.id, task);
             const runtime = await loadCreationRuntime();
-            const contextual = attachCreationTaskContexts(tasks, conversations);
+            const contextual = attachCreationTaskContexts(Array.from(observedTasks.values()), conversationsRef.current);
             const persistedTasks = await materializeCreationTaskResults(runtime, contextual, observationController.signal);
             if (cancelled) return;
             taskSyncWarningRef.current = false;
@@ -316,7 +318,7 @@ export default function CreatePage() {
                     await runtime.consumeGenerationTaskMessage(task, task.clientContext!.messageId!, async ({ effectKey, resultUrls, resultStorageKeys }) => {
                         if (cancelled) return;
                         await updateConversationMessage(task.clientContext!.conversationId!, task.clientContext!.messageId!, (item) =>
-                            runtime.applyGenerationConsumerEffect(item, effectKey, (current) => ({ ...current, status: "done" as const, ...(resultUrls.length ? { resultUrls: Array.from(new Set([...(current.resultUrls || []), ...resultUrls])) } : {}), ...(resultStorageKeys.length ? { resultStorageKeys: Array.from(new Set([...(current.resultStorageKeys || []), ...resultStorageKeys])) } : {}) })).value,
+                            runtime.applyGenerationConsumerEffect(item, effectKey, (current) => ({ ...current, ...(resultUrls.length ? { resultUrls: Array.from(new Set([...(current.resultUrls || []), ...resultUrls])) } : {}), ...(resultStorageKeys.length ? { resultStorageKeys: Array.from(new Set([...(current.resultStorageKeys || []), ...resultStorageKeys])) } : {}) })).value,
                         );
                     }, { signal: observationController.signal, materialize: async () => task, materializedUrls: runtime.generationTaskMaterializedUrls, materializedStorageKeys: runtime.generationTaskMaterializedStorageKeys });
                 } catch (error) {
@@ -350,6 +352,33 @@ export default function CreatePage() {
             unsubscribe();
         };
     }, [hydrated, recoveryTaskKey, toast]);
+
+    const unresolvedSubmissionKey = conversations.flatMap((conversation) => conversation.messages.filter((item) => item.role === "assistant" && item.mode !== "text" && item.status === "pending" && (item.submissionOperationIds?.length || 0) > (item.taskIds?.length || 0)).map((item) => `${conversation.id}:${item.id}:${item.taskIds?.length || 0}`)).join("|");
+    useEffect(() => {
+        if (!hydrated || !unresolvedSubmissionKey) return;
+        const controller = new AbortController();
+        const scope = getActiveUserScope();
+        let timer: ReturnType<typeof setTimeout>;
+        const resolve = async () => {
+            try {
+                const runtime = await loadCreationRuntime();
+                for (const conversation of conversationsRef.current) {
+                    for (const item of conversation.messages) {
+                        if (item.role !== "assistant" || item.mode === "text" || item.status !== "pending" || !item.submissionOperationIds?.length || (item.taskIds?.length || 0) >= item.submissionOperationIds.length) continue;
+                        const tasks = await runtime.resolveGenerationTaskSubmissions(item.submissionOperationIds, controller.signal);
+                        if (controller.signal.aborted || getActiveUserScope() !== scope) return;
+                        if (tasks.length) await updateConversationMessage(conversation.id, item.id, (current) => ({ ...current, taskIds: Array.from(new Set([...(current.taskIds || []), ...tasks.map((task) => task.id)])), generationSyncState: undefined }));
+                    }
+                }
+            } catch {
+                // An unresolved receipt is never permission to create another paid task.
+            } finally {
+                if (!controller.signal.aborted) timer = setTimeout(() => void resolve(), 10_000);
+            }
+        };
+        void resolve();
+        return () => { controller.abort(); clearTimeout(timer); };
+    }, [hydrated, unresolvedSubmissionKey]);
 
     const loadAddedSkills = useCallback(() => {
         if (addedSkillsRequestedRef.current) return;
@@ -665,7 +694,10 @@ export default function CreatePage() {
         }
         followLatestMessageRef.current = true;
         const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, references, settings });
-        const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" && textStreaming ? "streaming" : "pending", settings, ...retryContext });
+        const operationId = retryContext?.clientOperationId || crypto.randomUUID();
+        const expectedCount = mode === "image" ? Math.max(1, Math.min(imageProfile.maxOutputs, Math.floor(Number(count) || 1))) : 1;
+        const submissionOperationIds = mode === "image" ? Array.from({ length: expectedCount }, (_, index) => retryContext?.retryContextsByBatchIndex?.[index]?.clientOperationId || `${operationId}:${index}`) : [operationId];
+        const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" && textStreaming ? "streaming" : "pending", settings, ...retryContext, clientOperationId: operationId, submissionOperationIds });
         const updateOriginAssistant = (updater: (item: CreationMessage) => CreationMessage) => updateConversationMessage(originConversationId, assistantMessage.id, updater);
         const boundTaskIds = new Set<string>();
         const boundTaskIdsByBatchIndex = new Map<number, string>();
@@ -675,7 +707,7 @@ export default function CreatePage() {
             boundTaskIds.add(task.id);
             activeGenerationTaskIdsRef.current.add(task.id);
             boundTasks.set(task.id, task);
-            updateOriginAssistant((item) => ({ ...item, generationStage: task.stage, generationOperation: task.operation, generationErrorCode: task.errorCode, taskIds: Array.from(new Set([...(item.taskIds || []), task.id])), clientOperationId: task.clientOperationId, retryOf: task.retryOf, attemptGroupId: task.attemptGroupId }));
+            updateOriginAssistant((item) => ({ ...item, generationStage: task.stage, generationOperation: task.operation, generationErrorCode: task.errorCode, generationSyncState: undefined, taskIds: Array.from(new Set([...(item.taskIds || []), task.id])), clientOperationId: item.clientOperationId || task.clientOperationId, retryOf: item.retryOf || task.retryOf, attemptGroupId: item.attemptGroupId || task.attemptGroupId }));
             submittingControllersRef.current.delete(controller);
             releaseSubmitGate();
         };
@@ -690,6 +722,7 @@ export default function CreatePage() {
         setDraftReferences([]);
         const controller = new AbortController();
         const requestLifecycle = runtime.beginGenerationConsumer(controller.signal);
+        const onConnectionChange = (state: "connected" | "reconnecting") => updateOriginAssistant((item) => ({ ...item, generationSyncState: state === "reconnecting" ? "reconnecting" : undefined }));
         submittingControllersRef.current.add(controller);
         const normalizedImage = mode === "image"
             ? imageProfile.parameters
@@ -711,6 +744,7 @@ export default function CreatePage() {
         // 视频消息已持有本次提示词、引用和配置；网络提交及生成独立继续，输入框可准备下一镜。
         if (mode === "video") releaseSubmitGate();
         try {
+            await saveCreationConversations(conversationsRef.current);
             if (mode === "text") {
                 const result = await runtime.runGenerationOperationOnce(retryContext?.clientOperationId, () => runtime.runBackendGenerationTask({
                     mode: "text",
@@ -724,6 +758,7 @@ export default function CreatePage() {
                     metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, ...referenceMetadata },
                     onTaskUpdate: bindTask,
                     streamText: textStreaming,
+                    clientOperationId: operationId,
                     enableThinking: textThinking,
                     onTextDelta: textStreaming ? (value) => updateOriginAssistant((item) => ({ ...item, content: value })) : undefined,
                     ...retryContext,
@@ -741,6 +776,8 @@ export default function CreatePage() {
                     metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, ...referenceMetadata },
                     onTaskUpdate: bindTask,
                     count: taskCount,
+                    clientOperationId: operationId,
+                    onConnectionChange,
                     ...retryContext,
                 }));
                 if (requestLifecycle.signal.aborted) throw new DOMException("Aborted", "AbortError");
@@ -784,6 +821,8 @@ export default function CreatePage() {
                     signal: requestLifecycle.signal,
                     metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, videoEditOperation: videoOperation, ...referenceMetadata },
                     onTaskUpdate: bindTask,
+                    clientOperationId: operationId,
+                    onConnectionChange,
                     ...retryContext,
                 }));
                 if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
@@ -797,6 +836,10 @@ export default function CreatePage() {
             }
             updateOriginAssistant((item) => ({ ...item, status: "done" }));
         } catch (error) {
+            if (mode !== "text" && (error instanceof TaskObservationError || error instanceof TaskSubmissionUncertainError || Array.from(boundTasks.values()).some((task) => task.status === "queued" || task.status === "running" || task.status === "succeeded"))) {
+                updateOriginAssistant((item) => ({ ...item, status: "pending", content: "", error: undefined, generationSyncState: boundTaskIds.size ? "reconnecting" : "unconfirmed" }));
+                return;
+            }
             if (runtime.isGenerationTaskCancelled(error, requestLifecycle.signal)) {
                 updateOriginAssistant((item) => ({ ...item, status: "cancelled", content: "已停止" }));
                 return;
@@ -946,6 +989,17 @@ export default function CreatePage() {
         const previous = item.role === "assistant" ? activeConversation?.messages[index - 1] : item;
         if (!previous?.content || busy) return;
         const retryOf = item.taskIds?.[0];
+        if (item.status === "pending" || item.generationSyncState) {
+            try {
+                const runtime = await loadCreationRuntime();
+                const tasks = item.taskIds?.length ? await Promise.all(item.taskIds.map((id) => runtime.queryGenerationTask(id))) : await runtime.resolveGenerationTaskSubmissions(item.submissionOperationIds || []);
+                await updateConversationMessage(activeConversation!.id, item.id, (current) => ({ ...current, status: "pending", error: undefined, taskIds: Array.from(new Set([...(current.taskIds || []), ...tasks.map((task) => task.id)])) }));
+                const persisted = await materializeCreationTaskResults(runtime, attachCreationTaskContexts(tasks, conversationsRef.current));
+                setConversations((current) => reconcileCreationTaskMessages(runtime, current, persisted));
+                if (!tasks.length) toast.info("提交结果仍待确认，请勿重复生成");
+            } catch (error) { toast.warning(generationErrorMessage(error)); }
+            return;
+        }
         const restoreForRetry = () => {
             followLatestMessageRef.current = true;
             restoreMessageDraft(previous);
@@ -964,6 +1018,14 @@ export default function CreatePage() {
         retryPreparingRef.current.add(retryOf);
         try {
             const runtime = await loadCreationRuntime();
+            const sourceTasks = await Promise.all((item.taskIds || []).map((id) => runtime.queryGenerationTask(id)));
+            if (sourceTasks.some((task) => task.status === "queued" || task.status === "running" || task.status === "succeeded" || task.canRecoverMedia)) {
+                for (const task of sourceTasks) if (task.canRecoverMedia) await runtime.recoverGenerationTaskMedia(task.id);
+                runtime.refreshGenerationTaskObservations(sourceTasks.map((task) => task.id));
+                await updateConversationMessage(activeConversation!.id, item.id, (current) => ({ ...current, status: "pending", error: undefined, generationSyncState: "reconnecting" }));
+                retryPreparingRef.current.delete(retryOf);
+                return;
+            }
             const attemptGroupId = item.attemptGroupId || item.retryOf || retryOf;
             const context: CreationRetryContext = { ...(await runtime.createGenerationRetryContext(retryOf, attemptGroupId)), ...(item.taskIds && item.taskIds.length > 1 ? { retryContextsByBatchIndex: await runtime.createGenerationBatchRetryContexts(item.taskIds, attemptGroupId) } : {}) };
             restoreForRetry();

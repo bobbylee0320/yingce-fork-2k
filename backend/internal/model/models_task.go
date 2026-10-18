@@ -7,6 +7,7 @@ import (
 )
 
 type Task struct {
+	SubmissionReceipt *TaskSubmissionReceipt `json:"-" gorm:"-"`
 	// Only EnsureCloudAgent sets this after creating the execution in the same
 	// transaction. Ordinary task saves must not reset it from a stale snapshot.
 	AgentExecutionReady          bool                     `json:"-" gorm:"not null;default:false;<-:create"`
@@ -66,6 +67,17 @@ type Task struct {
 	CreatedAt         time.Time  `json:"createdAt" gorm:"index:idx_tasks_user_created,priority:2;index:idx_tasks_status_created,priority:2;index:idx_tasks_claim,priority:3;index:idx_tasks_user_project_created,priority:3"`
 	CreatedAtEpoch    int64      `json:"-" gorm:"index:idx_tasks_created_epoch"`
 	UpdatedAt         time.Time  `json:"updatedAt"`
+}
+
+// A receipt survives task-history deletion so a lost creation response cannot charge twice.
+type TaskSubmissionReceipt struct {
+	UserID        string `gorm:"primaryKey;size:36"`
+	KeyHash       string `gorm:"primaryKey;size:64"`
+	OperationHash string `gorm:"size:64;index"`
+	RequestHash   string `gorm:"size:64;not null"`
+	TaskID        string `gorm:"size:36;not null;index"`
+	RetryOf       string `gorm:"size:36"`
+	CreatedAt     time.Time
 }
 
 func (t *Task) BeforeCreate(tx *gorm.DB) error {

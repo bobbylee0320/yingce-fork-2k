@@ -31,6 +31,16 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if req.admission == nil && (strings.HasPrefix(req.Operation, "cloud_agent") || req.Input["cloudAgent"] != nil) {
 		return nil, BadAuthRequest("Agent 任务必须通过 Agent 接口创建")
 	}
+	if req.admission == nil && req.creationPrepare == nil {
+		receipt, existing, err := s.prepareTaskSubmission(userID, req)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			return taskForOutput(*existing), nil
+		}
+		req.submissionReceipt = receipt
+	}
 	if s.IsDraining() {
 		return nil, &AppError{Status: 503, Code: 503, Message: "服务正在维护，暂不接受新的生成任务", Retryable: true}
 	}
@@ -134,7 +144,7 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if workbenchKind == "" {
 		workbenchKind = workbenchKindFromTaskInput(normalizedInput, taskType)
 	}
-	task := model.Task{ID: newID(), UserID: userID, TraceID: req.TraceID, RequestID: req.RequestID, ProjectID: req.ProjectID, Type: taskType, WorkbenchKind: workbenchKind, Status: model.TaskStatusQueued, Stage: "等待队列调度", Progress: 5, Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: req.Model}
+	task := model.Task{SubmissionReceipt: req.submissionReceipt, ID: newID(), UserID: userID, TraceID: req.TraceID, RequestID: req.RequestID, ProjectID: req.ProjectID, Type: taskType, WorkbenchKind: workbenchKind, Status: model.TaskStatusQueued, Stage: "等待队列调度", Progress: 5, Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: req.Model}
 	if req.admission != nil {
 		task.ID = req.admission.ID
 		task.AgentRunID = req.admission.AgentRunID
@@ -211,6 +221,7 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		task.BillingOrderID = billingOrder.ID
 	}
 	err = s.createTaskWithinStorageQuota(&task, billingOrder, policy)
+	err = taskSubmissionError(err)
 	if errors.Is(err, repository.ErrActiveTaskLimit) {
 		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
 	}
@@ -398,7 +409,8 @@ func (s *Service) createTextReplayTask(userID string, req CreateTaskRequest, nor
 		return nil, err
 	}
 	task := model.Task{
-		ID: newID(), UserID: userID, TraceID: req.TraceID, RequestID: req.RequestID, ProjectID: req.ProjectID,
+		SubmissionReceipt: req.submissionReceipt,
+		ID:                newID(), UserID: userID, TraceID: req.TraceID, RequestID: req.RequestID, ProjectID: req.ProjectID,
 		Type: taskType, Status: model.TaskStatusTextReplay, Stage: "文本持久化（前端自管）", Progress: 5,
 		Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: strings.TrimSpace(req.Model),
 	}
