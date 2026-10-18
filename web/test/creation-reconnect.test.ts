@@ -23,6 +23,13 @@ test("original completed video replaces a historical transport failure", () => {
     expect(result[0].messages[0].resultStorageKeys).toEqual(["resource:video"]);
 });
 
+test("a confirmed backend failure clears reconnection before offering an intentional retry", () => {
+    const pending: CreationConversation = { ...conversation, messages: [{ ...conversation.messages[0], status: "pending", generationSyncState: "reconnecting" }] };
+    const result = reconcileCreationTaskMessages(runtime, [pending], [{ ...running, status: "failed", error: "provider rejected" }]);
+    expect(result[0].messages[0].status).toBe("error");
+    expect(result[0].messages[0].generationSyncState).toBeUndefined();
+});
+
 test("a partial batch is not marked complete while another task is unresolved", () => {
     const batch: CreationConversation = { ...conversation, messages: [{ ...conversation.messages[0], mode: "image", status: "pending", submissionOperationIds: ["operation:0", "operation:1"], taskIds: ["original", "second"] }] };
     const result = reconcileCreationTaskMessages(runtime, [batch], [{ ...running, status: "succeeded", creationResultStorageKeys: ["resource:image"] }]);

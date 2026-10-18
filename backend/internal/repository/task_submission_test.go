@@ -164,6 +164,15 @@ func TestTaskSubmission(t *testing.T) {
 			if err := repo.CreateTaskWithCreditReservation(&blocked, makeOrder(blocked), 100); !errors.Is(err, ErrTaskRetryUnconfirmed) {
 				t.Fatalf("uncertain billing retry: %v", err)
 			}
+			unknown := model.Task{ID: "unknown-provider", UserID: "owner", Type: "canvas_video", Status: model.TaskStatusFailed, ExecutionDiagnosticJSON: `{"submissionOutcome":"unknown"}`}
+			if err := db.Create(&unknown).Error; err != nil {
+				t.Fatal(err)
+			}
+			unsafe := makeTask("unsafe", "unknown-retry")
+			unsafe.SubmissionReceipt.RetryOf = unknown.ID
+			if err := repo.CreateTaskWithActiveLimit(&unsafe, 100); !errors.Is(err, ErrTaskRetryUnconfirmed) {
+				t.Fatalf("unknown upstream without local billing: %v", err)
+			}
 			// Deleting history cannot erase the durable paid-operation identity.
 			if err := db.Delete(&model.Task{}, "id = ?", first.ID).Error; err != nil {
 				t.Fatal(err)
