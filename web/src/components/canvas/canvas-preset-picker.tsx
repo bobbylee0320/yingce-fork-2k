@@ -57,17 +57,7 @@ export function CanvasPresetPicker({
 
     const content = (
         <div data-canvas-no-zoom className="canvas-preset-picker-menu w-[var(--panel-width-compact)] max-w-[calc(100vw-24px)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-            <Input
-                className="canvas-preset-picker-search"
-                variant="borderless"
-                autoFocus
-                allowClear
-                size="small"
-                prefix={<Search className="size-3.5" />}
-                placeholder="搜索已加入技能"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-            />
+            <Input className="canvas-preset-picker-search" variant="borderless" autoFocus allowClear size="small" prefix={<Search className="size-3.5" />} placeholder="搜索已加入技能" value={query} onChange={(event) => setQuery(event.target.value)} />
             <div className="thin-scrollbar mt-1 max-h-72 space-y-0.5 overflow-y-auto">
                 {presets.length ? (
                     presets.map((preset) => (
