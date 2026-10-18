@@ -46,7 +46,7 @@ export function CreationMessageView({
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
     if (item.role === "user") return <CreationUserMessage item={item} shotNumber={shotNumber} onEditUserMessage={onEditUserMessage} />;
     const mode = item.mode || "text";
-    const stateLabel = item.status === "pending" ? item.generationSyncState ? "等待同步" : "生成中" : item.status === "cancelled" ? "已停止" : item.status === "error" ? "生成失败" : "";
+    const stateLabel = item.status === "pending" ? (item.generationSyncState ? "等待同步" : "生成中") : item.status === "cancelled" ? "已停止" : item.status === "error" ? "生成失败" : "";
     const heading =
         mode !== "text" ? (
             <>
@@ -56,9 +56,7 @@ export function CreationMessageView({
                 </span>
                 <strong>{mode === "image" ? "图像生成" : "视频生成"}</strong>
                 {item.status === "pending" ? (
-                    <span className="creation-message-progress-copy">
-                        {item.generationSyncState ? "正在重新连接原任务……" : `${brandName}正在生成${mode === "video" ? "视频" : "图像"}……`}
-                    </span>
+                    <span className="creation-message-progress-copy">{item.generationSyncState ? "正在重新连接原任务……" : `${brandName}正在生成${mode === "video" ? "视频" : "图像"}……`}</span>
                 ) : item.status === "done" ? (
                     <span className="creation-message-progress-copy">你的{mode === "video" ? "视频" : "图像"}已创建</span>
                 ) : null}
@@ -304,12 +302,16 @@ export function MediaResult({
     const resultAssetIds = alignedResultUrls.length || resultStorageKeys.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: alignedResultUrls, resultStorageKeys }) : [];
     const expectedResultCount = resultStorageKeys.length || alignedResultUrls.length;
     const canContinueWithResults = expectedResultCount > 0 && resultAssetIds.length === expectedResultCount;
-    if (item.status === "pending" && item.generationSyncState) return (
-        <div className="creation-media-empty" aria-live="polite">
-            <span>{item.generationSyncState === "unconfirmed" ? "提交结果暂未确认，正在查找原任务，请勿重复提交。" : "暂时无法同步生成进度，正在重新连接，请勿重复提交。"}</span>
-            <button type="button" onClick={onRetryFailure}><RefreshCw />刷新状态</button>
-        </div>
-    );
+    if (item.status === "pending" && item.generationSyncState)
+        return (
+            <div className="creation-media-empty" aria-live="polite">
+                <span>{item.generationSyncState === "unconfirmed" ? "提交结果暂未确认，正在查找原任务，请勿重复提交。" : "暂时无法同步生成进度，正在重新连接，请勿重复提交。"}</span>
+                <button type="button" onClick={onRetryFailure}>
+                    <RefreshCw />
+                    刷新状态
+                </button>
+            </div>
+        );
     if (item.status === "pending") return <CreationMediaPending mode={item.mode || "image"} ratio={item.settings?.ratio} />;
     if ((item.status === "error" || item.status === "cancelled") && !expectedResultCount)
         return (

@@ -94,18 +94,20 @@ test("polling reconnects the original task after more than five network failures
     };
     const connections: string[] = [];
     const result = await waitForGenerationTask(running.id, {
-            initialTask: running,
-            intervalMs: 1,
-            timeoutMs: 1000,
-            onConnectionChange: (state) => connections.push(state),
-        });
+        initialTask: running,
+        intervalMs: 1,
+        timeoutMs: 1000,
+        onConnectionChange: (state) => connections.push(state),
+    });
     expect(result.status).toBe("succeeded");
     expect(queries).toBe(7);
     expect(connections).toEqual([...Array(6).fill("reconnecting"), "connected"]);
 });
 
 test("observation timeout remains an unknown state and does not mean generation failed", async () => {
-    apiClient.defaults.adapter = async () => { throw new ApiError("offline", { status: 503 }); };
+    apiClient.defaults.adapter = async () => {
+        throw new ApiError("offline", { status: 503 });
+    };
     try {
         await waitForGenerationTask(running.id, { initialTask: running, intervalMs: 1, timeoutMs: 15 });
         throw new Error("expected observation timeout");
@@ -117,7 +119,10 @@ test("observation timeout remains an unknown state and does not mean generation 
 
 test("abort during reconnection only stops observation", async () => {
     const controller = new AbortController();
-    apiClient.defaults.adapter = async () => { controller.abort(); throw new ApiError("offline", { status: 502 }); };
+    apiClient.defaults.adapter = async () => {
+        controller.abort();
+        throw new ApiError("offline", { status: 502 });
+    };
     await expect(waitForGenerationTask(running.id, { initialTask: running, signal: controller.signal, intervalMs: 1 })).rejects.toMatchObject({ name: "AbortError" });
 });
 
@@ -162,8 +167,13 @@ test("a recovered terminal task is queried again without creating a new task", a
     let queries = 0;
     const seen: string[] = [];
     const service = createGenerationTaskSubscriptionService({
-        async queryTask() { queries += 1; return current; },
-        async waitTask() { throw new Error("terminal task must not be polled"); },
+        async queryTask() {
+            queries += 1;
+            return current;
+        },
+        async waitTask() {
+            throw new Error("terminal task must not be polled");
+        },
     });
     const unsubscribe = service.subscribe([running.id], (task) => seen.push(task.status));
     await tick();
