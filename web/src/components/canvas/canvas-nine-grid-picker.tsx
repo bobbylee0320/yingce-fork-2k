@@ -4,6 +4,7 @@ import { Grid3x3 } from "lucide-react";
 
 import { TOOL_ICON_MAP } from "./canvas-resource-mention-textarea";
 import { getNineGridMenuItems } from "./canvas-image-toolbar-tools";
+import { CanvasPersonalImagePresets } from "./canvas-personal-image-presets";
 
 function NineGridToolIcon({ iconName, className = "size-3.5 shrink-0" }: { iconName: string; className?: string }) {
     const Icon = TOOL_ICON_MAP[iconName] ?? Grid3x3;
@@ -45,16 +46,23 @@ export function CanvasNineGridPicker({
     onOpenChange,
     icon = "Grid3x3",
     onSelect,
+    activeToolId,
+    onClear,
 }: {
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
     /** 当前已选九宫格工具的 lucide 图标名，无选择时回退 Grid3x3。 */
     icon?: string;
     onSelect: (toolId: number, label: string, icon: string) => void;
+    activeToolId?: number;
+    onClear?: () => void;
 }) {
     const [internalOpen, setInternalOpen] = useState(false);
+    const [tab, setTab] = useState<"builtin" | "mine">("builtin");
+    const [editing, setEditing] = useState(false);
     const actualOpen = open ?? internalOpen;
     const setOpen = (next: boolean) => {
+        if (!next && editing) return;
         setInternalOpen(next);
         onOpenChange?.(next);
     };
@@ -79,7 +87,29 @@ export function CanvasNineGridPicker({
                     onWheel={(event) => event.stopPropagation()}
                     onKeyDown={(event) => event.stopPropagation()}
                 >
-                    <div className="canvas-node-toolbar-menu-stack">{menu}</div>
+                    <div className="canvas-node-toolbar-menu-stack">
+                        <div className="flex gap-1 border-b border-border p-2" role="tablist" aria-label="图片预设来源">
+                            <button type="button" role="tab" aria-selected={tab === "builtin"} className={`rounded-md px-3 py-1.5 text-xs ${tab === "builtin" ? "bg-surface-active font-semibold" : "opacity-60"}`} onClick={() => setTab("builtin")}>
+                                系统预设
+                            </button>
+                            <button type="button" role="tab" aria-selected={tab === "mine"} className={`rounded-md px-3 py-1.5 text-xs ${tab === "mine" ? "bg-surface-active font-semibold" : "opacity-60"}`} onClick={() => setTab("mine")}>
+                                我的预设
+                            </button>
+                        </div>
+                        <div hidden={tab !== "builtin"}>{menu}</div>
+                        <div hidden={tab !== "mine"}>
+                            <CanvasPersonalImagePresets
+                                open={actualOpen && tab === "mine"}
+                                activeToolId={activeToolId}
+                                onClear={onClear}
+                                onEditingChange={setEditing}
+                                onSelect={(id, label, iconName) => {
+                                    setOpen(false);
+                                    onSelect(id, label, iconName);
+                                }}
+                            />
+                        </div>
+                    </div>
                 </div>
             )}
         >

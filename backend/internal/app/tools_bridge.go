@@ -37,8 +37,22 @@ func (s *Service) SetToolFavorite(userID string, toolID int64, favorite bool) (*
 }
 
 func (s *Service) CreateTool(userID string, req ToolMutationRequest) (*ToolItem, error) {
+	if err := s.validateToolPreviewResources(userID, req); err != nil {
+		return nil, err
+	}
+	return s.toolDomain().Create(userID, req)
+}
+
+func (s *Service) UpdateTool(userID string, toolID int64, req ToolMutationRequest) (*ToolItem, error) {
+	if err := s.validateToolPreviewResources(userID, req); err != nil {
+		return nil, err
+	}
+	return s.toolDomain().Update(userID, toolID, req)
+}
+
+func (s *Service) validateToolPreviewResources(userID string, req ToolMutationRequest) error {
 	if strings.TrimSpace(userID) == "" {
-		return nil, Unauthorized("请先登录")
+		return Unauthorized("请先登录")
 	}
 	values := append([]string{req.Cover, req.MediaURL}, req.ExtraInfo...)
 	for _, value := range values {
@@ -47,20 +61,20 @@ func (s *Service) CreateTool(userID string, req ToolMutationRequest) (*ToolItem,
 		}
 		id := resourceIDFromFileURL(value)
 		if id == "" {
-			return nil, BadAuthRequest("工具预览仅支持本人上传的资源")
+			return BadAuthRequest("工具预览仅支持本人上传的资源")
 		}
 		resource, err := s.repo.ResourceForUser(userID, id)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if resource.Status != model.ResourceStatusReady {
-			return nil, BadAuthRequest("预览资源尚未上传完成")
+			return BadAuthRequest("预览资源尚未上传完成")
 		}
 		if req.Visibility == tools.ToolVisibilityPublic {
-			return nil, BadAuthRequest("公开工具暂不支持私人预览资源，请移除预览或改为私有")
+			return BadAuthRequest("公开工具暂不支持私人预览资源，请移除预览或改为私有")
 		}
 	}
-	return s.toolDomain().Create(userID, req)
+	return nil
 }
 
 func (s *Service) DeleteTool(userID string, toolID int64) error {

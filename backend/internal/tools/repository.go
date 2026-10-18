@@ -25,6 +25,7 @@ type Repository interface {
 	AddToolFavorite(userID string, toolID int64) error
 	RemoveToolFavorite(userID string, toolID int64) error
 	CreateTool(tool *model.Tool) (*model.Tool, error)
+	UpdateUserTool(userID string, toolID int64, tool *model.Tool) (*model.Tool, error)
 	DeleteUserTool(userID string, toolID int64) error
 }
 

@@ -74,6 +74,14 @@
 }
 
 /* 九宫格菜单按 section 分两列，缩短纵向长度 */
+.canvas-node-toolbar-menu-nine-grid .canvas-node-toolbar-menu-stack {
+    width: min(28rem, calc(100vw - 32px));
+    overflow: hidden;
+    border: 1px solid var(--workspace-overlay-border, var(--dock-border));
+    border-radius: var(--r-md);
+    background: var(--workspace-overlay-bg-strong, var(--popover));
+}
+
 .canvas-node-toolbar-menu-nine-grid .ant-dropdown-menu {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

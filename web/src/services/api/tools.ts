@@ -82,3 +82,7 @@ export function createTool(input: ToolMutationInput) {
 export function deleteTool(id: number) {
     return http.delete<{ deleted: boolean }>(`/tools/${encodeURIComponent(String(id))}`);
 }
+
+export function updateTool(id: number, input: ToolMutationInput) {
+    return http.patch<ToolItem>(`/tools/${encodeURIComponent(String(id))}`, input);
+}

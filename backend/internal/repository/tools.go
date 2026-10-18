@@ -180,6 +180,27 @@ func (r *Repository) CreateTool(tool *model.Tool) (*model.Tool, error) {
 	return tool, nil
 }
 
+func (r *Repository) UpdateUserTool(userID string, toolID int64, tool *model.Tool) (*model.Tool, error) {
+	var updated model.Tool
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.Tool{}).
+			Where("id = ? AND owner_id = ? AND source = ? AND type = ? AND enabled = ?", toolID, userID, tools.ToolSourceUser, tool.Type, true).
+			Updates(map[string]any{
+				"label": tool.Label, "label_en": tool.LabelEn, "desc": tool.Desc, "tag": tool.Tag,
+				"cover": tool.Cover, "extra_info_json": tool.ExtraInfoJSON, "prompt": tool.Prompt,
+				"ratio": tool.Ratio, "media_url": tool.MediaURL, "visibility": tool.Visibility, "updated_at": time.Now(),
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return kernel.NotFound("工具不存在或不支持编辑")
+		}
+		return tx.First(&updated, toolID).Error
+	})
+	return &updated, err
+}
+
 // DeleteUserTool 仅允许删除自己的自定义工具；事务内同步清理收藏记录。
 func (r *Repository) DeleteUserTool(userID string, toolID int64) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
