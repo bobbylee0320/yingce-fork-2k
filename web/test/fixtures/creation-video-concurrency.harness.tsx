@@ -189,7 +189,7 @@ test("创建返回前可提交下一镜，重复触发不重复提交，乱序�
     expect(composer.model).toBe(firstUser.model);
     expect(composer.seconds).toBe(firstUser.settings!.seconds);
     expect(composer.references.filter((item: any) => item.attachmentId).map((item: any) => item.mentionToken)).toEqual(["@[attachment:image-a]", "@[attachment:audio-a]"]);
-    expect(expandCreationPrompt(composer.prompt, composer.references, composer.attachments)).toContain("@图片1：参考图片 1");
+    expect(expandCreationPrompt(composer.prompt, composer.references, composer.attachments)).toContain("@角色.png：参考图片 1");
     expect(buildCreationMentionReferences([], attachments)).toHaveLength(2);
     // 复用仅回填，确认发送前不创建收费任务。
     expect(requests).toHaveLength(3);
