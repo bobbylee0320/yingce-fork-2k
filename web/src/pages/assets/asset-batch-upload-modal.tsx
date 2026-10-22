@@ -20,6 +20,7 @@ export function AssetBatchUploadModal({ open, defaultFolderId, folders, onClose,
     const [folderId, setFolderId] = useState(defaultFolderId);
     const [tags, setTags] = useState<string[]>([]);
     const [uploading, setUploading] = useState(false);
+    const [dragging, setDragging] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const doneCount = items.filter((item) => item.status === "done").length;
     const failedItems = items.filter((item) => item.status === "error");
@@ -94,13 +95,21 @@ export function AssetBatchUploadModal({ open, defaultFolderId, folders, onClose,
                 <label className="text-xs font-medium text-foreground/65">自定义分类<Select className="mt-1 w-full" value={folderId} options={folderOptions} onChange={setFolderId} /></label>
                 <label className="text-xs font-medium text-foreground/65">公共标签<Select mode="tags" className="mt-1 w-full" value={tags} tokenSeparators={[",", "，"]} onChange={setTags} placeholder="输入后回车" /></label>
             </div>
-            <button type="button" className="batch-upload-dropzone" onClick={() => inputRef.current?.click()}>
-                <UploadCloud className="size-7" /><strong>选择多张图片</strong><span>支持拖拽思路的多选上传，标题默认取文件名</span>
+            <button
+                type="button"
+                className={dragging ? "batch-upload-dropzone is-dragging" : "batch-upload-dropzone"}
+                onClick={() => inputRef.current?.click()}
+                onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
+                onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }}
+                onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
+                onDrop={(event) => { event.preventDefault(); setDragging(false); if (!uploading) chooseFiles(Array.from(event.dataTransfer.files)); }}
+            >
+                <UploadCloud className="size-7" /><strong>选择多张图片</strong><span>支持拖拽或多选上传，标题默认取文件名</span>
             </button>
             <input ref={inputRef} type="file" hidden accept="image/*" multiple onChange={(event) => { chooseFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} />
             {hasFiles ? <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs text-foreground/55"><span>已选择 {items.length} 张 · 成功 {doneCount} 张</span><button type="button" className="text-foreground/45 hover:text-foreground" onClick={() => setItems([])} disabled={uploading}>清空</button></div>
-                <div className="batch-upload-list">{items.map((item) => <div key={item.id} className="batch-upload-item"><FileImage className="size-4 shrink-0 text-foreground/45" /><span className="min-w-0 flex-1 truncate" title={item.file.name}>{item.file.name}</span>{item.status === "uploading" ? <div className="w-20 shrink-0"><Progress percent={item.percent || 10} size="small" showInfo={false} /></div> : item.status === "done" ? <StatusBadge tone="success" size="sm" label="完成" /> : item.status === "error" ? <StatusBadge tone="error" size="sm" label="失败" title={item.error} /> : <StatusBadge tone="neutral" size="sm" label="待上传" />}<button type="button" aria-label={`移除 ${item.file.name}`} title="移除" className="batch-upload-remove" onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))} disabled={uploading}><X className="size-3.5" /></button></div>)}</div>
+                <div className="batch-upload-list">{items.map((item) => <div key={item.id} className="batch-upload-item"><FileImage className="size-4 shrink-0 text-foreground/45" /><span className="min-w-0 flex-1"><span className="block truncate" title={item.file.name}>{item.file.name}</span>{item.status === "error" && item.error ? <span className="block truncate text-[11px] text-red-500" title={item.error}>{item.error}</span> : null}</span>{item.status === "uploading" ? <div className="w-20 shrink-0"><Progress percent={item.percent || 10} size="small" showInfo={false} /></div> : item.status === "done" ? <StatusBadge tone="success" size="sm" label="完成" /> : item.status === "error" ? <StatusBadge tone="error" size="sm" label="失败" title={item.error} /> : <StatusBadge tone="neutral" size="sm" label="待上传" />}<button type="button" aria-label={`移除 ${item.file.name}`} title="移除" className="batch-upload-remove" onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))} disabled={uploading}><X className="size-3.5" /></button></div>)}</div>
             </div> : null}
             <div className="flex justify-end gap-2"><Button onClick={close} disabled={uploading}>取消</Button><Button type="primary" icon={<UploadCloud className="size-4" />} onClick={() => void uploadBatch()} disabled={!items.some((item) => item.status === "queued" || item.status === "error")} loading={uploading}>{failedItems.length ? `重试失败项 (${failedItems.length})` : "开始上传"}</Button></div>
         </div>

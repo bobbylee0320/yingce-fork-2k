@@ -70,6 +70,29 @@ func TestExportSystemChannelsRejectsQueryParametersInBaseURL(t *testing.T) {
 	}
 }
 
+func TestImportSystemChannelsRejectsQueryParametersInBaseURL(t *testing.T) {
+	svc, _ := newChannelModelTestService(t)
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	_, err := svc.ImportSystemChannels(admin, SystemChannelExport{
+		Format:   SystemChannelExportFormat,
+		Version:  SystemChannelExportVersion,
+		Channels: []SystemChannelExportChannel{{Name: "query-channel", BaseURL: "https://8.8.8.8/v1?api_key=secret-query"}},
+	})
+	if err == nil {
+		t.Fatal("channel import accepted a Base URL with query parameters")
+	}
+	if strings.Contains(err.Error(), "secret-query") {
+		t.Fatal("channel import error exposed the query credential")
+	}
+	channels, listErr := svc.repo.SystemChannels(true)
+	if listErr != nil {
+		t.Fatal(listErr)
+	}
+	if len(channels) != 0 {
+		t.Fatalf("unsafe channel was persisted: %#v", channels)
+	}
+}
+
 func TestImportSystemChannelsCreatesDisabledAndKeepsExistingSecrets(t *testing.T) {
 	source, _ := newChannelModelTestService(t)
 	source.dataDir = t.TempDir()

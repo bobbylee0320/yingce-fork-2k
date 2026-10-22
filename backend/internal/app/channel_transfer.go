@@ -57,7 +57,7 @@ type SystemChannelImportResult struct {
 func safeSystemChannelExportBaseURL(raw string) (string, error) {
 	baseURL := strings.TrimSpace(raw)
 	parsed, err := url.Parse(baseURL)
-	if err != nil || !parsed.IsAbs() || parsed.Hostname() == "" {
+	if err != nil || !parsed.IsAbs() || parsed.Hostname() == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") {
 		return "", errors.New("渠道 Base URL 无效，无法安全导出")
 	}
 	if parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
@@ -163,6 +163,9 @@ func (s *Service) ImportSystemChannels(actor *model.User, payload SystemChannelE
 	seenNames := map[string]bool{}
 	for _, channel := range payload.Channels {
 		name := strings.TrimSpace(channel.Name)
+		if _, err := safeSystemChannelExportBaseURL(channel.BaseURL); err != nil {
+			return nil, fmt.Errorf("渠道 %s：%w", name, err)
+		}
 		if name == "" {
 			return nil, BadAuthRequest("导出文件中存在未命名的渠道")
 		}
