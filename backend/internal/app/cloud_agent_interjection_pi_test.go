@@ -312,6 +312,33 @@ func TestCloudAgentPiInterjectionResumesAfterFinalAnswer(t *testing.T) {
 	}
 }
 
+func TestCloudAgentPiPlanNudgeResumesAfterFinalAnswer(t *testing.T) {
+	s, db, root := interjectionPiRoot(t)
+	run, state := agentInterjectionState(t, s, root.ID)
+	run.Status = "running"
+	state.Request.Prompt = "请创建一个文本节点"
+	state.Request.Budget.MaxSteps = 3
+	state.Plan = []cloudAgentPlanItem{{ID: "step-1", Title: "创建文本节点", Status: "pending"}}
+	state.Step = 1
+	state.PiAssistantResponses = 1
+	interjectionSaveState(t, s, db, run, &state)
+
+	if err := s.completeCloudAgentPiRun("user", root.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, state = agentInterjectionState(t, s, root.ID)
+	if run.Status != "running" || !state.ActionNudged || !cloudAgentPiResumePromptNudgesPlan(&state) {
+		t.Fatalf("pending plan did not trigger one resumable nudge: status=%s nudged=%v prompt=%q", run.Status, state.ActionNudged, state.PiResumePrompt)
+	}
+	var prompt cloudAgentRuntimeContext
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(state.PiResumePrompt, cloudAgentRuntimeContextMarker)), &prompt); err != nil {
+		t.Fatal(err)
+	}
+	if prompt.Kind != cloudAgentContextPendingPlan || prompt.PendingTitle != "创建文本节点" || prompt.LatestUserMessage != state.Request.Prompt {
+		t.Fatalf("plan nudge lost request context: %+v", prompt)
+	}
+}
+
 // 步数已尽时插话退回、运行照常完成。
 func TestCloudAgentPiInterjectionDroppedWhenStepBudgetExhausted(t *testing.T) {
 	s, db, root := interjectionPiRoot(t)
