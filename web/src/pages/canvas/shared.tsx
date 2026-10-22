@@ -40,7 +40,7 @@ export default function SharedCanvasPage() {
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
     const [connections, setConnections] = useState<Awaited<ReturnType<typeof getPublicCanvasShare>>["project"]["connections"]>([]);
     const [appearance, setAppearance] = useState<CanvasAppearance>(() => canvasAppearanceForTheme(colorTheme));
-    const [backgroundMode, setBackgroundMode] = useState<"lines" | "dots" | "blank">("lines");
+    const [backgroundMode, setBackgroundMode] = useState<"lines" | "dots" | "blank">("dots");
     const [viewport, setViewport] = useState<ViewportTransform>({ x: 0, y: 0, k: 1 });
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);

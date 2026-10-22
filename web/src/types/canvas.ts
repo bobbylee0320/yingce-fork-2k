@@ -8,6 +8,8 @@ import type { CameraControlOptions } from "@/lib/canvas/camera-prompt-library";
 import type { SrtEntry, SubtitleHighlight, SubtitleStyle } from "@/types/timeline";
 import type { GenerationSpec } from "@/lib/canvas/generation-contract.generated";
 import type { GenerationTask } from "@/services/api/task-center";
+import type { ReferenceImage } from "@/types/image";
+import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
 export type Position = {
     x: number;
@@ -63,7 +65,7 @@ export type CanvasGenerationBatchStatus = "queued" | "running" | "partial_failed
 export type CanvasGenerationBatchItemStatus = "waiting" | "submitting" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type CanvasImageGenerationType = "generation" | "edit";
 export type CanvasWorkflowKind = "free" | "script" | "story_input" | "character" | "scene" | "storyboard" | "shot" | "final" | "styleboard" | "reference_set" | "reference_video" | "action_board";
-export type CanvasVideoEditOperation = "text_to_video" | "image_to_video" | "reference_to_video" | "extend" | "inpaint" | "replace_element" | "camera_motion" | "style_transfer" | "audio_to_video" | "compare_versions" | "concat";
+export type CanvasVideoEditOperation = "text_to_video" | "image_to_video" | "reference_to_video" | "extend" | "inpaint" | "replace_element" | "camera_motion" | "style_transfer" | "audio_to_video" | "compare_versions" | "concat" | "enhance";
 export type CanvasSkillCategory = "writing" | "storyboard" | "image" | "video" | "utility";
 export type CanvasSkillOutputMode = "text" | "json" | "image_prompt" | "workflow";
 export type StoryboardColumn =
@@ -149,6 +151,26 @@ export type StoryboardData = {
     referenceNodeIds: string[];
 };
 
+/** 批量创作入队时的输入，保留资源版本；队列重试继续使用同一份输入。 */
+export type CanvasBatchInputSnapshot = {
+    version: 1;
+    prompt: string;
+    context: {
+        prompt: string;
+        referenceImages: ReferenceImage[];
+        referenceVideos: ReferenceVideo[];
+        referenceAudios: ReferenceAudio[];
+        referenceImageSlots: Array<{ nodeId: string; kind: "image" | "character"; imageId?: string }>;
+        characterReferences: Array<{ nodeId: string; assetId: string; requestedVersionId?: string }>;
+        resolvedCharacterVersions: Array<{ assetId: string; versionId: string }>;
+        resolvedCharacterVoices: Array<{ assetId: string; versionId: string; characterName: string; voiceKey: string; sampleResourceId?: string; language?: string; voiceAge?: string; timbre?: string; deliveryInstructions?: string; instructions: string }>;
+        textCount: number;
+        imageCount: number;
+        videoCount: number;
+        audioCount: number;
+    };
+};
+
 export type CanvasGenerationBatchItem = {
     id: string;
     rowId: string;
@@ -158,6 +180,7 @@ export type CanvasGenerationBatchItem = {
     retryCount: number;
     errorDetails?: string;
     costUncertain?: boolean;
+    inputSnapshot?: CanvasBatchInputSnapshot;
 };
 
 export type CanvasGenerationBatch = {
@@ -177,10 +200,15 @@ export type CanvasBatchRow = {
     id: string;
     enabled: boolean;
     inputNodeIds: string[];
+    /** Stable column IDs explicitly edited by the user, including deliberately empty cells. */
+    referenceOverrides?: string[];
     /** Text nodes selected for this row; their contents are appended to prompt. */
     textNodeIds?: string[];
     prompt: string;
     outputNodeId?: string;
+    /** Fingerprint of the inputs used when this row was last queued. */
+    generatedInputSignature?: string;
+    inputChanged?: boolean;
     /** AI-generated cell content keyed by column id (for aiGenerated tables). */
     cells?: Record<string, string>;
 };
@@ -206,6 +234,10 @@ export type CanvasBatchTableData = {
     rows: CanvasBatchRow[];
     /** When true, columns are AI-generated with dynamic headers. */
     aiGenerated?: boolean;
+    /** Cell overrides coexist with live column connections. */
+    referenceMode?: "cells";
+    /** 上次已应用的列输入顺序；行插入、删除及重开不重复分配引用。 */
+    referenceColumnInputs?: Record<string, string[]>;
 };
 
 export type CanvasSkillSnapshot = {
@@ -247,6 +279,12 @@ export type CanvasNodeMetadata = {
           };
     content?: string;
     previewContent?: string;
+    /** Original file and immutable pixel-corrected variants; references share the current content/storageKey. */
+    imageRotation?: {
+        quarterTurns: 0 | 1 | 2 | 3;
+        original: { content: string; storageKey?: string; width: number; height: number; bytes?: number; mimeType?: string };
+        variants?: Partial<Record<1 | 2 | 3, { content: string; storageKey: string; width: number; height: number; bytes: number; mimeType: string }>>;
+    };
     videoPreview?: {
         content: string;
         storageKey?: string;
@@ -456,6 +494,15 @@ export type CanvasNodeMetadata = {
         effectKey?: string;
     };
     sessionId?: string;
+    /** 视频画质增强任务参数；重试按这里重建请求，而不是沿用源节点的生成配置。 */
+    videoEnhance?: {
+        sourceNodeId: string;
+        model: string;
+        resolution: string;
+        fps?: number;
+        bitrateLevel?: "low" | "medium" | "high";
+        bitrate?: number;
+    };
     videoEditOperation?: CanvasVideoEditOperation;
     arkPrivateAssetUpload?: string;
     videoCameraMoveId?: string;
@@ -468,11 +515,14 @@ export type CanvasNodeMetadata = {
     versionLabel?: string;
     versionPrimary?: boolean;
     copiedFromNodeId?: string;
+    /** Explicit editing copy; subsequent orientation tools modify this node in place. */
+    imageEditSourceNodeId?: string;
     generationResultPlacement?: "replace-node" | "new-version";
     previsSceneId?: string;
     previsShotId?: string;
     previsPreviewNodeId?: string;
     previsDepthNodeId?: string;
+    previsDepthVideoNodeId?: string;
     previsNormalNodeId?: string;
     previsClayVideoNodeId?: string;
     subtitleEntries?: SrtEntry[];
@@ -500,6 +550,10 @@ export type CanvasNodeMetadata = {
     batchRowId?: string;
     batchOperation?: CanvasBatchOperation;
     batchInputNodeIds?: string[];
+    /** 本次批量生成准备时的输入签名；不代表旧缩略图已采用这些输入。 */
+    batchInputSignature?: string;
+    /** 只有成功媒体写入后才记录，等待或失败时保持空缺。 */
+    batchResultInputSignature?: string;
     frame?: {
         collapsed: boolean;
         expandedWidth: number;

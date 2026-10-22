@@ -293,6 +293,9 @@ func (s *Service) settleRecoveredBilling(task *model.Task, providerRequestID str
 	if order.Status == model.BillingStatusRefunded {
 		return billing.RestoreRefundedBilling(task.BillingOrderID, providerRequestID)
 	}
+	if handled, err := s.settleVideoProcessingBilling(*task, providerRequestID); handled || err != nil {
+		return err
+	}
 	return billing.SettleBilling(task.BillingOrderID, providerRequestID)
 }
 

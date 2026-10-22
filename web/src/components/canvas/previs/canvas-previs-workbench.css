@@ -436,6 +436,23 @@
     outline: 2px solid var(--pd-a0);
     outline-offset: 2px;
 }
+.previs-desk-header-action.is-active {
+    border-color: var(--pd-a-bd);
+    background: var(--pd-a-bg);
+    color: var(--pd-a1);
+}
+.previs-desk-header-action:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+/* 顶栏按钮多时，中等宽度先压缩内边距，避免挤出可视区域。 */
+@media (max-width: 1440px) {
+    .previs-desk-header-action {
+        padding: 0 9px;
+        gap: 4px;
+    }
+}
 
 /* ── Viewport shell ────────────────────────────────────────────────────────── */
 .previs-desk .previs-viewport-shell,
@@ -1683,6 +1700,9 @@
 }
 .pv-panel--right {
     border-left: 1px solid var(--pd-line);
+    /* Agent 入口默认悬浮在右下角（约 76px + 标签）：留出滚动余量，输出与提示词可以滚到它上方，不被遮挡。 */
+    padding-bottom: 128px;
+    scroll-padding-bottom: 128px;
 }
 .pv-panel-close {
     display: none;
@@ -2157,44 +2177,103 @@
     gap: 6px;
     padding: 0 8px 4px;
 }
+.pv-prop-lib__header,
 .pv-prop-cat__label {
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--pd-faint);
-    margin-bottom: 3px;
-}
-.pv-prop-cat__items {
     display: flex;
-    flex-wrap: wrap;
-    gap: 3px;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
 }
-.pv-prop-chip {
+.pv-prop-lib__header {
+    padding: 8px 12px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--pd-muted);
+}
+.pv-prop-cat__label {
+    padding: 2px 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--pd-faint);
+}
+.pv-prop-lib__header:hover,
+.pv-prop-cat__label:hover {
+    color: var(--pd-text);
+}
+.pv-prop-lib__chevron {
+    flex: none;
+    transition: transform 0.12s;
+}
+.pv-prop-lib__chevron.is-open {
+    transform: rotate(90deg);
+}
+.pv-prop-cat__count {
+    margin-left: auto;
+    font-weight: 500;
+    opacity: 0.7;
+}
+.pv-prop-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    margin-top: 4px;
+}
+.pv-prop-card {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
-    padding: 4px 7px;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    padding: 6px 4px 5px;
     border: 1px solid var(--pd-line);
-    border-radius: 5px;
+    border-radius: 6px;
     background: rgba(255, 255, 255, 0.03);
     cursor: pointer;
     transition:
         border-color 0.1s,
         background 0.1s;
 }
-.pv-prop-chip:hover {
+.pv-prop-card:hover {
     border-color: var(--pd-line-strong);
     background: var(--pd-surface-2);
 }
-.pv-prop-chip__name {
+.pv-prop-card:focus-visible {
+    outline: 2px solid var(--pd-accent, #4c8dff);
+    outline-offset: 1px;
+}
+.pv-prop-thumb {
+    width: 40px;
+    height: 32px;
+}
+.pv-prop-thumb__top {
+    fill: #c9d1db;
+}
+.pv-prop-thumb__side {
+    fill: #8e99a8;
+}
+.pv-prop-thumb__shade {
+    fill: #6c7685;
+}
+.pv-prop-card__name {
+    max-width: 100%;
+    overflow: hidden;
     font-size: 11px;
     color: var(--pd-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.pv-prop-chip__size {
+.pv-prop-card__size {
+    max-width: 100%;
+    overflow: hidden;
     font-size: 9px;
     color: var(--pd-faint);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* ── Background images ──────────────────────────────────────────────────── */
@@ -3120,4 +3199,663 @@
 .previs-desk .previs-actor-colors .ant-color-picker-trigger:hover,
 .previs-desk .previs-actor-colors .ant-color-picker-trigger:focus-visible {
     border-color: var(--pd-a0);
+}
+
+/* ── 镜头画幅安全框（CAM 视图）：框内即成片，框外压暗 ───────────────────── */
+.pv-safe-frame {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    overflow: hidden;
+}
+.pv-safe-frame__window {
+    position: absolute;
+    outline: 1px solid color-mix(in srgb, var(--pd-t0) 55%, transparent);
+    /* 用超大扩散阴影压暗安全框外区域，避免四块遮幅随尺寸重算。 */
+    box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--pd-s0) 62%, transparent);
+}
+
+/* ── 快捷键提示条与帮助面板 ─────────────────────────────────────────────── */
+.pv-shortcut-hint {
+    /* 底部中间是工具 dock（约 52px 高 + 14px 间距）；提示条放在 dock 上方一行，任何宽度都不会互相遮挡。 */
+    position: absolute;
+    left: 12px;
+    bottom: 76px;
+    z-index: 6;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: calc(100% - 24px);
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--pd-s1) 72%, transparent);
+    backdrop-filter: blur(16px);
+    color: var(--pd-t1);
+    font-size: var(--pd-ts-xs);
+    white-space: nowrap;
+    overflow: hidden;
+    pointer-events: none;
+}
+.pv-shortcut-hint > span:first-of-type {
+    color: var(--pd-t0);
+    font-weight: 600;
+}
+.pv-shortcut-hint__sep {
+    width: 1px;
+    height: 12px;
+    background: var(--pd-b0);
+}
+.pv-shortcut-hint kbd,
+.pv-shortcut-panel kbd {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    margin: 0 2px;
+    border-radius: 4px;
+    border: 1px solid var(--pd-b1);
+    background: var(--pd-s2);
+    color: var(--pd-t0);
+    font: 600 10px/1 var(--font-mono, ui-monospace, monospace);
+}
+.pv-shortcut-panel {
+    position: absolute;
+    right: 12px;
+    bottom: 64px;
+    z-index: 8;
+    width: min(320px, calc(100% - 24px));
+    max-height: calc(100% - 96px);
+    overflow-y: auto;
+    padding: 10px 12px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--pd-b0);
+    background: var(--pd-s1);
+    color: var(--pd-t0);
+    box-shadow: 0 18px 48px color-mix(in srgb, var(--pd-s0) 60%, transparent);
+    font-size: var(--pd-ts-xs);
+}
+.pv-shortcut-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+.pv-shortcut-panel__group + .pv-shortcut-panel__group {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--pd-b0);
+}
+.pv-shortcut-panel__title {
+    margin-bottom: 4px;
+    color: var(--pd-t2);
+}
+.pv-shortcut-panel__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 24px;
+}
+.pv-shortcut-panel__keys {
+    flex-shrink: 0;
+}
+
+/* ── 录制中 ───────────────────────────────────────────────────────────── */
+.previs-desk-header-action.is-recording {
+    border-color: var(--previs-danger);
+    background: var(--previs-danger-soft);
+    color: var(--previs-danger);
+}
+.previs-desk-header-action.is-recording svg {
+    fill: currentColor;
+    animation: pv-record-pulse 1.2s ease-in-out infinite;
+}
+@keyframes pv-record-pulse {
+    50% {
+        opacity: 0.35;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .previs-desk-header-action.is-recording svg {
+        animation: none;
+    }
+}
+@media (max-width: 860px) {
+    .pv-shortcut-hint {
+        display: none;
+    }
+}
+
+/* ── 动作库片段列表 ─────────────────────────────────────────────────────── */
+.previs-motion-list {
+    display: grid;
+    gap: 6px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+}
+.previs-motion-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 76px 76px;
+    grid-template-areas:
+        "name start duration"
+        "intensity intensity remove";
+    align-items: center;
+    gap: 4px 6px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: var(--pd-s2);
+}
+.previs-motion-row.is-conflict {
+    box-shadow: inset 0 0 0 1px var(--previs-danger);
+}
+.previs-motion-row__name {
+    grid-area: name;
+    overflow: hidden;
+    color: var(--pd-t0);
+    font-size: var(--pd-ts-xs);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.previs-motion-row > .ant-input-number-group-wrapper:nth-of-type(1) {
+    grid-area: start;
+}
+.previs-motion-row > .ant-input-number-group-wrapper:nth-of-type(2) {
+    grid-area: duration;
+}
+.previs-motion-row__intensity {
+    grid-area: intensity;
+    margin: 0 4px;
+}
+.previs-motion-row__remove {
+    grid-area: remove;
+    justify-self: end;
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--pd-t2);
+    cursor: pointer;
+}
+.previs-motion-row__remove:hover {
+    background: var(--pd-s3);
+    color: var(--previs-danger);
+}
+.previs-motion-row__remove:focus-visible {
+    outline: 2px solid var(--pd-a0);
+    outline-offset: 1px;
+}
+
+/* ── 检查器分组：变换 / 体型 / 外观 / 姿态 / 动作 ─────────────────────── */
+.previs-inspector-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--pd-b0);
+}
+.previs-inspector-group:first-of-type {
+    border-top: 0;
+    padding-top: 0;
+}
+.previs-inspector-group__title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: var(--pd-ts-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--pd-t1);
+}
+.previs-inspector-group__hint {
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--pd-t2);
+}
+.previs-inspector-group__body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.previs-profile-slider {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 46px;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--pd-ts-sm);
+    color: var(--pd-t1);
+}
+.previs-profile-slider__value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--pd-t2);
+}
+.previs-vec3 {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.previs-vec3__label {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    font-size: var(--pd-ts-sm);
+    color: var(--pd-t1);
+}
+.previs-vec3__unit {
+    font-size: var(--pd-ts-2xs);
+    color: var(--pd-t3);
+}
+.previs-vec3__inputs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+}
+.previs-vec3__axis {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    border: 1px solid var(--pd-b1);
+    border-radius: var(--pd-r-sm);
+    background: var(--pd-s2);
+    overflow: hidden;
+}
+.previs-vec3__axis:focus-within {
+    border-color: var(--pd-a0);
+}
+.previs-vec3__axis-tag {
+    flex: 0 0 16px;
+    align-self: stretch;
+    display: grid;
+    place-items: center;
+    font-size: var(--pd-ts-2xs);
+    font-weight: 700;
+    color: var(--pd-t0);
+}
+/* 轴色与 gizmo 一致：X 红、Y 绿、Z 蓝。 */
+.previs-vec3__axis--x .previs-vec3__axis-tag {
+    background: oklch(0.6 0.17 25 / 0.55);
+}
+.previs-vec3__axis--y .previs-vec3__axis-tag {
+    background: oklch(0.62 0.15 150 / 0.55);
+}
+.previs-vec3__axis--z .previs-vec3__axis-tag {
+    background: oklch(0.6 0.15 250 / 0.55);
+}
+.previs-vec3__axis .ant-input-number {
+    min-width: 0;
+    background: transparent !important;
+    border: 0 !important;
+}
+.previs-vec3__axis .ant-input-number-disabled {
+    opacity: 0.5;
+}
+.previs-inspector-toggles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+.previs-inspector-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 5px 8px;
+    border: 1px solid var(--pd-b0);
+    border-radius: var(--pd-r-sm);
+    font-size: var(--pd-ts-sm);
+    color: var(--pd-t1);
+}
+
+/* ── 场景面板「添加」按钮行 ─────────────────────────────────────────────── */
+.pv-add-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 0 8px 8px;
+}
+.pv-add-row__btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 7px 0 6px;
+    border: 1px solid var(--pd-line);
+    border-radius: 6px;
+    background: var(--pd-surface-2, rgba(255, 255, 255, 0.03));
+    color: var(--pd-text);
+    font-size: 11px;
+    cursor: pointer;
+    transition:
+        border-color 0.12s,
+        background 0.12s;
+}
+.pv-add-row__btn:hover {
+    border-color: var(--pd-a0);
+    background: var(--pd-a-bg);
+}
+.pv-add-row__btn:focus-visible {
+    outline: 2px solid var(--pd-a0);
+    outline-offset: 1px;
+}
+
+/* ── 添加弹窗（antd 门户渲染在 .previs-desk 之外，自带变量） ─────────────── */
+.previs-add-dialog-root {
+    --ad-bg: oklch(0.14 0.018 236);
+    --ad-surface: oklch(0.17 0.02 234);
+    --ad-surface-2: oklch(0.21 0.022 232);
+    --ad-line: oklch(1 0 0 / 0.1);
+    --ad-line-strong: oklch(1 0 0 / 0.24);
+    --ad-text: oklch(0.97 0.008 240);
+    --ad-muted: oklch(0.7 0.016 240);
+    --ad-faint: oklch(0.5 0.016 240);
+    --ad-accent: var(--previs-accent, oklch(0.72 0.18 240));
+    --ad-accent-bg: oklch(0.72 0.18 240 / 0.14);
+}
+/* antd v6 的外壳是 .ant-modal-container；标题栏透明，统一跟随外壳底色。 */
+.previs-add-dialog-root .ant-modal-container {
+    padding: 16px 18px 14px;
+    border: 1px solid var(--ad-line);
+    background: var(--ad-bg);
+    color: var(--ad-text);
+}
+.previs-add-dialog-root .ant-modal-header {
+    margin-bottom: 12px;
+    background: transparent;
+}
+.previs-add-dialog-root .ant-modal-title {
+    color: var(--ad-text);
+    font-size: 14px;
+}
+.previs-add-dialog-root .ant-modal-close {
+    color: var(--ad-muted);
+}
+.previs-add-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    color: var(--ad-text);
+}
+.previs-add-dialog__tabs {
+    display: inline-flex;
+    align-self: flex-start;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--ad-surface);
+}
+.previs-add-dialog__tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ad-muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+.previs-add-dialog__tab:hover {
+    color: var(--ad-text);
+}
+.previs-add-dialog__tab.is-active {
+    background: var(--ad-text);
+    color: var(--ad-bg);
+    font-weight: 600;
+}
+.previs-add-dialog__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 14px;
+    min-height: 420px;
+}
+.previs-add-dialog__options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 460px;
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+}
+.previs-add-dialog__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 6px;
+}
+.previs-add-dialog__card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    min-height: 52px;
+    padding: 8px 10px;
+    border: 1px solid var(--ad-line);
+    border-radius: 8px;
+    background: var(--ad-surface);
+    color: var(--ad-text);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        border-color 0.12s,
+        background 0.12s;
+}
+.previs-add-dialog__card:hover {
+    border-color: var(--ad-line-strong);
+}
+.previs-add-dialog__card.is-active {
+    border-color: var(--ad-accent);
+    background: var(--ad-accent-bg);
+}
+.previs-add-dialog__card:focus-visible,
+.previs-add-dialog__chip:focus-visible,
+.previs-add-dialog__tab:focus-visible,
+.previs-add-dialog__swatch:focus-visible {
+    outline: 2px solid var(--ad-accent);
+    outline-offset: 2px;
+}
+.previs-add-dialog__card-thumb {
+    align-self: center;
+    width: 100%;
+    height: 40px;
+}
+.previs-add-dialog__card-thumb .pv-prop-thumb {
+    width: 100%;
+    height: 100%;
+}
+.previs-add-dialog__card-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.previs-add-dialog__card-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.3);
+}
+.previs-add-dialog__card-hint {
+    color: var(--ad-faint);
+    font-size: 10px;
+    line-height: 1.35;
+}
+.previs-add-dialog__section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.previs-add-dialog__section-title {
+    color: var(--ad-muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+.previs-add-dialog__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.previs-add-dialog__chip {
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--ad-line);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ad-muted);
+    font-size: 11px;
+    cursor: pointer;
+}
+.previs-add-dialog__chip:hover {
+    color: var(--ad-text);
+    border-color: var(--ad-line-strong);
+}
+.previs-add-dialog__chip.is-active {
+    border-color: var(--ad-accent);
+    background: var(--ad-accent-bg);
+    color: var(--ad-text);
+}
+.previs-add-dialog__swatches {
+    display: flex;
+    gap: 6px;
+}
+.previs-add-dialog__swatch {
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.25);
+}
+.previs-add-dialog__swatch.is-active {
+    outline: 2px solid var(--ad-accent);
+    outline-offset: 2px;
+}
+.previs-add-dialog__check,
+.previs-add-dialog__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    color: var(--ad-muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+.previs-add-dialog__link {
+    padding: 0;
+    border: 0;
+    background: none;
+}
+.previs-add-dialog__link:hover,
+.previs-add-dialog__check:hover {
+    color: var(--ad-text);
+}
+.previs-add-dialog__preview {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--ad-line);
+    border-radius: 10px;
+    background: #d8dde3;
+}
+.previs-add-dialog__preview canvas {
+    display: block;
+}
+.previs-add-dialog__preview-label,
+.previs-add-dialog__preview-note {
+    position: absolute;
+    left: 10px;
+    z-index: 1;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: oklch(0.14 0.018 236 / 0.72);
+    color: var(--ad-text);
+    font-size: 10px;
+    pointer-events: none;
+}
+.previs-add-dialog__preview-label {
+    top: 10px;
+}
+.previs-add-dialog__preview-note {
+    bottom: 10px;
+}
+.previs-add-dialog__footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--ad-line);
+}
+.previs-add-dialog__footer-hint {
+    flex: 1;
+    min-width: 0;
+    color: var(--ad-faint);
+    font-size: 11px;
+}
+.previs-add-dialog__footer .pv-btn {
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 7px;
+    font-size: 12px;
+    border: 1px solid var(--ad-line-strong);
+    background: transparent;
+    color: var(--ad-text);
+}
+.previs-add-dialog__footer .pv-btn--accent {
+    border-color: var(--ad-accent);
+    background: var(--ad-accent);
+    color: #fff;
+    font-weight: 600;
+}
+@media (max-width: 860px) {
+    .previs-add-dialog__body {
+        grid-template-columns: 1fr;
+    }
+    .previs-add-dialog__preview {
+        height: 260px;
+        order: -1;
+    }
+    .previs-add-dialog__options {
+        max-height: none;
+    }
+}
+.previs-add-dialog__preview {
+    min-height: 420px;
+}
+.previs-add-dialog__preview > div:not(.previs-add-dialog__preview-label):not(.previs-add-dialog__preview-note) {
+    position: absolute !important;
+    inset: 0;
+}
+.previs-add-dialog__swatches {
+    flex-wrap: wrap;
+    align-items: center;
+}
+.previs-add-dialog__swatch--custom {
+    background: conic-gradient(from 0deg, #ff5f5f, #ffd25f, #5fff8f, #5fc8ff, #9f7bff, #ff5fd2, #ff5f5f);
+}
+.previs-add-dialog__hex {
+    width: 84px;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--ad-line-strong);
+    border-radius: 6px;
+    background: var(--ad-surface);
+    color: var(--ad-text);
+    font: 500 11px/1 var(--font-mono, ui-monospace, monospace);
+    text-transform: uppercase;
+}
+.previs-add-dialog__hex:focus-visible {
+    outline: 2px solid var(--ad-accent);
+    outline-offset: 1px;
 }

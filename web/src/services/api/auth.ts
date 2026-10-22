@@ -533,6 +533,18 @@ export function duplicateAdminChannel(id: string) {
     return http.post<{ channel: ModelChannel }>(`/admin/channels/${encodeURIComponent(id)}/duplicate`);
 }
 
+/** 系统渠道导出文件：不含 API Key、Secret Key、自定义请求头和代理地址。 */
+export type SystemChannelExport = { format: string; version: number; exportedAt: string; channels: Array<{ name: string; models: unknown[] } & Record<string, unknown>> };
+export type SystemChannelImportResult = { createdChannels: string[]; updatedChannels: string[]; savedModels: number; errors: string[] };
+
+export function exportAdminChannels(ids?: string[]) {
+    return http.post<SystemChannelExport>("/admin/channels/export", { ids: ids || [] });
+}
+
+export function importAdminChannels(payload: SystemChannelExport) {
+    return http.post<SystemChannelImportResult>("/admin/channels/import", payload);
+}
+
 export function updateAdminChannel(id: string, input: Partial<ModelChannel> & { useGlobalConcurrency?: boolean }) {
     return http.patch<{ channel: ModelChannel }>(`/admin/channels/${encodeURIComponent(id)}`, input);
 }

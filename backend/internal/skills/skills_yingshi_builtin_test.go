@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	agenttool "yingce/backend/internal/agent/tool"
 )
 
 const yingshiSkillID = "yingshi-drama-workshop"
@@ -66,7 +69,8 @@ func TestYingshiBuiltinBundleCompatibility(t *testing.T) {
 		if !strings.HasSuffix(path, "/__init__.py") {
 			executableCount++
 		}
-		fileHash := sha256.Sum256(target.archive.Files[path])
+		canonical := bytes.ReplaceAll(target.archive.Files[path], []byte("\r\n"), []byte("\n"))
+		fileHash := sha256.Sum256(canonical)
 		_, _ = fmt.Fprintf(digest, "%s\t%s\n", path, hex.EncodeToString(fileHash[:]))
 	}
 	if executableCount != 31 {
@@ -138,13 +142,12 @@ func TestYingshiBuiltinBundleCompatibility(t *testing.T) {
 	if !strings.Contains(string(tools), `"skill_read_file"`) || !strings.Contains(string(tools), `"skill_search"`) {
 		t.Fatal("host tool inventory no longer exposes the documented skill-reading tools")
 	}
-	if regexp.MustCompile(`(?i)add\(\s*"python(?:_exec|_run)?"`).Match(tools) {
+	if regexp.MustCompile(`(?i)add(?:Typed)?\(\s*"python(?:_exec|_run)?"`).Match(tools) {
 		t.Fatal("host tool inventory unexpectedly exposes a Python executor; review the skill boundary")
 	}
-	unavailable := readYingshiRepoFile(t, root, "backend/internal/app/cloud_agent_pi_standard_tools_test.go")
-	for _, fragment := range []string{"TestPiStandardToolsFailWhenExecutorIsUnavailable", `"write_file"`, `"bash"`, `"shell_command"`} {
-		if !strings.Contains(string(unavailable), fragment) {
-			t.Errorf("host executor inventory check missing %q", fragment)
+	for _, name := range []string{"write_file", "bash", "shell_command", "python", "python_exec", "python_run"} {
+		if _, exists := agenttool.Get(name); exists {
+			t.Errorf("host registry exposes a forbidden executor: %s", name)
 		}
 	}
 	policy := readYingshiRepoFile(t, root, "backend/internal/prompts/agent-system-policy.md")

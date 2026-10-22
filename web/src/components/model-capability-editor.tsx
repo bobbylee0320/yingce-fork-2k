@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/base/switch";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { ReactNode } from "react";
 
-import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ImageCapabilityConfig, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, defaultImageCapabilityConfig, defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ImageCapabilityConfig, type ImageResponseFormat, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
 import { ImageParameterSchemaEditor, ImageParameterSizeEditor } from "@/components/image-parameter-fields";
 import { updateImageParameterSchema, resolveImageParameters, type ImageParameter } from "@/lib/image-parameters";
@@ -24,6 +24,7 @@ const operationOptions = [
     { label: "运镜调整", value: "camera_motion" },
     { label: "风格迁移", value: "style_transfer" },
     { label: "音频生视频", value: "audio_to_video" },
+    { label: "画质增强", value: "enhance" },
 ];
 
 function ImageSizeHelp() {
@@ -59,6 +60,30 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
     const durationValues = (profile.duration.values || []).join(",");
     const resolutionOptions = Array.from(new Set([...VIDEO_RESOLUTION_CAPABILITY_OPTIONS, ...profile.resolutions]));
     const autoDLSpecFields = <AutoDLScreenSpecFields profile={profile} workflow={workflow} disabled={disabled} onChange={(video) => onChange?.({ version: 1, video })} />;
+    // 视频处理模型（画质增强等）：帧率策略与源视频时长上限；生成模型不显示。
+    const processing = profile.processing;
+    const processingFields = processing ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="帧率策略">
+                <Select
+                    className="w-full"
+                    disabled={disabled}
+                    value={processing.fpsPolicy}
+                    options={[
+                        { label: "保持原帧率（按 ≤30fps 档预扣）", value: "keep_source" },
+                        { label: "用户选择帧率", value: "user_select" },
+                    ]}
+                    onChange={(fpsPolicy) => update({ processing: fpsPolicy === "user_select" ? { ...processing, fpsPolicy, fpsOptions: processing.fpsOptions?.length ? processing.fpsOptions : [30, 60] } : { fpsPolicy, maxSourceSeconds: processing.maxSourceSeconds } })}
+                />
+            </Field>
+            {processing.fpsPolicy === "user_select" ? (
+                <Field label="可选帧率（15–120，逗号分隔）">
+                    <Input disabled={disabled} value={(processing.fpsOptions || []).join(",")} placeholder="例如：30,60" onChange={(event) => update({ processing: { ...processing, fpsOptions: parseIntegerList(event.target.value) } })} />
+                </Field>
+            ) : null}
+            <NumberField label={`源视频最长秒数（≤${DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS}）`} value={processing.maxSourceSeconds || DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS} min={1} max={DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS} disabled={disabled} onChange={(value) => update({ processing: { ...processing, maxSourceSeconds: value || DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS } })} />
+        </div>
+    ) : null;
 
     if (section === "references") {
         return (
@@ -196,6 +221,11 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                             </Field>
                         </div>}
                     </ProtocolParameterCard>
+                    {processingFields ? (
+                        <ProtocolParameterCard step="04" title="视频处理" description="帧率策略与源视频时长上限；任务轮询上限 1 小时">
+                            {processingFields}
+                        </ProtocolParameterCard>
+                    ) : null}
                 </div>
             </div>
         );
@@ -308,6 +338,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                         </Field>
                     </div>}
                 </CapabilityBlock>
+                {processingFields ? <CapabilityBlock title="视频处理">{processingFields}</CapabilityBlock> : null}
                 {section === "all" ? (
                     <CapabilityBlock title="视频引用">
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -453,6 +484,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
             <ImageParameterSchemaEditor definitions={definitions} parameters={profile.parameters.filter((p) => p.name === "imageResolution")} disabled={disabled} onChange={(parameters) => onChange?.({ version: 1, image: updateImageParameterSchema(profile, profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p), definitions) })} />
             {size ? <ImageParameterSizeEditor profile={profile} definition={definitions.find((p) => p.name === "size") || size} disabled={disabled} onChange={(image) => onChange?.({ version: 1, image })} /> : null}
             <ImageParameterSchemaEditor definitions={definitions} parameters={profile.parameters.filter((p) => p.name !== "size" && p.name !== "imageResolution")} disabled={disabled} onChange={(parameters) => onChange?.({ version: 1, image: updateImageParameterSchema(profile, profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p)) })} />
+            <ImageResponseFormatEditor value={profile.responseFormat} disabled={disabled} onChange={(responseFormat) => update({ responseFormat })} />
         </div>;
     }
 
@@ -536,7 +568,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
                             </div>
                         ) : null}
                         <BooleanField label="透明背景" value={profile.transparentBackground} disabled={disabled} onChange={(transparentBackground) => update({ transparentBackground })} />
-                        <ParameterField label="response_format" description="发送 b64_json 响应格式" supported={profile.responseFormat.supported} disabled={disabled} onChange={(supported) => update({ responseFormat: { supported } })} />
+                        <ImageResponseFormatEditor value={profile.responseFormat} disabled={disabled} onChange={(responseFormat) => update({ responseFormat })} />
                         <ParameterField label="output_format" description="发送 PNG 输出格式" supported={profile.outputFormat.supported} disabled={disabled} onChange={(supported) => update({ outputFormat: { supported } })} />
                     </ProtocolParameterCard>
                 </div>
@@ -621,7 +653,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
                 ) : null}
                 <BooleanField label="透明背景" value={profile.transparentBackground} disabled={disabled} onChange={(transparentBackground) => update({ transparentBackground })} />
                 <div className="grid gap-3 sm:grid-cols-2">
-                    <ParameterField label="response_format" description="发送 b64_json 响应格式" supported={profile.responseFormat.supported} disabled={disabled} onChange={(supported) => update({ responseFormat: { supported } })} />
+                    <ImageResponseFormatEditor value={profile.responseFormat} disabled={disabled} onChange={(responseFormat) => update({ responseFormat })} />
                     <ParameterField label="output_format" description="发送 PNG 输出格式" supported={profile.outputFormat.supported} disabled={disabled} onChange={(supported) => update({ outputFormat: { supported } })} />
                 </div>
             </CapabilityGroup>
@@ -752,6 +784,36 @@ function ParameterField({ label, description, supported, disabled, onChange }: {
                 <span>支持</span>
                 <Switch aria-label={`${label}支持`} size="sm" disabled={disabled} checked={supported} onChange={onChange} />
             </label>
+        </div>
+    );
+}
+
+function ImageResponseFormatEditor({ value, disabled, onChange }: { value: ImageCapabilityConfig["responseFormat"]; disabled: boolean; onChange: (value: ImageCapabilityConfig["responseFormat"]) => void }) {
+    const defaultValue: ImageResponseFormat = value.default || "auto";
+    return (
+        <div className="admin-image-response-format-editor space-y-2">
+            <ParameterField
+                label="response_format"
+                description="是否向上游发送响应格式；关闭后由上游自动决定"
+                supported={value.supported}
+                disabled={disabled}
+                onChange={(supported) => onChange({ supported, default: supported ? defaultValue : "auto" })}
+            />
+            {value.supported ? (
+                <Field label="默认响应格式">
+                    <SegmentedControl
+                        block
+                        disabled={disabled}
+                        value={defaultValue}
+                        options={[
+                            { label: "自动", value: "auto" },
+                            { label: "Base64", value: "b64_json" },
+                            { label: "URL", value: "url" },
+                        ]}
+                        onChange={(next) => onChange({ supported: true, default: next as ImageResponseFormat })}
+                    />
+                </Field>
+            ) : null}
         </div>
     );
 }

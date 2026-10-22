@@ -338,7 +338,9 @@ func skuSelectorForIntent(intent ModelRequestIntent) map[string]string {
 		// 价格档按实际参考素材归类。供应商执行仍可使用 reference_to_video、extend
 		// 等细分操作；计价时视频参考优先归为视频生视频，其余图片参考无论数量
 		// 都归为图生视频。
-		if intent.Inputs["video"] > 0 {
+		if selector["operation"] == VideoProcessingOperationEnhance {
+			// 画质增强等处理任务保留自身 operation，价格档可单独按 enhance 定价。
+		} else if intent.Inputs["video"] > 0 {
 			selector["operation"] = "video_to_video"
 		} else if intent.Inputs["image"] > 0 {
 			selector["operation"] = "image_to_video"
@@ -354,6 +356,9 @@ func skuSelectorForIntent(intent ModelRequestIntent) map[string]string {
 		}
 		if audio := normalizedScalar(intent.Options["videoGenerateAudio"]); audio == "true" || audio == "false" {
 			selector["videoGenerateAudio"] = audio
+		}
+		if band := normalizedScalar(intent.Options["fpsBand"]); band == "le30" || band == "le60" || band == "le120" {
+			selector["fpsBand"] = band
 		}
 	case "image":
 		for name, value := range intent.Options {

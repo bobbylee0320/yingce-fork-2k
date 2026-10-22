@@ -1,6 +1,6 @@
 import { Vector3 } from "three";
 
-import { previsActorProfileForArchetype } from "@/lib/canvas/previs/previs-scene";
+import { previsMannequinExtents, resolvePrevisMannequinProfile } from "@/lib/canvas/previs/previs-mannequin";
 import type { PrevisObject } from "@/types/previs";
 
 export type PrevisFrameBounds = {
@@ -20,12 +20,14 @@ export function resolvePrevisObjectBox(object: PrevisObject): { min: Vector3; ma
     const [sx, sy, sz] = object.transform.scale;
     const actor = object.kind === "actor" || object.primitive === "character";
     if (actor) {
-        const profile = { ...previsActorProfileForArchetype(object.archetype || "adult"), ...(object.actorProfile || {}) };
-        const actorScaleY = Math.max(0.1, Math.abs(sy) * profile.height);
-        const actorHeight = object.pose === "sit" || object.pose === "squat" ? 2.05 : profile.accessory === "horns" ? 2.8 : 2.45;
-        const halfWidth = 0.78 * Math.max(0.8, profile.shoulderWidth) * Math.max(0.1, Math.abs(sx));
-        const halfDepth = 0.72 * Math.max(0.1, Math.abs(sz));
-        return { min: new Vector3(x - halfWidth, y - 0.12 * actorScaleY, z - halfDepth), max: new Vector3(x + halfWidth, y + actorHeight * actorScaleY, z + halfDepth) };
+        // 与标准人偶实际尺寸一致（成人约 1.83m）；坐/蹲降低，留出手臂伸展的余量。
+        const profile = resolvePrevisMannequinProfile(object.archetype || "adult", object.actorProfile);
+        const extents = previsMannequinExtents(profile);
+        const lowered = object.pose === "sit" || object.pose === "squat" || object.pose === "kneel_double" ? 0.68 : 1;
+        const height = extents.height * lowered * Math.max(0.1, Math.abs(sy));
+        const halfWidth = Math.max(extents.halfWidth, 0.35 * profile.height) * Math.max(0.1, Math.abs(sx));
+        const halfDepth = Math.max(extents.halfDepth, 0.3 * profile.height) * Math.max(0.1, Math.abs(sz));
+        return { min: new Vector3(x - halfWidth, y, z - halfDepth), max: new Vector3(x + halfWidth, y + height, z + halfDepth) };
     }
     const primitiveBounds: [number, number, number] = object.primitive === "sphere" ? [0.6, 0.6, 0.6] : object.primitive === "cylinder" ? [0.55, 0.8, 0.55] : object.primitive === "plane" ? [1.2, 0.05, 1.2] : [0.6, 0.6, 0.6];
     const half = new Vector3(primitiveBounds[0] * Math.max(0.1, Math.abs(sx)), primitiveBounds[1] * Math.max(0.1, Math.abs(sy)), primitiveBounds[2] * Math.max(0.1, Math.abs(sz)));

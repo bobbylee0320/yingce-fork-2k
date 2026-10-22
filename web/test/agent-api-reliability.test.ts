@@ -186,18 +186,18 @@ describe("Agent admission replay and durable pending records", () => {
 
     it("restores the full original request and message identity, isolated by conversation", async () => {
         const pending = { fingerprint: "fingerprint", key: input.idempotencyKey, request: input, parentRunId: "parent", messageId: "bubble" };
-        await conversations.saveCloudAgentPendingSubmission("canvas", "conversation", pending);
-        expect(await conversations.loadCloudAgentPendingSubmission("canvas", "conversation")).toEqual(pending);
-        expect(await conversations.loadCloudAgentPendingSubmission("canvas", "other")).toBeNull();
-        await conversations.clearCloudAgentPendingSubmission("canvas", "conversation");
-        expect(await conversations.loadCloudAgentPendingSubmission("canvas", "conversation")).toBeNull();
+        await conversations.saveCloudAgentPendingSubmission("conversation", pending);
+        expect(await conversations.loadCloudAgentPendingSubmission("conversation")).toEqual(pending);
+        expect(await conversations.loadCloudAgentPendingSubmission("other")).toBeNull();
+        await conversations.clearCloudAgentPendingSubmission("conversation");
+        expect(await conversations.loadCloudAgentPendingSubmission("conversation")).toBeNull();
     });
 
     it.each(["{broken", "null", "{}", JSON.stringify({ fingerprint: "f", key: input.idempotencyKey, request: { ...input, idempotencyKey: "wrong-key" } })])("fails closed on corrupt pending recovery data", async (raw) => {
-        await conversations.saveCloudAgentPendingSubmission("canvas", "conversation", { fingerprint: "f", key: input.idempotencyKey });
+        await conversations.saveCloudAgentPendingSubmission("conversation", { fingerprint: "f", key: input.idempotencyKey });
         const key = [...storage.data.keys()][0];
         storage.data.set(key, raw);
-        await expect(conversations.loadCloudAgentPendingSubmission("canvas", "conversation")).rejects.toThrow("已暂停本对话发送");
+        await expect(conversations.loadCloudAgentPendingSubmission("conversation")).rejects.toThrow("已暂停本对话发送");
         expect(storage.data.get(key)).toBe(raw);
     });
 });

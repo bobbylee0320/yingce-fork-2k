@@ -1,6 +1,7 @@
 import { Euler, Vector3 } from "three";
 
 import { interpolatePrevisTransform } from "@/lib/canvas/previs/previs-scene";
+import { resolvePrevisShotFov } from "@/lib/canvas/previs/previs-optics";
 import type { PrevisCamera, PrevisScene, PrevisShot, PrevisTransform, PrevisVec3 } from "@/types/previs";
 
 /**
@@ -168,7 +169,9 @@ export function resolvePrevisViewFraming(input: { scene: PrevisScene; mode: Prev
     // 位置与焦点重合时视线为零向量，lookAt 无解：沿摄影机自身 -Z 造一个 1m 外的焦点。
     const view = degenerate ? new Vector3(0, 0, -1).applyEuler(new Euler(...transform.rotation)) : raw;
     const target: PrevisVec3 = degenerate ? [position[0] + view.x, position[1] + view.y, position[2] + view.z] : camera.target;
-    return { cameraId: camera.id, position, target, up: resolvePrevisViewUp(transform.rotation, view.toArray() as PrevisVec3), fov: camera.fov, near: camera.near, far: camera.far };
+    // 焦段是光学真源：fov 按镜头画幅从焦段换算，避免 Agent 只改焦段时画面不变。
+    const fov = resolvePrevisShotFov(camera, resolvePrevisActiveShot(input.scene));
+    return { cameraId: camera.id, position, target, up: resolvePrevisViewUp(transform.rotation, view.toArray() as PrevisVec3), fov, near: camera.near, far: camera.far };
 }
 
 /**

@@ -1,3 +1,4 @@
+import { createClientUUID } from "@/lib/client-id";
 import { App, Button, Form, Input, InputNumber, Modal, Select, Switch, Upload } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { CloudUpload, Edit3, Plus, RefreshCw, Search, Trash2, WandSparkles } from "lucide-react";
@@ -503,7 +504,7 @@ export default function WorkbenchToolsPage() {
                             onClick={() =>
                                 setDraft((current) => ({
                                     ...current,
-                                    inputContract: { ...current.inputContract, slots: [...current.inputContract.slots, { key: crypto.randomUUID(), name: "", mediaTypes: ["image"], resourceKind: "asset", minCount: 0, maxCount: 1, required: false }] },
+                                    inputContract: { ...current.inputContract, slots: [...current.inputContract.slots, { key: createClientUUID(), name: "", mediaTypes: ["image"], resourceKind: "asset", minCount: 0, maxCount: 1, required: false }] },
                                 }))
                             }
                         >
@@ -620,7 +621,7 @@ export default function WorkbenchToolsPage() {
                                 size="small"
                                 disabled={draft.presets.length >= 50}
                                 icon={<Plus className="size-3.5" />}
-                                onClick={() => setDraft((current) => ({ ...current, presets: [...current.presets, { id: crypto.randomUUID(), name: "", promptTemplate: "", summary: "", enabled: true }] }))}
+                                onClick={() => setDraft((current) => ({ ...current, presets: [...current.presets, { id: createClientUUID(), name: "", promptTemplate: "", summary: "", enabled: true }] }))}
                             >
                                 添加预设
                             </Button>

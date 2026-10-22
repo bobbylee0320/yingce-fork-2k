@@ -90,6 +90,49 @@ func registerAdminChannelRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"ok": true})
 	})
+	// 导出不含任何密钥；ids 为空时导出全部系统渠道。
+	r.POST("/admin/channels/export", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req struct {
+			IDs []string `json:"ids"`
+		}
+		if c.Request.ContentLength != 0 {
+			if err := c.ShouldBindJSON(&req); err != nil {
+				fail(c, http.StatusBadRequest, err)
+				return
+			}
+		}
+		exported, err := svc.ExportSystemChannels(user, req.IDs)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, exported)
+	})
+	r.POST("/admin/channels/import", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<20)
+		var req service.SystemChannelExport
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.ImportSystemChannels(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
 	r.GET("/admin/provider-catalog", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

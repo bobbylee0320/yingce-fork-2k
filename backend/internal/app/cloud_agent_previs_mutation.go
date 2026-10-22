@@ -56,6 +56,7 @@ type cloudAgentPrevisPatchOperation struct {
 	ParentID  *string `json:"parentId"`
 	Visible   *bool   `json:"visible"`
 	Pose      string  `json:"pose"`
+	Motion    string  `json:"motion"`
 
 	CharacterAssetID   *string `json:"characterAssetId"`
 	CharacterVersionID *string `json:"characterVersionId"`
@@ -128,7 +129,7 @@ func cloudAgentPrevisSceneCreateSchema() map[string]any {
 func cloudAgentPrevisPatchOperationSchema() map[string]any {
 	vec3 := map[string]any{"type": "array", "minItems": 3, "maxItems": 3, "items": map[string]any{"type": "number"}}
 	properties := map[string]any{
-		"type":               map[string]any{"type": "string", "enum": []string{"scene_update", "shot_add", "shot_update", "shot_remove", "object_add", "object_update", "object_remove", "object_keyframe_upsert", "object_keyframe_remove", "object_motion_path_set", "object_motion_path_clear", "camera_add", "camera_update", "camera_remove", "camera_keyframe_upsert", "camera_keyframe_remove", "light_add", "light_update", "light_remove"}},
+		"type":               map[string]any{"type": "string", "enum": []string{"scene_update", "shot_add", "shot_update", "shot_remove", "object_add", "object_update", "object_remove", "object_keyframe_upsert", "object_keyframe_remove", "object_motion_path_set", "object_motion_path_clear", "actor_motion_add", "actor_motion_remove", "camera_add", "camera_update", "camera_remove", "camera_keyframe_upsert", "camera_keyframe_remove", "light_add", "light_update", "light_remove"}},
 		"id":                 map[string]any{"type": "string", "maxLength": 80, "description": "目标或新建资源 ID"},
 		"name":               map[string]any{"type": "string", "maxLength": cloudAgentPrevisTextLimit},
 		"title":              map[string]any{"type": "string", "maxLength": cloudAgentPrevisTextLimit},
@@ -143,6 +144,7 @@ func cloudAgentPrevisPatchOperationSchema() map[string]any {
 		"color":              map[string]any{"type": "string", "maxLength": 9, "pattern": `^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`, "description": "十六进制颜色"},
 		"parentId":           map[string]any{"type": "string", "maxLength": 80},
 		"visible":            map[string]any{"type": "boolean"},
+		"motion":             map[string]any{"type": "string", "enum": cloudAgentPrevisMotionIDs, "description": "actor_motion_add 动作；time=开始秒，duration=时长，intensity=幅度0.2-2；remove 用 keyframeId 传动作 id"},
 
 		"position":             vec3,
 		"rotation":             vec3,
@@ -1006,6 +1008,7 @@ func prepareCloudAgentPrevisApplyPatch(repo *repository.Repository, userID, canv
 		}
 		items = append(items, item)
 	}
+	cloudAgentPrevisGroundScene(scene)
 	scene["updatedAt"] = time.Now().UTC().Format(time.RFC3339Nano)
 	if err := cloudAgentPrevisValidateScene(scene); err != nil {
 		return nil, err
@@ -1072,6 +1075,46 @@ func cloudAgentPrevisApplyTransform(item map[string]any, operation cloudAgentPre
 		transform["scale"] = cloudAgentPrevisVec3(*operation.Scale)
 	}
 	return nil
+}
+
+// cloudAgentPrevisGroundScene mirrors web/src/lib/canvas/previs/previs-grounding.ts:
+// actors are locked to y=0 (static transform, keyframes and motion path);
+// other objects may be raised but never sink below the ground.
+func cloudAgentPrevisGroundScene(scene map[string]any) {
+	for _, object := range creationMaps(scene["objects"]) {
+		locked := stringValue(object["kind"]) == "actor" || stringValue(object["primitive"]) == "character"
+		if transform, ok := object["transform"].(map[string]any); ok {
+			cloudAgentPrevisGroundPosition(transform, locked)
+		}
+		for _, keyframe := range creationMaps(object["keyframes"]) {
+			if transform, ok := keyframe["transform"].(map[string]any); ok {
+				cloudAgentPrevisGroundPosition(transform, locked)
+			}
+		}
+		if !locked {
+			continue
+		}
+		if path, ok := object["motionPath"].(map[string]any); ok {
+			if points, ok := path["points"].([]any); ok {
+				for _, point := range points {
+					if vec, ok := point.([]any); ok && len(vec) == 3 {
+						vec[1] = 0.0
+					}
+				}
+			}
+		}
+	}
+}
+
+func cloudAgentPrevisGroundPosition(transform map[string]any, locked bool) {
+	position, ok := transform["position"].([]any)
+	if !ok || len(position) != 3 {
+		return
+	}
+	y := numberValue(position[1], 0)
+	if locked || math.IsNaN(y) || math.IsInf(y, 0) || y < -0.005 {
+		position[1] = 0.0
+	}
 }
 
 func cloudAgentPrevisApplyName(item map[string]any, value *string, label string) error {
@@ -1299,8 +1342,79 @@ func cloudAgentPrevisSetMotionPath(item map[string]any, operation cloudAgentPrev
 	for _, point := range operation.PathPoints {
 		points = append(points, cloudAgentPrevisVec3(point))
 	}
+	keyframes, err := cloudAgentPrevisPathKeyframes(item, operation.PathPoints, speed, startDelay, duration, orient)
+	if err != nil {
+		return err
+	}
 	item["motionPath"] = map[string]any{"points": points, "speed": speed, "startDelay": startDelay, "orientToPath": orient}
+	// 与 UI 画走位一致：整条路径接管 transform 轨道，避免走完后跳回旧手工帧。
+	item["keyframes"] = keyframes
 	return nil
+}
+
+// cloudAgentPrevisFocalToFov 按 36mm 传感器宽度换算水平视角，与前端 previsHorizontalFov 一致。
+func cloudAgentPrevisFocalToFov(focalLength float64) float64 {
+	return 2 * math.Atan(36.0/(2*math.Max(1, focalLength))) * 180 / math.Pi
+}
+
+var cloudAgentPrevisPathSpeeds = map[string]float64{"slow": 0.7, "walk": 1.4, "run": 3.5}
+
+// cloudAgentPrevisPathKeyframes 按路径长度与步速把路径点映射到时间：startDelay 前停在起点，
+// 走完路径后停在终点；时长不够时压缩到镜头结束。orientToPath 时按行进方向转身。
+func cloudAgentPrevisPathKeyframes(item map[string]any, points [][]float64, speed string, startDelay, duration float64, orient bool) ([]map[string]any, error) {
+	available := duration - startDelay
+	transform := cloudAgentPrevisMapTransform(item)
+	rotation, ok := cloudAgentPrevisNumberVec3(transform["rotation"])
+	if !ok {
+		rotation = []float64{0, 0, 0}
+	}
+	scale, ok := cloudAgentPrevisNumberVec3(transform["scale"])
+	if !ok {
+		scale = []float64{1, 1, 1}
+	}
+	cumulative := make([]float64, len(points))
+	for index := 1; index < len(points); index++ {
+		a, b := points[index-1], points[index]
+		cumulative[index] = cumulative[index-1] + math.Sqrt((b[0]-a[0])*(b[0]-a[0])+(b[1]-a[1])*(b[1]-a[1])+(b[2]-a[2])*(b[2]-a[2]))
+	}
+	total := cumulative[len(points)-1]
+	if total < 0.01 {
+		return nil, BadAuthRequest("motion path 起终点过近，无法形成走位")
+	}
+	travel := math.Min(available, total/cloudAgentPrevisPathSpeeds[speed])
+	id := stringValue(item["id"])
+	heading := func(index int) float64 {
+		from, to := points[max(0, index-1)], points[min(len(points)-1, index+1)]
+		dx, dz := to[0]-from[0], to[2]-from[2]
+		if math.Hypot(dx, dz) < 1e-6 {
+			return rotation[1]
+		}
+		return math.Atan2(dx, dz)
+	}
+	frame := func(suffix string, time float64, point []float64, yaw float64) map[string]any {
+		return map[string]any{
+			"id": fmt.Sprintf("%s-path-%s", id, suffix), "time": math.Round(time*1000) / 1000, "easing": "linear",
+			"transform": map[string]any{"position": cloudAgentPrevisVec3(point), "rotation": []any{rotation[0], yaw, rotation[2]}, "scale": cloudAgentPrevisVec3(scale)},
+		}
+	}
+	yawAt := func(index int) float64 {
+		if orient {
+			return heading(index)
+		}
+		return rotation[1]
+	}
+	if available <= 0.05 {
+		// 镜头结束时才出发：画面内不会移动，只保留起点站位。
+		return []map[string]any{frame("hold", startDelay, points[0], yawAt(0))}, nil
+	}
+	result := make([]map[string]any, 0, len(points)+1)
+	if startDelay > 0 {
+		result = append(result, frame("hold", 0, points[0], yawAt(0)))
+	}
+	for index, point := range points {
+		result = append(result, frame(fmt.Sprintf("%d", index+1), startDelay+travel*cumulative[index]/total, point, yawAt(index)))
+	}
+	return result, nil
 }
 
 func cloudAgentPrevisApplyObjectPatch(objects *[]map[string]any, operation cloudAgentPrevisPatchOperation, index int) (cloudAgentApprovalPreviewItem, error) {
@@ -1324,7 +1438,11 @@ func cloudAgentPrevisApplyObjectPatch(objects *[]map[string]any, operation cloud
 		}
 		primitive := operation.Primitive
 		if primitive == "" {
+			// 演员缺省必须是人形；旧逻辑默认 box 会让 Agent 新增的演员渲染成方块。
 			primitive = "box"
+			if operation.Kind == "actor" {
+				primitive = "character"
+			}
 		}
 		if primitive != "box" && primitive != "sphere" && primitive != "cylinder" && primitive != "plane" && primitive != "character" {
 			return cloudAgentApprovalPreviewItem{}, BadAuthRequest("新增对象 primitive 不受支持")
@@ -1544,6 +1662,16 @@ func cloudAgentPrevisApplyPatchOperation(scene map[string]any, operation cloudAg
 			scene["objects"] = objects
 		}
 		return item, err
+	case "actor_motion_add", "actor_motion_remove":
+		object := cloudAgentPrevisFindByID(objects, operation.ID)
+		if object == nil {
+			return cloudAgentApprovalPreviewItem{}, BadAuthRequest("目标对象不存在")
+		}
+		if err := cloudAgentPrevisApplyActorMotion(object, operation, cloudAgentPrevisShotDuration(scene)); err != nil {
+			return cloudAgentApprovalPreviewItem{}, err
+		}
+		scene["objects"] = objects
+		return cloudAgentApprovalPreviewItem{Operation: operation.Type, NodeID: operation.ID, NodeTitle: stringValue(object["name"]), Summary: fmt.Sprintf("修改演员《%s》的动作", stringValue(object["name"]))}, nil
 	case "object_keyframe_upsert", "object_keyframe_remove", "object_motion_path_set", "object_motion_path_clear":
 		object := cloudAgentPrevisFindByID(objects, operation.ID)
 		if object == nil {
@@ -1560,6 +1688,7 @@ func cloudAgentPrevisApplyPatchOperation(scene map[string]any, operation cloudAg
 			err = cloudAgentPrevisSetMotionPath(object, operation, duration)
 		case "object_motion_path_clear":
 			delete(object, "motionPath")
+			object["keyframes"] = []map[string]any{}
 		}
 		if err != nil {
 			return cloudAgentApprovalPreviewItem{}, err
@@ -1747,7 +1876,7 @@ func cloudAgentPrevisApplyPatchOperation(scene map[string]any, operation cloudAg
 		if err := cloudAgentPrevisFiniteInRange(focalLength, "摄影机焦段", 1, 300); err != nil {
 			return cloudAgentApprovalPreviewItem{}, err
 		}
-		fov := 2 * math.Atan(36.0/(2*math.Max(1, focalLength))) * 180 / math.Pi
+		fov := cloudAgentPrevisFocalToFov(focalLength)
 		newCamera := map[string]any{
 			"id": operation.ID, "name": name,
 			"transform": map[string]any{"position": cloudAgentPrevisVec3(camPos), "rotation": cloudAgentPrevisVec3(camRot), "scale": cloudAgentPrevisVec3(camScale)},
@@ -1787,6 +1916,8 @@ func cloudAgentPrevisApplyPatchOperation(scene map[string]any, operation cloudAg
 				return cloudAgentApprovalPreviewItem{}, err
 			}
 			camera["focalLength"] = *operation.FocalLength
+			// 焦段与 fov 必须同时写：只改焦段时旧客户端仍按 fov 取景，画面会不变。
+			camera["fov"] = cloudAgentPrevisFocalToFov(*operation.FocalLength)
 		}
 		if operation.Target != nil {
 			if err := cloudAgentPrevisValidateVec3(*operation.Target, "target"); err != nil {
@@ -1963,4 +2094,74 @@ func applyCloudAgentPrevisMutation(repo *repository.Repository, userID, canvasID
 		resultSnapshotHash = afterCanvasHash
 	}
 	return map[string]any{"canvasId": canvasID, "sceneId": plan.SceneID, "nodeId": plan.NodeID, "shotId": plan.ShotID, "snapshotHash": resultSnapshotHash, "canvasSnapshotHash": afterCanvasHash, "committed": true, "summary": plan.Preview.Description}, nil
+}
+
+// cloudAgentPrevisMotionIDs 与前端 PREVIS_MOTIONS（previs-motion.ts）一一对应。
+var cloudAgentPrevisMotionIDs = []string{"idle", "walk", "run", "talk", "wave", "nod", "shake_head", "look_around", "point", "phone_call", "sit_idle", "clap", "fight_idle", "punch", "jump", "fall", "cry", "cheer", "slap", "hold_hand", "hit_react"}
+
+const cloudAgentPrevisMaxActorMotions = 32
+
+// cloudAgentPrevisApplyActorMotion 在演员时间轴上插入/删除程序化动作片段。移动步态由位移自动推导，不需要写 walk/run。
+func cloudAgentPrevisApplyActorMotion(object map[string]any, operation cloudAgentPrevisPatchOperation, duration float64) error {
+	if stringValue(object["kind"]) != "actor" && stringValue(object["primitive"]) != "character" {
+		return BadAuthRequest("只有演员可以添加动作")
+	}
+	motions := creationMaps(object["motions"])
+	if operation.Type == "actor_motion_remove" {
+		if operation.KeyframeID == nil || *operation.KeyframeID == "" {
+			return BadAuthRequest("删除动作需要用 keyframeId 传动作 id")
+		}
+		filtered := make([]map[string]any, 0, len(motions))
+		for _, item := range motions {
+			if stringValue(item["id"]) != *operation.KeyframeID {
+				filtered = append(filtered, item)
+			}
+		}
+		if len(filtered) == len(motions) {
+			return BadAuthRequest("目标动作不存在")
+		}
+		object["motions"] = filtered
+		return nil
+	}
+	if err := cloudAgentPrevisValidateEnum(operation.Motion, "动作", cloudAgentPrevisMotionIDs...); err != nil {
+		return err
+	}
+	if len(motions) >= cloudAgentPrevisMaxActorMotions {
+		return BadAuthRequest("单个演员最多32个动作片段")
+	}
+	start := 0.0
+	if operation.Time != nil {
+		start = *operation.Time
+	}
+	if err := cloudAgentPrevisFiniteInRange(start, "动作开始时间", 0, duration); err != nil {
+		return err
+	}
+	length := math.Max(0.2, duration-start)
+	if operation.Duration != nil {
+		length = *operation.Duration
+	}
+	if err := cloudAgentPrevisFiniteInRange(length, "动作时长", 0.2, 60); err != nil {
+		return err
+	}
+	intensity := 1.0
+	if operation.Intensity != nil {
+		intensity = *operation.Intensity
+	}
+	if err := cloudAgentPrevisFiniteInRange(intensity, "动作幅度", 0.2, 2); err != nil {
+		return err
+	}
+	id := fmt.Sprintf("%s-motion-%d", stringValue(object["id"]), len(motions)+1)
+	if operation.KeyframeID != nil && *operation.KeyframeID != "" {
+		if err := validateCloudAgentID(*operation.KeyframeID, "动作 id", 120); err != nil {
+			return err
+		}
+		id = *operation.KeyframeID
+	}
+	for _, item := range motions {
+		if stringValue(item["id"]) == id {
+			return BadAuthRequest("动作 id 已存在")
+		}
+	}
+	object["motions"] = append(motions, map[string]any{"id": id, "motion": operation.Motion, "start": start, "duration": length, "intensity": intensity})
+	return nil
 }

@@ -22,14 +22,15 @@ const paths: Record<string, string> = {
     "@/lib/canvas/canvas-content": join(dir, "content.ts"),
     "@/stores/use-sync-progress-store": join(dir, "progress.ts"),
     "@/lib/canvas/canvas-task-mutation": fileURLToPath(new URL("../src/lib/canvas/canvas-task-mutation.ts", import.meta.url)),
-    "@/lib/canvas/agent-canvas-patch": new URL("../src/lib/canvas/agent-canvas-patch.ts", import.meta.url).pathname,
+    "./canvas-mutation-batches": fileURLToPath(new URL("services/canvas-mutation-batches.ts", root)),
+    "@/lib/canvas/canvas-batch-input-signature": fileURLToPath(new URL("lib/canvas/canvas-batch-input-signature.ts", root)),
     "./user-data-sync-media": join(dir, "media.ts"),
     "./canvas-edit-leases": stubPath,
     "@/lib/canvas/agent-canvas-patch": fileURLToPath(new URL("lib/canvas/agent-canvas-patch.ts", root)),
 };
 function copySource(source: string, name: string) {
     const code = readFileSync(new URL(source, root), "utf8");
-    const imports = code.replace(/"(@\/[^\"]+|\.\/user-data-sync-media|\.\/canvas-edit-leases|json-canonicalize|zustand)"/g, (_, specifier: string) => JSON.stringify(paths[specifier] ?? stubPath));
+    const imports = code.replace(/"(@\/[^\"]+|\.\/user-data-sync-media|\.\/canvas-edit-leases|\.\/canvas-mutation-batches|json-canonicalize|zustand)"/g, (_, specifier: string) => JSON.stringify(paths[specifier] ?? stubPath));
     writeFileSync(join(dir, name), `import { fixtureWindow as window } from ${JSON.stringify(stubPath)};\n` + imports);
 }
 writeFileSync(
@@ -141,7 +142,11 @@ sync.installRemoteUserDataAutoSync();
 // Independent module state/storage/session, sharing only the server fixture.
 const peerDir = join(dir, "peer");
 mkdirSync(peerDir);
-for (const name of ["dependencies.ts", "resources.ts", "media.ts", "content.ts", "rebase.ts", "progress.ts", "sync.ts"]) writeFileSync(join(peerDir, name), readFileSync(join(dir, name), "utf8").replaceAll(dir, peerDir));
+for (const name of ["dependencies.ts", "resources.ts", "media.ts", "content.ts", "rebase.ts", "progress.ts", "sync.ts"]) {
+    const escapedDir = JSON.stringify(dir).slice(1, -1);
+    const escapedPeerDir = JSON.stringify(peerDir).slice(1, -1);
+    writeFileSync(join(peerDir, name), readFileSync(join(dir, name), "utf8").replaceAll(escapedDir, escapedPeerDir));
+}
 const peerSync: typeof sync = await import(join(peerDir, "sync.ts"));
 const peer = await import(join(peerDir, "dependencies.ts"));
 const peerProgress: typeof import("@/stores/use-sync-progress-store") = await import(join(peerDir, "progress.ts"));

@@ -50,11 +50,11 @@ export type CloudAgentPendingSubmission = CloudAgentMessagePresentation & {
     messageId?: string;
 };
 
-const CLOUD_AGENT_CONVERSATIONS_KEY = "cloud-agent-conversations-v1";
+const CLOUD_AGENT_CONVERSATIONS_KEY = "cloud-agent-conversations-v2";
 
-export async function loadCloudAgentConversations(canvasId: string): Promise<CloudAgentConversationDocument> {
-    if (!canvasId) throw new Error("缺少画布 ID，无法读取 Agent 对话");
-    const value = await localForageStorageForScope(getActiveUserScope()).getItem(storageKey(canvasId));
+// 平台只有一个 Agent：对话按账号保存，不再按画布分桶。每轮绑定哪个画布由发送时所在页面决定。
+export async function loadCloudAgentConversations(): Promise<CloudAgentConversationDocument> {
+    const value = await localForageStorageForScope(getActiveUserScope()).getItem(storageKey());
     if (!value) return emptyDocument();
 
     let parsed: unknown;
@@ -67,8 +67,7 @@ export async function loadCloudAgentConversations(canvasId: string): Promise<Clo
     return parsed;
 }
 
-export async function saveCloudAgentConversations(canvasId: string, activeId: string | null, conversations: CloudAgentConversation[]) {
-    if (!canvasId) throw new Error("缺少画布 ID，无法保存 Agent 对话");
+export async function saveCloudAgentConversations(activeId: string | null, conversations: CloudAgentConversation[]) {
     // 流式标记只属于内存中的观察状态。若网络在最后一个 delta 后断开，
     // 也不能让下次恢复把思考卡片误判为仍在实时展开。
     const persistedConversations = conversations.map((conversation) => ({
@@ -76,22 +75,22 @@ export async function saveCloudAgentConversations(canvasId: string, activeId: st
         messages: conversation.messages.map((message) => ({ ...message, streaming: false })),
     }));
     const document: CloudAgentConversationDocument = { version: 1, activeId, conversations: persistedConversations };
-    await localForageStorageForScope(getActiveUserScope()).setItem(storageKey(canvasId), JSON.stringify(document));
+    await localForageStorageForScope(getActiveUserScope()).setItem(storageKey(), JSON.stringify(document));
 }
 
 // Keep the retry key outside the chat snapshot. If the response is lost, a
 // page refresh can safely repeat the same request without creating another
 // billed Agent turn.
-export async function loadCloudAgentPendingSubmission(canvasId: string, conversationId: string) {
-    if (!canvasId || !conversationId) return null;
-    const value = await localForageStorageForScope(getActiveUserScope()).getItem(pendingStorageKey(canvasId, conversationId));
+export async function loadCloudAgentPendingSubmission(conversationId: string) {
+    if (!conversationId) return null;
+    const value = await localForageStorageForScope(getActiveUserScope()).getItem(pendingStorageKey(conversationId));
     if (value === null || value === undefined) return null;
     // A corrupt recovery record is not proof that the previous POST never ran.
     // Fail closed rather than discarding its identity and risking another charge.
     try {
         const parsed = JSON.parse(value) as Partial<CloudAgentPendingSubmission> | null;
         if (!parsed || typeof parsed.fingerprint !== "string" || typeof parsed.key !== "string" || parsed.key.length < 8) throw new Error("invalid identity");
-        if (parsed.request !== undefined && (!parsed.request || parsed.request.idempotencyKey !== parsed.key || parsed.request.canvasId !== canvasId || typeof parsed.request.prompt !== "string")) throw new Error("invalid request");
+        if (parsed.request !== undefined && (!parsed.request || parsed.request.idempotencyKey !== parsed.key || typeof parsed.request.canvasId !== "string" || typeof parsed.request.prompt !== "string")) throw new Error("invalid request");
         if (parsed.parentRunId !== undefined && typeof parsed.parentRunId !== "string") throw new Error("invalid parent");
         if (parsed.messageId !== undefined && typeof parsed.messageId !== "string") throw new Error("invalid message");
         return { fingerprint: parsed.fingerprint, key: parsed.key, request: parsed.request, parentRunId: parsed.parentRunId, messageId: parsed.messageId, displayText: parsed.displayText, canvasReferenceNodeId: parsed.canvasReferenceNodeId } satisfies CloudAgentPendingSubmission;
@@ -100,14 +99,14 @@ export async function loadCloudAgentPendingSubmission(canvasId: string, conversa
     }
 }
 
-export async function saveCloudAgentPendingSubmission(canvasId: string, conversationId: string, pending: CloudAgentPendingSubmission) {
-    if (!canvasId || !conversationId) throw new Error("缺少 Agent 对话范围，无法保存幂等提交");
-    await localForageStorageForScope(getActiveUserScope()).setItem(pendingStorageKey(canvasId, conversationId), JSON.stringify(pending));
+export async function saveCloudAgentPendingSubmission(conversationId: string, pending: CloudAgentPendingSubmission) {
+    if (!conversationId) throw new Error("缺少 Agent 对话范围，无法保存幂等提交");
+    await localForageStorageForScope(getActiveUserScope()).setItem(pendingStorageKey(conversationId), JSON.stringify(pending));
 }
 
-export async function clearCloudAgentPendingSubmission(canvasId: string, conversationId: string) {
-    if (!canvasId || !conversationId) return;
-    await localForageStorageForScope(getActiveUserScope()).removeItem(pendingStorageKey(canvasId, conversationId));
+export async function clearCloudAgentPendingSubmission(conversationId: string) {
+    if (!conversationId) return;
+    await localForageStorageForScope(getActiveUserScope()).removeItem(pendingStorageKey(conversationId));
 }
 
 export function cloudAgentConversationTitle(messages: CloudAgentConversationMessage[]) {
@@ -119,12 +118,12 @@ function displayConversationTitle(value: string) {
     return markdownPlainText(value.replace(/@\[skill:[^\]]+\]/gu, "技能包")) || "新对话";
 }
 
-function storageKey(canvasId: string) {
-    return `${CLOUD_AGENT_CONVERSATIONS_KEY}:${encodeURIComponent(canvasId)}`;
+function storageKey() {
+    return `${CLOUD_AGENT_CONVERSATIONS_KEY}:global`;
 }
 
-function pendingStorageKey(canvasId: string, conversationId: string) {
-    return `${CLOUD_AGENT_CONVERSATIONS_KEY}:pending:${encodeURIComponent(canvasId)}:${encodeURIComponent(conversationId)}`;
+function pendingStorageKey(conversationId: string) {
+    return `${CLOUD_AGENT_CONVERSATIONS_KEY}:pending:${encodeURIComponent(conversationId)}`;
 }
 
 function emptyDocument(): CloudAgentConversationDocument {

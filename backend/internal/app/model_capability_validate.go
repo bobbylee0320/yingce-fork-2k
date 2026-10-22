@@ -38,6 +38,18 @@ func validateTextCapabilityConfig(value *TextCapabilityConfig) error {
 }
 
 func validateImageCapabilityConfig(value *ImageCapabilityConfig) error {
+	if value.ResponseFormat.Supported {
+		switch strings.ToLower(strings.TrimSpace(value.ResponseFormat.Default)) {
+		case "", "auto":
+			value.ResponseFormat.Default = "auto"
+		case "b64_json", "url":
+			value.ResponseFormat.Default = strings.ToLower(strings.TrimSpace(value.ResponseFormat.Default))
+		default:
+			return BadAuthRequest("图片响应格式默认值仅支持 auto、b64_json 或 url")
+		}
+	} else {
+		value.ResponseFormat.Default = "auto"
+	}
 	if value.References.PromptMaxChars < 1 || value.References.PromptMaxChars > 1000000 {
 		return BadAuthRequest("提示词最大字符数必须在 1-1000000 之间")
 	}
@@ -181,7 +193,58 @@ func validateVideoCapabilityConfig(value *VideoCapabilityConfig) error {
 	if len(value.Operations) == 0 || strings.TrimSpace(value.DefaultOperation) == "" || !containsCapabilityString(value.Operations, value.DefaultOperation) {
 		return BadAuthRequest("请至少配置一个生成模式，并选择默认模式")
 	}
+	return validateVideoProcessingConfig(value.Processing)
+}
+
+func validateVideoProcessingConfig(value *VideoProcessingConfig) error {
+	if value == nil {
+		return nil
+	}
+	switch value.FPSPolicy {
+	case VideoProcessingFPSKeepSource:
+		if len(value.FPSOptions) > 0 {
+			return BadAuthRequest("保持原帧率时不能配置可选帧率")
+		}
+	case VideoProcessingFPSUserSelect:
+		if len(value.FPSOptions) == 0 || len(value.FPSOptions) > 16 {
+			return BadAuthRequest("用户选择帧率时需配置 1-16 个可选帧率")
+		}
+		seen := map[int]bool{}
+		for _, fps := range value.FPSOptions {
+			if fps < 15 || fps > 120 || seen[fps] {
+				return BadAuthRequest("可选帧率必须在 15-120 之间且不能重复")
+			}
+			seen[fps] = true
+		}
+	default:
+		return BadAuthRequest("视频处理帧率策略仅支持保持原帧率或用户选择")
+	}
+	if value.MaxSourceSeconds < 0 || value.MaxSourceSeconds > DefaultVideoProcessingMaxSourceSeconds {
+		return BadAuthRequest(fmt.Sprintf("源视频时长上限必须在 1-%d 秒之间（任务轮询上限为 1 小时）", DefaultVideoProcessingMaxSourceSeconds))
+	}
 	return nil
+}
+
+// videoProcessingMaxSourceSeconds 返回生效的源视频时长上限。
+func videoProcessingMaxSourceSeconds(value *VideoProcessingConfig) int {
+	if value == nil || value.MaxSourceSeconds <= 0 {
+		return DefaultVideoProcessingMaxSourceSeconds
+	}
+	return value.MaxSourceSeconds
+}
+
+// videoFPSBand 把帧率映射到火山 MediaKit 的计费档位：≤30、≤60、≤120。
+func videoFPSBand(fps float64) string {
+	switch {
+	case fps <= 0:
+		return ""
+	case fps <= 30:
+		return "le30"
+	case fps <= 60:
+		return "le60"
+	default:
+		return "le120"
+	}
 }
 
 func validateVideoDuration(value VideoDurationConfig) error {
@@ -437,7 +500,7 @@ func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInp
 			return newModelCapabilityArgumentError("size", "unsupported_value", err)
 		}
 	}
-	if profile.Quality.Supported && quality != "" && !strings.EqualFold(quality, "auto") && !strings.EqualFold(quality, "any") && !containsCapabilityString(profile.Quality.Values, quality) {
+	if profile.Quality.Supported && len(profile.Quality.Values) > 0 && quality != "" && !strings.EqualFold(quality, "auto") && !strings.EqualFold(quality, "any") && !containsCapabilityString(profile.Quality.Values, quality) {
 		return newModelCapabilityArgumentError("quality", "unsupported_value", BadAuthRequest("图片质量不在当前模型支持范围内"))
 	}
 	if err := validateImagePresetSelection(profile, qualityForImageValidation(selectionTier, firstNonEmpty(profile.Resolution.Default, profile.Quality.Default)), firstNonEmpty(resolvedRatio, input.Config.Size, profile.Size.Default)); err != nil {
@@ -507,7 +570,7 @@ func imageSizeValueForDeclaredPreset(profile *ImageCapabilityConfig, size string
 	if profile.Size.Parameter == "size" {
 		return strings.TrimSpace(preset.Size)
 	}
-	return normalizeDeclaredImageRatio(preset.Ratio)
+	return strings.TrimSpace(preset.Ratio)
 }
 
 // imageSizeRatioForDeclaredPreset 把已声明的 preset 像素值还原成它对应的比例。比例型线路
@@ -522,7 +585,7 @@ func imageSizeRatioForDeclaredPreset(profile *ImageCapabilityConfig, size string
 		return ""
 	}
 	if preset, ok := declaredImageSizePreset(profile.Size.Presets, value, imagePresetSelectionTier(profile, quality), imagePresetDefaultTier(profile)); ok {
-		return normalizeDeclaredImageRatio(preset.Ratio)
+		return strings.TrimSpace(preset.Ratio)
 	}
 	return ""
 }
@@ -646,7 +709,7 @@ func resolveImageTaskSize(profile *ImageCapabilityConfig, interfaceType string, 
 		return preset.Size
 	}
 	if profile.Size.Parameter == "aspect_ratio" {
-		return normalizeDeclaredImageRatio(preset.Ratio)
+		return strings.TrimSpace(preset.Ratio)
 	}
 	return size
 }

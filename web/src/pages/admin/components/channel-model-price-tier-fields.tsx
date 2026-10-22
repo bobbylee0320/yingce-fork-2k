@@ -9,6 +9,8 @@ import { CreditCostFields } from "./credit-cost-fields";
 import { Select } from "@/components/ui/base/select";
 import { ImageParameterInput } from "@/components/image-parameter-fields";
 import { imageResolutionTiers } from "@/lib/image-size-presets";
+// 价格档分辨率按后端保存口径（2k→1440p、4k→2160p）取值，已存档位才能正确回显。
+import { normalizeTierResolution } from "@/lib/model-pricing";
 
 export function PriceTierFields({
     index,
@@ -115,7 +117,12 @@ export function PriceTierFields({
                                 </Form.Item>
                                 {isVideo ? (
                                     <Form.Item className="mb-0" name={[index, "resolution"]} label="分辨率" rules={[{ required: true, message: "请选择分辨率" }]}>
-                                        <Select options={[{ label: "任意分辨率", value: "*" }, ...resolutionOptions.map((value) => ({ label: value.toUpperCase(), value }))]} />
+                                        <Select options={[{ label: "任意分辨率", value: "*" }, ...resolutionOptions.map((value) => ({ label: value.toUpperCase(), value: normalizeTierResolution(value) }))]} />
+                                    </Form.Item>
+                                ) : null}
+                                {isVideo && video?.processing ? (
+                                    <Form.Item className="mb-0" name={[index, "fpsBand"]} label="输出帧率档" tooltip="视频处理按输出帧率分档计价；保持原帧率时按 ≤30fps 档预扣">
+                                        <Select options={fpsBandOptions} />
                                     </Form.Item>
                                 ) : null}
                                 {isImage && image?.parameters
@@ -253,10 +260,17 @@ function ImagePriceParameterInput({ field, value, onChange }: { field: import("@
     return <ImageParameterInput field={field} value={typed} onChange={(next) => onChange?.(next === undefined ? undefined : String(next))} />;
 }
 
+const fpsBandOptions = [
+    { label: "任意帧率", value: "*" },
+    { label: "≤30fps", value: "le30" },
+    { label: "30–60fps", value: "le60" },
+    { label: "60–120fps", value: "le120" },
+];
+
 function operationOptions(capability: EditableCapability | undefined) {
     const options = [{ label: "任意生成方式", value: "*" }];
     if (capability === "image") return [...options, { label: "文生图", value: "text_to_image" }, { label: "图生图", value: "image_to_image" }];
-    if (capability === "video") return [...options, { label: "文生视频", value: "text_to_video" }, { label: "图生视频", value: "image_to_video" }, { label: "视频生视频", value: "video_to_video" }];
+    if (capability === "video") return [...options, { label: "文生视频", value: "text_to_video" }, { label: "图生视频", value: "image_to_video" }, { label: "视频生视频", value: "video_to_video" }, { label: "画质增强", value: "enhance" }];
     if (capability === "text") return [...options, { label: "文本生成", value: "text_generation" }];
     return options;
 }

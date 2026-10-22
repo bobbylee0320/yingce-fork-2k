@@ -5,6 +5,7 @@ import { lazy, useState } from "react";
 import { useAdminContext } from "./admin-context";
 import { AdminPageFrame } from "./components/admin-shell";
 import { readAnnouncementPendingReview } from "./components/admin-announcement-safety";
+import { BillingAutoRefundToggle } from "./components/billing-auto-refund-toggle";
 
 const AnalyticsPanel = lazy(() => import("./components/analytics-panel"));
 const AdminAnnouncementsPanel = lazy(() => import("./components/admin-announcements-panel"));
@@ -84,6 +85,7 @@ export function CreditOperationsPage() {
             description="异常计费核对、积分策略与人工调账"
             actions={
                 <>
+                    <BillingAutoRefundToggle />
                     <Button icon={<Settings2 className="size-4" />} onClick={() => setActiveOperation("policy")}>
                         积分策略
                     </Button>

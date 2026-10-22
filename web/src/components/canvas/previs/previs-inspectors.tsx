@@ -17,21 +17,93 @@ import {
     type PrevisVec3,
 } from "@/types/previs";
 import { type PrevisModeCapabilities } from "@/lib/canvas/previs/previs-modes";
-import { PREVIS_ACTOR_ARCHETYPES, PREVIS_ACTOR_COLORS, previsActorArchetypeLabel, previsActorProfileForArchetype, previsBoneLabel, previsFocalLengthToFov, previsPoseLabel } from "@/lib/canvas/previs/previs-scene";
+import { PREVIS_ACTOR_ARCHETYPES, PREVIS_ACTOR_COLORS, previsActorArchetypeLabel, previsActorProfileForArchetype, previsBoneLabel, previsPoseLabel } from "@/lib/canvas/previs/previs-scene";
+import { previsHorizontalFov } from "@/lib/canvas/previs/previs-optics";
 import { Button, ColorPicker, Dropdown, Input, InputNumber, type MenuProps, Slider } from "antd";
 import { Select } from "@/components/ui/base/select";
 import { Switch } from "@/components/ui/base/switch";
-import { Camera, Copy, Focus, Plus, Trash2, Video } from "lucide-react";
+import { Camera, Check, Copy, Focus, Pause, Play, Plus, Route, Trash2, Video } from "lucide-react";
 import { type ReactElement, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Euler, Quaternion } from "three";
 import { releasePrevisFocusAfterPointer } from "@/lib/canvas/previs/previs-shortcuts";
+import { isPrevisStandardActor, PREVIS_MANNEQUIN_HEIGHT } from "@/lib/canvas/previs/previs-mannequin";
+import { previsPrimitiveHalfHeight } from "@/lib/canvas/previs/previs-prop-library";
+import { dropPrevisObjectToGround } from "@/lib/canvas/previs/previs-grounding";
+
+/** 演员色板：一行 8 个高区分度颜色，其余颜色用取色器/十六进制输入，避免两行杂乱色块。 */
+const PREVIS_ACTOR_SWATCHES: readonly string[] = ["#2f7de1", "#d84949", "#dfae3f", "#34a276", "#8b5cf6", "#f97316", "#06b6d4", "#8a93a0"];
+import { PREVIS_MOTION_IDS, PREVIS_MOTIONS, previsMotionLabel, previsMotionsOverlap } from "@/lib/canvas/previs/previs-motion";
+import type { PrevisActorMotion, PrevisMotionId } from "@/types/previs";
+
+/**
+ * 标准人偶的动作库：点击动作即在当前播放头插入片段；移动步态由走位自动推导，不需要手动添加。
+ * 上半身动作（招手、说话…）可以叠加在走路上，整身动作同层互斥并给出冲突提示。
+ */
+function ActorMotionSection({ object, playhead, onUpdate }: { object: PrevisObject; playhead: number; onUpdate: (patch: Partial<PrevisObject>) => void }) {
+    const motions = object.motions || [];
+    const sorted = motions.toSorted((left, right) => left.start - right.start);
+    const add = (motion: PrevisMotionId) => {
+        const definition = PREVIS_MOTIONS[motion];
+        const next: PrevisActorMotion = { id: `motion-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, motion, start: Math.max(0, Number(playhead.toFixed(2))), duration: definition.duration, intensity: 1 };
+        onUpdate({ motions: [...motions, next] });
+    };
+    const patch = (id: string, value: Partial<PrevisActorMotion>) => onUpdate({ motions: motions.map((item) => (item.id === id ? { ...item, ...value } : item)) });
+    const remove = (id: string) => onUpdate({ motions: motions.filter((item) => item.id !== id) });
+    return (
+        <section className="previs-pose-section" aria-label="动作库">
+            <div className="previs-pose-grid">
+                {PREVIS_MOTION_IDS.map((id) => (
+                    <button
+                        key={id}
+                        type="button"
+                        className="previs-pose-button"
+                        title={`${previsMotionLabel(id)}（${PREVIS_MOTIONS[id].layer === "upper" ? "上半身，可叠加走路" : "整身"}）`}
+                        onClick={(event) => {
+                            releasePrevisFocusAfterPointer(event);
+                            add(id);
+                        }}
+                    >
+                        {previsMotionLabel(id)}
+                    </button>
+                ))}
+            </div>
+            <div className="text-[var(--fs-tiny)] opacity-55">走位移动时会自动迈步和跑动，无需添加「走」「跑」。</div>
+            {sorted.length ? (
+                <ul className="previs-motion-list">
+                    {sorted.map((item) => {
+                        const conflict = previsMotionsOverlap(motions, item, item.id);
+                        return (
+                            <li key={item.id} className={`previs-motion-row ${conflict ? "is-conflict" : ""}`}>
+                                <span className="previs-motion-row__name" title={conflict ? "与同层动作时间重叠，后添加的会覆盖前者" : undefined}>
+                                    {previsMotionLabel(item.motion)}
+                                    {conflict ? " ⚠" : ""}
+                                </span>
+                                <InputNumber size="small" aria-label="开始秒" min={0} max={60} step={0.1} value={item.start} addonAfter="s" onChange={(start) => patch(item.id, { start: Math.max(0, Number(start) || 0) })} />
+                                <InputNumber size="small" aria-label="时长秒" min={0.2} max={60} step={0.1} value={item.duration} addonAfter="长" onChange={(duration) => patch(item.id, { duration: Math.max(0.2, Number(duration) || 0.2) })} />
+                                <Slider className="previs-motion-row__intensity" aria-label="幅度" min={0.2} max={1.6} step={0.05} value={item.intensity ?? 1} onChange={(intensity) => patch(item.id, { intensity })} />
+                                <button type="button" className="previs-motion-row__remove" aria-label={`删除动作 ${previsMotionLabel(item.motion)}`} onClick={() => remove(item.id)}>
+                                    <Trash2 className="size-3" />
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
+            ) : null}
+        </section>
+    );
+}
 
 const PREVIS_HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
 function normalizePrevisHexColor(value: string, fallback = "#ffffff") {
     const trimmed = value.trim().toLowerCase();
     if (!PREVIS_HEX_COLOR_PATTERN.test(trimmed)) return fallback;
-    if (trimmed.length === 4) return `#${trimmed.slice(1).split("").map((part) => part + part).join("")}`;
+    if (trimmed.length === 4)
+        return `#${trimmed
+            .slice(1)
+            .split("")
+            .map((part) => part + part)
+            .join("")}`;
     return trimmed;
 }
 
@@ -98,18 +170,30 @@ export const cameraMoveOptions = [
     { label: "手持", value: "handheld" },
 ];
 
+type ObjectInspectorTab = "animate" | "pose" | "props";
+
+/**
+ * 对象检查器：按标签分组，而不是一长串字段。
+ * - 摆场：属性（变换/体型/外观）+ 姿态（演员）。
+ * - 动画：动画（引导式三步：走位 → 动作 → 预览，手动关键帧收在「高级」）+ 姿态 + 属性。
+ */
 export function ObjectInspector({
     object,
     rendered,
     playhead,
     selectedBone,
     capabilities,
+    playing,
+    pathDrawing,
     onSelectBone,
     onUpdate,
     onTransformEdit,
     onBoneRotationStage,
     onBoneRotationCommit,
     onAddKeyframe,
+    onTogglePlay,
+    onToggleDrawPath,
+    onClearPath,
     onDuplicate,
     onDelete,
 }: {
@@ -118,12 +202,17 @@ export function ObjectInspector({
     playhead: number;
     selectedBone: string | null;
     capabilities: PrevisModeCapabilities;
+    playing: boolean;
+    pathDrawing: boolean;
     onSelectBone: (bone: string | null) => void;
     onUpdate: (patch: Partial<PrevisObject>) => void;
     onTransformEdit: (transform: PrevisTransform) => void;
     onBoneRotationStage: (rotation: PrevisQuat) => void;
     onBoneRotationCommit: () => void;
     onAddKeyframe: () => void;
+    onTogglePlay: () => void;
+    onToggleDrawPath: () => void;
+    onClearPath: () => void;
     onDuplicate: () => void;
     onDelete: () => void;
 }) {
@@ -142,237 +231,383 @@ export function ObjectInspector({
         delete boneOverrides[selectedBoneId];
         onUpdate({ boneOverrides });
     };
+    const profile = { ...previsActorProfileForArchetype(object.archetype || "adult"), ...(object.actorProfile || {}) };
+    const updateProfile = (patch: Partial<typeof profile>) => onUpdate({ actorProfile: { ...profile, ...patch } });
+    const grounded = isActor || Math.abs(rendered.position[1] - (previsPrimitiveHalfHeight({ kind: object.kind, primitive: object.primitive, transform: rendered }) ?? 0)) < 0.001;
+    const hasPath = Boolean(object.motionPath) || object.keyframes.length > 1;
+    const motionCount = object.motions?.length || 0;
+    const boneKeyCount = object.boneTracks?.reduce((sum, track) => sum + track.keyframes.length, 0) || 0;
+
+    const tabs: Array<{ id: ObjectInspectorTab; label: string }> = [
+        ...(capabilities.timeline ? [{ id: "animate" as const, label: "动画" }] : []),
+        { id: "props", label: "属性" },
+        ...(isActor && capabilities.bones ? [{ id: "pose" as const, label: "姿态" }] : []),
+    ];
+    const [tab, setTab] = useState<ObjectInspectorTab>(tabs[0].id);
+    // 换对象或换模式时回到该模式的首个标签：进入动画默认看动画步骤。
+    useEffect(() => setTab(capabilities.timeline ? "animate" : "props"), [capabilities.timeline, object.id]);
+    const activeTab = tabs.some((item) => item.id === tab) ? tab : tabs[0].id;
+
     return (
         <Inspector title={object.name} onTitleChange={(name) => onUpdate({ name })} onDuplicate={onDuplicate} onDelete={onDelete}>
-            <TransformFields transform={rendered} onChange={onTransformEdit} scaleLabel={isActor ? "比例" : "尺寸（W / H / D）"} scaleAxisLabels={isActor ? undefined : ["W", "H", "D"]} />
-            {isActor ? (
+            {tabs.length > 1 ? (
+                <div className="previs-inspector-tabs" role="tablist" aria-label="属性分类">
+                    {tabs.map((item) => (
+                        <button key={item.id} type="button" role="tab" aria-selected={activeTab === item.id} className={`previs-inspector-tab ${activeTab === item.id ? "is-active" : ""}`} onClick={() => setTab(item.id)}>
+                            {item.label}
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+
+            {activeTab === "animate" ? (
                 <>
-                    <Field label="角色原型">
-                        <Select className="w-full" size="small" value={object.archetype || "adult"} options={PREVIS_ACTOR_ARCHETYPES.map((item) => ({ label: item.label, value: item.value }))} onChange={(archetype: PrevisActorArchetype) => onUpdate({ archetype, actorProfile: previsActorProfileForArchetype(archetype) })} />
-                        <div className="mt-1 text-[10px] opacity-50">{previsActorArchetypeLabel(object.archetype)}会影响体型、头身比和配件轮廓。</div>
-                    </Field>
-                    <Field label="角色颜色">
-                        <div className="previs-actor-colors">
-                            {PREVIS_ACTOR_COLORS.map((color) => <button key={color} type="button" className={`previs-actor-color ${object.color.toLowerCase() === color ? "is-active" : ""}`} style={{ background: color }} aria-label={`设置颜色 ${color}`} onClick={() => onUpdate({ color })} />)}
-                            <ColorPicker value={normalizePrevisHexColor(object.color)} size="small" onChange={(color) => onUpdate({ color: color.toHexString() })} />
+                    {isActor ? (
+                        <div className="previs-anim-guide">
+                            <GuideStep index={1} title="走位" done={hasPath} hint="在俯视图的地面上按住拖出路线，演员会沿路线自动迈步；路线越长走得越快，过快会自动变成跑。">
+                                <div className="previs-anim-guide__actions">
+                                    <Button size="small" type={pathDrawing ? "primary" : "default"} icon={<Route className="size-3.5" />} onClick={onToggleDrawPath}>
+                                        {pathDrawing ? "取消绘制" : hasPath ? "重新画走位" : "画走位路径"}
+                                    </Button>
+                                    {hasPath ? (
+                                        <Button size="small" type="text" onClick={onClearPath}>
+                                            清除走位
+                                        </Button>
+                                    ) : null}
+                                </div>
+                            </GuideStep>
+                            {isPrevisStandardActor(object) ? (
+                                <GuideStep index={2} title="动作" done={motionCount > 0} hint={`先把时间轴上的播放头拖到动作开始的时间（现在是 ${playhead.toFixed(1)}s），再点下面的动作。招手、说话等上半身动作可以边走边做。`}>
+                                    <ActorMotionSection object={object} playhead={playhead} onUpdate={onUpdate} />
+                                </GuideStep>
+                            ) : null}
+                            <GuideStep index={isPrevisStandardActor(object) ? 3 : 2} title="预览" hint="播放整段镜头，看走位和动作是否自然；满意后在顶栏导出白膜视频。">
+                                <Button size="small" block icon={playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />} onClick={onTogglePlay}>
+                                    {playing ? "暂停" : "播放预览"}
+                                </Button>
+                            </GuideStep>
                         </div>
-                        <div className="mt-1">
-                            <HexColorInput value={object.color} onChange={(color) => onUpdate({ color })} label="角色十六进制颜色" />
-                        </div>
-                    </Field>
+                    ) : (
+                        <div className="previs-inspector-note">道具动画用关键帧：把播放头拖到某个时间，移动道具后点「记录关键帧」；在另一个时间再摆一次，中间会自动补间。</div>
+                    )}
+                    {motionClips.length ? (
+                        <InspectorGroup title="模型自带动作">
+                            <Select
+                                className="w-full"
+                                size="small"
+                                value={object.activeMotionClipId || ""}
+                                options={[{ label: "静态姿势", value: "" }, ...motionClips.map((clip) => ({ label: clip.name, value: clip.id }))]}
+                                onChange={(activeMotionClipId) => onUpdate({ activeMotionClipId: activeMotionClipId || undefined })}
+                            />
+                            {activeMotionClip ? (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Field label="播放速度">
+                                        <InputNumber className="w-full" size="small" min={0.1} max={4} step={0.1} value={activeMotionClip.playbackRate} onChange={(playbackRate) => updateActiveMotion({ playbackRate: playbackRate || 1 })} />
+                                    </Field>
+                                    <Field label="循环">
+                                        <Switch checked={activeMotionClip.loop} onChange={(loop) => updateActiveMotion({ loop })} />
+                                    </Field>
+                                </div>
+                            ) : null}
+                        </InspectorGroup>
+                    ) : null}
+                    {/* 记录关键帧属于动画模式；摆场不默认制造关键帧。 */}
+                    {capabilities.keyframes ? (
+                        <details className="previs-inspector-advanced" open={!isActor}>
+                            <summary>{isActor ? "高级：手动关键帧" : "关键帧"}</summary>
+                            <div className="previs-inspector-advanced__body">
+                                <Button size="small" block icon={<Focus className="size-3.5" />} onClick={onAddKeyframe}>
+                                    {selectedBone ? `在 ${playhead.toFixed(1)}s 记录当前部位` : `在 ${playhead.toFixed(1)}s 记录关键帧`}
+                                </Button>
+                                <div className="previs-inspector-note">
+                                    位置 {object.keyframes.length} 帧 · 骨骼 {boneKeyCount} 帧。打开时间轴上的「自动关键帧」后，拖动对象会直接在播放头处记帧。
+                                </div>
+                            </div>
+                        </details>
+                    ) : null}
                 </>
-            ) : (
-                <Field label="颜色">
-                    <div className="space-y-1">
-                        <ColorPicker value={normalizePrevisHexColor(object.color)} onChange={(color) => onUpdate({ color: color.toHexString() })} />
-                        <HexColorInput value={object.color} onChange={(color) => onUpdate({ color })} />
-                    </div>
-                </Field>
-            )}
-            {/*
-          骨骼与姿势入口：只在姿态/动画模式出现，且只对演员出现。
-          规格要求「仅在演员选择时展示现有骨骼/姿势入口」——
-          带动画的普通模型不是演员，不应拿到姿势预设与骨骼控制。
-        */}
-            {capabilities.bones && (object.kind === "actor" || object.primitive === "character") ? (
-                <>
-                    <section className="previs-pose-section">
-                        <div className="previs-inspector-section-title">
-                            <span>姿势预设</span>
-                            <span>{previsPoseLabel(object.pose || "stand")}</span>
-                        </div>
-                        <div className="previs-pose-grid">
-                            {poseOptions.map((option) => (
-                                <button key={option.value} type="button" className={`previs-pose-button ${object.pose === option.value && !object.activeMotionClipId ? "is-active" : ""}`} title={option.label} onClick={() => applyPose(option.value)}>
-                                    {option.label}
-                                </button>
-                            ))}
-                        </div>
-                        <Button size="small" block onClick={() => applyPose("stand")}>
-                            重置姿态
-                        </Button>
-                    </section>
-                    <div className="flex items-center justify-between border-y py-2 text-[var(--fs-label)]">
-                        <span>角色绑定</span>
-                        <span>{mappedBones.length ? `${mappedBones.length} 根骨骼` : "白膜骨架"}</span>
+            ) : null}
+
+            {activeTab === "pose" ? (
+                <InspectorGroup title="姿势" hint={previsPoseLabel(object.pose || "stand")}>
+                    <div className="previs-pose-grid">
+                        {poseOptions.map((option) => (
+                            <button key={option.value} type="button" className={`previs-pose-button ${object.pose === option.value && !object.activeMotionClipId ? "is-active" : ""}`} title={option.label} onClick={() => applyPose(option.value)}>
+                                {option.label}
+                            </button>
+                        ))}
                     </div>
                     {poseBones.length ? (
-                        <Field label="姿势调节">
-                            <Select className="w-full" allowClear value={selectedBone || undefined} options={poseBones.map((bone) => ({ label: previsBoneLabel(bone), value: bone }))} onChange={(bone) => onSelectBone(bone || null)} />
+                        <Field label="身体部位微调（也可直接点视口里的关节）">
+                            <Select
+                                className="w-full"
+                                size="small"
+                                allowClear
+                                placeholder="选择身体部位"
+                                value={selectedBone || undefined}
+                                options={poseBones.map((bone) => ({ label: previsBoneLabel(bone), value: bone }))}
+                                onChange={(bone) => onSelectBone(bone || null)}
+                            />
                         </Field>
                     ) : null}
                     {selectedBoneId && selectedBoneRotation ? (
                         <>
                             <BoneRotationFields rotation={selectedBoneRotation} onChange={onBoneRotationStage} onChangeComplete={onBoneRotationCommit} />
                             <Button size="small" block onClick={resetSelectedBone}>
-                                重置当前骨骼
+                                重置当前部位
                             </Button>
                         </>
                     ) : null}
-                    {/* 演员还没加载出模型时给一句解释，避免「动作片段」区域凭空消失。 */}
-                    {motionClips.length ? null : <div className="text-[var(--fs-tiny)] opacity-50">模型加载后会显示可用动作 Clip</div>}
-                </>
-            ) : null}
-            {/* 动作片段是动画内容而非骨骼入口：任何带 Clip 的对象都能调，不限演员。 */}
-            {motionClips.length ? (
-                <>
-                    <Field label="动作片段">
-                        <Select
-                            className="w-full"
-                            value={object.activeMotionClipId || ""}
-                            options={[{ label: "静态姿势", value: "" }, ...motionClips.map((clip) => ({ label: clip.name, value: clip.id }))]}
-                            onChange={(activeMotionClipId) => onUpdate({ activeMotionClipId: activeMotionClipId || undefined })}
-                        />
-                    </Field>
-                    {activeMotionClip ? (
-                        <div className="grid grid-cols-2 gap-2">
-                            <Field label="播放速度">
-                                <InputNumber className="w-full" min={0.1} max={4} step={0.1} value={activeMotionClip.playbackRate} onChange={(playbackRate) => updateActiveMotion({ playbackRate: playbackRate || 1 })} />
-                            </Field>
-                            <Field label="循环">
-                                <Switch checked={activeMotionClip.loop} onChange={(loop) => updateActiveMotion({ loop })} />
-                            </Field>
-                        </div>
-                    ) : null}
-                </>
-            ) : null}
-            <Field label="可见">
-                <Switch checked={object.visible} onChange={(visible) => onUpdate({ visible })} />
-            </Field>
-            <Field label="投射阴影">
-                <Switch checked={object.castShadow} onChange={(castShadow) => onUpdate({ castShadow })} />
-            </Field>
-            {/* 记录关键帧属于动画模式；摆场与姿态模式不默认制造关键帧。 */}
-            {capabilities.keyframes ? (
-                <>
-                    <Button block icon={<Focus className="size-3.5" />} onClick={onAddKeyframe}>
-                        {selectedBone ? `在 ${playhead.toFixed(1)}s 记录骨骼` : `在 ${playhead.toFixed(1)}s 记录关键帧`}
+                    <Button size="small" block onClick={() => applyPose("stand")}>
+                        重置姿态
                     </Button>
-                    <div className="text-[var(--fs-tiny)] opacity-50">
-                        Transform {object.keyframes.length} 个 · 骨骼 {object.boneTracks?.reduce((sum, track) => sum + track.keyframes.length, 0) || 0} 个
-                    </div>
+                </InspectorGroup>
+            ) : null}
+
+            {activeTab === "props" ? (
+                <>
+                    <InspectorGroup title="位置" hint={isActor ? "始终贴地" : undefined}>
+                        <TransformFields transform={rendered} onChange={onTransformEdit} scaleLabel={isActor ? "比例" : "尺寸"} scaleUnit={isActor ? "×" : "倍"} scaleAxisLabels={isActor ? undefined : ["W", "H", "D"]} lockY={isActor} />
+                        {isActor ? null : (
+                            <Button size="small" block disabled={grounded} onClick={() => onTransformEdit(dropPrevisObjectToGround({ ...object, transform: rendered, keyframes: [] }).transform)}>
+                                贴地
+                            </Button>
+                        )}
+                    </InspectorGroup>
+                    {isActor ? (
+                        <InspectorGroup title="体型">
+                            <Field label="角色原型">
+                                <Select
+                                    className="w-full"
+                                    size="small"
+                                    value={object.archetype || "adult"}
+                                    options={PREVIS_ACTOR_ARCHETYPES.map((item) => ({ label: item.label, value: item.value }))}
+                                    onChange={(archetype: PrevisActorArchetype) => onUpdate({ archetype, actorProfile: previsActorProfileForArchetype(archetype) })}
+                                />
+                            </Field>
+                            <ProfileSlider label="身高" min={0.5} max={1.5} value={profile.height} suffix={`${(profile.height * PREVIS_MANNEQUIN_HEIGHT).toFixed(2)}m`} onChange={(height) => updateProfile({ height })} />
+                            <ProfileSlider label="肩宽" min={0.6} max={1.5} value={profile.shoulderWidth} onChange={(shoulderWidth) => updateProfile({ shoulderWidth })} />
+                            <ProfileSlider label="躯干" min={0.7} max={1.3} value={profile.torsoRatio} onChange={(torsoRatio) => updateProfile({ torsoRatio })} />
+                            <ProfileSlider label="头部" min={0.7} max={1.5} value={profile.headRatio} onChange={(headRatio) => updateProfile({ headRatio })} />
+                        </InspectorGroup>
+                    ) : null}
+                    <InspectorGroup title="外观">
+                        <ColorRow value={object.color} swatches={isActor ? PREVIS_ACTOR_SWATCHES : undefined} label={isActor ? "角色十六进制颜色" : "十六进制颜色"} onChange={(color) => onUpdate({ color })} />
+                        <div className="previs-inspector-toggles">
+                            <label className="previs-inspector-toggle">
+                                <span>可见</span>
+                                <Switch checked={object.visible} onChange={(visible) => onUpdate({ visible })} />
+                            </label>
+                            <label className="previs-inspector-toggle">
+                                <span>投射阴影</span>
+                                <Switch checked={object.castShadow} onChange={(castShadow) => onUpdate({ castShadow })} />
+                            </label>
+                        </div>
+                    </InspectorGroup>
                 </>
             ) : null}
         </Inspector>
     );
 }
+
+/** 引导步骤：编号 + 标题 + 一句话说明 + 操作。完成后编号变成对勾。 */
+function GuideStep({ index, title, hint, done = false, children }: { index: number; title: string; hint: string; done?: boolean; children: ReactNode }) {
+    return (
+        <section className={`previs-anim-step ${done ? "is-done" : ""}`} aria-label={`第 ${index} 步：${title}`}>
+            <div className="previs-anim-step__head">
+                <span className="previs-anim-step__index" aria-hidden="true">
+                    {done ? <Check className="size-3" /> : index}
+                </span>
+                <span className="previs-anim-step__title">{title}</span>
+                {done ? <span className="previs-anim-step__state">已设置</span> : <span className="previs-anim-step__state">可选</span>}
+            </div>
+            <p className="previs-anim-step__hint">{hint}</p>
+            {children}
+        </section>
+    );
+}
+
+function ColorRow({ value, swatches, label, onChange }: { value: string; swatches?: readonly string[]; label: string; onChange: (color: string) => void }) {
+    return (
+        <div className="previs-color-row">
+            {swatches?.map((color) => (
+                <button
+                    key={color}
+                    type="button"
+                    className={`previs-actor-color ${value.toLowerCase() === color ? "is-active" : ""}`}
+                    style={{ background: color }}
+                    aria-label={`设置颜色 ${color}`}
+                    aria-pressed={value.toLowerCase() === color}
+                    onClick={() => onChange(color)}
+                />
+            ))}
+            <ColorPicker value={normalizePrevisHexColor(value)} size="small" onChange={(color) => onChange(color.toHexString())} />
+            <div className="previs-color-row__hex">
+                <HexColorInput value={value} onChange={onChange} label={label} />
+            </div>
+        </div>
+    );
+}
+
+const LIGHT_TYPE_OPTIONS = [
+    { label: "方向光（太阳）", value: "directional" },
+    { label: "点光源（灯泡）", value: "point" },
+    { label: "聚光灯", value: "spot" },
+    { label: "环境光", value: "ambient" },
+];
 
 export function LightInspector({ light, onUpdate, onDelete }: { light: PrevisLight; onUpdate: (patch: Partial<PrevisLight>) => void; onDelete: () => void }) {
     return (
         <Inspector title={light.name} onTitleChange={(name) => onUpdate({ name })} onDelete={onDelete}>
-            <Field label="类型">
-                <Select
-                    className="w-full"
-                    value={light.type}
-                    options={[
-                        { label: "方向光", value: "directional" },
-                        { label: "点光源", value: "point" },
-                        { label: "聚光灯", value: "spot" },
-                        { label: "环境光", value: "ambient" },
-                    ]}
-                    onChange={(type) => onUpdate({ type })}
-                />
-            </Field>
-            <Vec3Field label="位置" value={light.transform.position} onChange={(position) => onUpdate({ transform: { ...light.transform, position } })} />
-            <Field label="颜色">
-                <div className="space-y-1">
-                    <ColorPicker value={normalizePrevisHexColor(light.color)} onChange={(color) => onUpdate({ color: color.toHexString() })} />
-                    <HexColorInput value={light.color} onChange={(color) => onUpdate({ color })} />
-                </div>
-            </Field>
-            <Field label="强度">
-                <InputNumber className="w-full" min={0} max={20} step={0.1} value={light.intensity} onChange={(value) => onUpdate({ intensity: value || 0 })} />
-            </Field>
-            <Field label="投射阴影">
-                <Switch checked={light.castShadow} onChange={(castShadow) => onUpdate({ castShadow })} />
-            </Field>
+            <InspectorGroup title="灯光">
+                <Field label="类型">
+                    <Select className="w-full" size="small" value={light.type} options={LIGHT_TYPE_OPTIONS} onChange={(type) => onUpdate({ type })} />
+                </Field>
+                <ProfileSlider label="强度" min={0} max={10} step={0.1} value={light.intensity} suffix={light.intensity.toFixed(1)} onChange={(intensity) => onUpdate({ intensity })} />
+                <ColorRow value={light.color} swatches={LIGHT_SWATCHES} label="灯光十六进制颜色" onChange={(color) => onUpdate({ color })} />
+                {light.type !== "ambient" ? (
+                    <label className="previs-inspector-toggle">
+                        <span>投射阴影</span>
+                        <Switch checked={light.castShadow} onChange={(castShadow) => onUpdate({ castShadow })} />
+                    </label>
+                ) : null}
+            </InspectorGroup>
+            {light.type !== "ambient" ? (
+                <InspectorGroup title="位置">
+                    <Vec3Field label="位置" unit="m" value={light.transform.position} onChange={(position) => onUpdate({ transform: { ...light.transform, position } })} />
+                </InspectorGroup>
+            ) : null}
         </Inspector>
     );
 }
 
+const LIGHT_SWATCHES: readonly string[] = ["#ffffff", "#ffe2b8", "#ffc58a", "#9cc7ff", "#c3b5ff", "#ff9b8a"];
+const FOCAL_PRESETS = [18, 24, 35, 50, 85, 135];
+
+/**
+ * 镜头检查器：没选中对象时显示。
+ * 画面（机位/景别/画幅/时长）→ 镜头（焦段/光圈）→ 机位（对齐视图/坐标）→ 运镜 → 镜头意图。
+ * 运镜生成与关键帧只在动画模式出现；摆场模式只选运镜语义（会写进提示词）。
+ */
 export function ShotInspector({
     shot,
     camera,
     cameras,
     capabilities,
+    pathDrawing,
     onUpdateShot,
     onUpdateCamera,
     onAddCameraKeyframe,
     onApplyCameraMove,
     onAlignCameraToView,
-    onExportClay,
-    recording,
+    onToggleDrawPath,
 }: {
     shot: PrevisShot;
     camera: PrevisCamera | null;
     cameras: PrevisScene["cameras"];
     capabilities: PrevisModeCapabilities;
+    pathDrawing: boolean;
     onUpdateShot: (patch: Partial<PrevisShot>) => void;
     onUpdateCamera: (patch: Partial<PrevisCamera>) => void;
     onAddCameraKeyframe: () => void;
     onApplyCameraMove: () => void;
     onAlignCameraToView: () => void;
-    onExportClay: () => void;
-    recording: boolean;
+    onToggleDrawPath: () => void;
 }) {
+    const setFocal = (focalLength: number) => onUpdateCamera({ focalLength, fov: previsHorizontalFov(focalLength) });
     return (
         <Inspector title={shot.name} onTitleChange={(name) => onUpdateShot({ name })}>
-            <Field label="摄影机">
-                <Select className="w-full" value={shot.cameraId} options={cameras.map((item) => ({ label: item.name, value: item.id }))} onChange={(cameraId) => onUpdateShot({ cameraId })} />
-            </Field>
-            <div className="grid grid-cols-2 gap-2">
-                <Field label="景别">
-                    <Select className="w-full" value={shot.shotSize} options={shotSizeOptions} onChange={(shotSize: PrevisShotSize) => onUpdateShot({ shotSize })} />
+            <InspectorGroup title="画面">
+                <Field label="使用机位">
+                    <Select className="w-full" size="small" value={shot.cameraId} options={cameras.map((item) => ({ label: item.name, value: item.id }))} onChange={(cameraId) => onUpdateShot({ cameraId })} />
                 </Field>
-                <Field label="画幅">
-                    <Select className="w-full" value={shot.aspectRatio || "9:16"} options={["9:16", "16:9", "2.39:1"].map((value) => ({ label: value, value }))} onChange={(aspectRatio: PrevisAspectRatio) => onUpdateShot({ aspectRatio })} />
-                </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-                <Field label="帧率">
-                    <Select className="w-full" value={shot.fps} options={[24, 25, 30].map((fps) => ({ label: `${fps} fps`, value: fps }))} onChange={(fps: 24 | 25 | 30) => onUpdateShot({ fps })} />
-                </Field>
-                <Field label="时长">
-                    <InputNumber className="w-full" min={0.5} max={60} step={0.5} value={shot.duration} addonAfter="秒" onChange={(value) => onUpdateShot({ duration: value || 5 })} />
-                </Field>
-            </div>
-            <Field label="运镜">
-                <Select className="w-full" value={shot.cameraMove} options={cameraMoveOptions} onChange={(cameraMove: PrevisCameraMove) => onUpdateShot({ cameraMove })} />
-            </Field>
-            <Field label="镜头意图">
-                <Input.TextArea autoSize={{ minRows: 3, maxRows: 7 }} value={shot.prompt} placeholder="人物表演、动作、叙事目标…" onChange={(event) => onUpdateShot({ prompt: event.target.value })} />
-            </Field>
+                <div className="grid grid-cols-2 gap-2">
+                    <Field label="景别">
+                        <Select className="w-full" size="small" value={shot.shotSize} options={shotSizeOptions} onChange={(shotSize: PrevisShotSize) => onUpdateShot({ shotSize })} />
+                    </Field>
+                    <Field label="画幅">
+                        <Select
+                            className="w-full"
+                            size="small"
+                            value={shot.aspectRatio || "9:16"}
+                            options={["9:16", "16:9", "2.39:1"].map((value) => ({ label: value, value }))}
+                            onChange={(aspectRatio: PrevisAspectRatio) => onUpdateShot({ aspectRatio })}
+                        />
+                    </Field>
+                    <Field label="时长">
+                        <InputNumber className="w-full" size="small" min={0.5} max={60} step={0.5} value={shot.duration} addonAfter="秒" onChange={(value) => onUpdateShot({ duration: value || 5 })} />
+                    </Field>
+                    <Field label="帧率">
+                        <Select className="w-full" size="small" value={shot.fps} options={[24, 25, 30].map((fps) => ({ label: `${fps} fps`, value: fps }))} onChange={(fps: 24 | 25 | 30) => onUpdateShot({ fps })} />
+                    </Field>
+                </div>
+            </InspectorGroup>
             {camera ? (
                 <>
-                    <Vec3Field label="摄影机位置" value={camera.transform.position} onChange={(position) => onUpdateCamera({ transform: { ...camera.transform, position } })} />
-                    <Vec3Field label="焦点" value={camera.target} onChange={(target) => onUpdateCamera({ target })} />
-                    <Field label="焦距">
-                        <InputNumber className="w-full" min={12} max={200} value={camera.focalLength} addonAfter="mm" onChange={(focalLength) => onUpdateCamera({ focalLength: focalLength || 35, fov: previsFocalLengthToFov(focalLength || 35) })} />
-                    </Field>
-                    <div className="grid grid-cols-2 gap-2">
-                        <Field label="光圈">
-                            <InputNumber className="w-full" min={0.7} max={32} step={0.1} value={camera.aperture} addonBefore="f/" onChange={(aperture) => onUpdateCamera({ aperture: aperture || 2.8 })} />
-                        </Field>
-                        <Field label="焦点距离">
-                            <InputNumber className="w-full" min={0.1} max={200} step={0.1} value={camera.focusDistance} addonAfter="m" onChange={(focusDistance) => onUpdateCamera({ focusDistance: focusDistance || 5 })} />
-                        </Field>
-                    </div>
-                    <Button block icon={<Camera className="size-3.5" />} onClick={onAlignCameraToView}>
-                        摄影机对齐当前视图
-                    </Button>
-                    <Button block icon={<Video className="size-3.5" />} title="根据当前运镜预设自动生成路径" onClick={onApplyCameraMove}>
-                        用预设生成路径
-                    </Button>
-                    {capabilities.keyframes ? (
-                        <Button block icon={<Focus className="size-3.5" />} onClick={onAddCameraKeyframe}>
-                            记录摄影机关键帧
+                    <InspectorGroup title="镜头" hint={`${camera.focalLength}mm · f/${camera.aperture}`}>
+                        <div className="previs-focal-chips" role="group" aria-label="常用焦段">
+                            {FOCAL_PRESETS.map((value) => (
+                                <button key={value} type="button" className={`previs-focal-chip ${camera.focalLength === value ? "is-active" : ""}`} aria-pressed={camera.focalLength === value} onClick={() => setFocal(value)}>
+                                    {value}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                            <Field label="焦距">
+                                <InputNumber className="w-full" size="small" min={12} max={200} value={camera.focalLength} onChange={(focalLength) => setFocal(focalLength || 35)} />
+                            </Field>
+                            <Field label="光圈 f/">
+                                <InputNumber className="w-full" size="small" min={0.7} max={32} step={0.1} value={camera.aperture} onChange={(aperture) => onUpdateCamera({ aperture: aperture || 2.8 })} />
+                            </Field>
+                            <Field label="对焦 m">
+                                <InputNumber className="w-full" size="small" min={0.1} max={200} step={0.1} value={camera.focusDistance} onChange={(focusDistance) => onUpdateCamera({ focusDistance: focusDistance || 5 })} />
+                            </Field>
+                        </div>
+                    </InspectorGroup>
+                    <InspectorGroup title="机位">
+                        <Button size="small" block icon={<Camera className="size-3.5" />} onClick={onAlignCameraToView}>
+                            摄影机对齐当前视图
                         </Button>
-                    ) : null}
-                    <Button block type="primary" ghost icon={<Video className="size-3.5" />} loading={recording} onClick={onExportClay}>
-                        导出白膜视频
-                    </Button>
+                        <div className="previs-inspector-note">在 3D 视图里转到想要的角度，点上面的按钮，机位就移到这里。</div>
+                        <details className="previs-inspector-advanced">
+                            <summary>精确坐标</summary>
+                            <div className="previs-inspector-advanced__body">
+                                <Vec3Field label="摄影机位置" unit="m" value={camera.transform.position} onChange={(position) => onUpdateCamera({ transform: { ...camera.transform, position } })} />
+                                <Vec3Field label="焦点" unit="m" value={camera.target} onChange={(target) => onUpdateCamera({ target })} />
+                            </div>
+                        </details>
+                    </InspectorGroup>
                 </>
             ) : null}
+            <InspectorGroup title="运镜" hint={capabilities.timeline ? undefined : "切到「动画」可生成运镜"}>
+                <Select className="w-full" size="small" value={shot.cameraMove} options={cameraMoveOptions} onChange={(cameraMove: PrevisCameraMove) => onUpdateShot({ cameraMove })} />
+                {capabilities.timeline && camera ? (
+                    <>
+                        <div className="previs-anim-guide__actions">
+                            <Button size="small" icon={<Video className="size-3.5" />} disabled={shot.cameraMove === "static"} title="根据上面选的运镜生成首尾关键帧" onClick={onApplyCameraMove}>
+                                生成运镜
+                            </Button>
+                            <Button size="small" type={pathDrawing ? "primary" : "default"} icon={<Route className="size-3.5" />} onClick={onToggleDrawPath}>
+                                {pathDrawing ? "取消绘制" : "画运镜路径"}
+                            </Button>
+                        </div>
+                        {capabilities.keyframes ? (
+                            <details className="previs-inspector-advanced">
+                                <summary>高级：手动关键帧</summary>
+                                <div className="previs-inspector-advanced__body">
+                                    <Button size="small" block icon={<Focus className="size-3.5" />} onClick={onAddCameraKeyframe}>
+                                        记录摄影机关键帧
+                                    </Button>
+                                    <div className="previs-inspector-note">在不同时间把机位摆到不同位置并分别记录，中间会自动补间。</div>
+                                </div>
+                            </details>
+                        ) : null}
+                    </>
+                ) : null}
+            </InspectorGroup>
+            <InspectorGroup title="镜头意图">
+                <Input.TextArea autoSize={{ minRows: 2, maxRows: 6 }} value={shot.prompt} placeholder="人物表演、动作、叙事目标…会写进生成提示词" onChange={(event) => onUpdateShot({ prompt: event.target.value })} />
+            </InspectorGroup>
         </Inspector>
     );
 }
@@ -398,13 +633,57 @@ export function Inspector({ title, children, onTitleChange, onDuplicate, onDelet
     );
 }
 
-export function TransformFields({ transform, onChange, scaleLabel = "缩放", scaleAxisLabels }: { transform: PrevisTransform; onChange: (transform: PrevisTransform) => void; scaleLabel?: string; scaleAxisLabels?: [string, string, string] }) {
+const RAD_TO_DEG = 180 / Math.PI;
+
+/**
+ * 位置（米）、旋转（度，存档仍是弧度）、比例三行，每个输入都带 X/Y/Z 轴标记。
+ * lockY：演员高度由落地规则决定，Y 显示为只读，避免用户以为能把演员抬起来。
+ */
+export function TransformFields({
+    transform,
+    onChange,
+    scaleLabel = "缩放",
+    scaleUnit,
+    scaleAxisLabels,
+    lockY = false,
+}: {
+    transform: PrevisTransform;
+    onChange: (transform: PrevisTransform) => void;
+    scaleLabel?: string;
+    scaleUnit?: string;
+    scaleAxisLabels?: [string, string, string];
+    lockY?: boolean;
+}) {
+    const degrees = transform.rotation.map((value) => value * RAD_TO_DEG) as PrevisVec3;
     return (
         <>
-            <Vec3Field label="位置" value={transform.position} onChange={(position) => onChange({ ...transform, position })} />
-            <Vec3Field label="旋转" value={transform.rotation} step={0.05} onChange={(rotation) => onChange({ ...transform, rotation })} />
-            <Vec3Field label={scaleLabel} value={transform.scale} step={0.1} axisLabels={scaleAxisLabels} onChange={(scale) => onChange({ ...transform, scale })} />
+            <Vec3Field label="位置" unit="m" value={transform.position} lockedAxes={lockY ? [1] : undefined} onChange={(position) => onChange({ ...transform, position })} />
+            <Vec3Field label="旋转" unit="°" value={degrees} step={5} precision={1} onChange={(rotation) => onChange({ ...transform, rotation: rotation.map((value) => value / RAD_TO_DEG) as PrevisVec3 })} />
+            <Vec3Field label={scaleLabel} unit={scaleUnit} value={transform.scale} step={0.1} axisLabels={scaleAxisLabels} onChange={(scale) => onChange({ ...transform, scale })} />
         </>
+    );
+}
+
+/** 检查器分组：小标题 + 可选右侧提示，组间留白与分隔线由 CSS 负责。 */
+export function InspectorGroup({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+    return (
+        <section className="previs-inspector-group" aria-label={title}>
+            <div className="previs-inspector-group__title">
+                <span>{title}</span>
+                {hint ? <span className="previs-inspector-group__hint">{hint}</span> : null}
+            </div>
+            <div className="previs-inspector-group__body">{children}</div>
+        </section>
+    );
+}
+
+function ProfileSlider({ label, min, max, step = 0.01, value, suffix, onChange }: { label: string; min: number; max: number; step?: number; value: number; suffix?: string; onChange: (value: number) => void }) {
+    return (
+        <div className="previs-profile-slider">
+            <span className="previs-profile-slider__label">{label}</span>
+            <Slider className="m-0" min={min} max={max} step={step} value={value} aria-label={label} onChange={(next) => onChange(Array.isArray(next) ? (next[0] ?? value) : next)} />
+            <span className="previs-profile-slider__value">{suffix ?? value.toFixed(2)}</span>
+        </div>
     );
 }
 
@@ -451,16 +730,57 @@ export function samePrevisQuaternion(left: PrevisQuat, right: PrevisQuat) {
     return Math.min(directDistance, inverseDistance) < 0.0001;
 }
 
-export function Vec3Field({ label, value, step = 0.1, axisLabels, onChange }: { label: string; value: PrevisVec3; step?: number; axisLabels?: [string, string, string]; onChange: (value: PrevisVec3) => void }) {
+const VEC3_AXES = ["X", "Y", "Z"] as const;
+
+export function Vec3Field({
+    label,
+    value,
+    step = 0.1,
+    precision = 2,
+    unit,
+    axisLabels,
+    lockedAxes,
+    onChange,
+}: {
+    label: string;
+    value: PrevisVec3;
+    step?: number;
+    precision?: number;
+    unit?: string;
+    axisLabels?: [string, string, string];
+    lockedAxes?: number[];
+    onChange: (value: PrevisVec3) => void;
+}) {
     return (
-        <Field label={label}>
-            <div className="grid grid-cols-3 gap-1">
-                {value.map((item, index) => <div key={index} className="relative">
-                    <InputNumber className="w-full" size="small" step={step} value={Number(item.toFixed(2))} onChange={(next) => onChange(value.map((entry, itemIndex) => (itemIndex === index ? next || 0 : entry)) as PrevisVec3)} />
-                    {axisLabels ? <span className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[9px] opacity-45">{axisLabels[index]}</span> : null}
-                </div>)}
+        <div className="previs-vec3">
+            <span className="previs-vec3__label">
+                {label}
+                {unit ? <span className="previs-vec3__unit">{unit}</span> : null}
+            </span>
+            <div className="previs-vec3__inputs">
+                {value.map((item, index) => {
+                    const axis = axisLabels?.[index] ?? VEC3_AXES[index];
+                    const locked = lockedAxes?.includes(index) ?? false;
+                    return (
+                        <label key={index} className={`previs-vec3__axis previs-vec3__axis--${VEC3_AXES[index].toLowerCase()}`}>
+                            <span className="previs-vec3__axis-tag" aria-hidden="true">
+                                {axis}
+                            </span>
+                            <InputNumber
+                                className="w-full"
+                                size="small"
+                                variant="borderless"
+                                step={step}
+                                disabled={locked}
+                                aria-label={`${label} ${axis}`}
+                                value={Number(item.toFixed(precision))}
+                                onChange={(next) => onChange(value.map((entry, itemIndex) => (itemIndex === index ? Number(next) || 0 : entry)) as PrevisVec3)}
+                            />
+                        </label>
+                    );
+                })}
             </div>
-        </Field>
+        </div>
     );
 }
 

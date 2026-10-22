@@ -311,6 +311,8 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
         const channel = decoded ? channels?.find((item) => item.id === decoded.channelId) : undefined;
         const modelName = decoded?.model || modelOptionName(model);
         const costEntry = channel?.modelCosts?.find((item) => item.model === modelName);
+        // 视频处理模型（画质增强等）只出现在画布处理工具里，不进入普通生成下拉。
+        if (costEntry?.capabilityConfig?.video?.processing) return false;
         // 协议层优先级最高：协议决定 API 端点，明确属于其他能力时直接排除，
         // 防止用户将 video/image/audio 协议的模型误标为 text 后混入文本下拉。
         const protocolCapability = modelProtocolCapability(costEntry?.protocol);

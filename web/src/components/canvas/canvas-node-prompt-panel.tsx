@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerE
 import { ArrowUp, ChevronDown, FileText, ImagePlus, LayoutList, LoaderCircle, Maximize2, Music2, SlidersHorizontal, Video, WandSparkles, X } from "lucide-react";
 
 import { ModelPicker } from "@/components/model-picker";
-import { CanvasTextLeaseIndicator } from "./use-canvas-text-lease";
 import { modelOptionName, resolveModelChannel, useEffectiveConfig } from "@/stores/use-config-store";
 import { canonicalGenerationMetadata, nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { PROMPT_EDITOR_VIEWPORT_MARGIN } from "@/lib/canvas/canvas-prompt-editor-size";
@@ -568,7 +567,6 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                         aria-label={`${modeDisplayName(mode)}提示词`}
                     />
                 </div>
-                <CanvasTextLeaseIndicator nodeId={node.id} canvasId={projectId} />
                 {!expanded && <PromptResizeHandle
                     height={height}
                     min={bounds.min}

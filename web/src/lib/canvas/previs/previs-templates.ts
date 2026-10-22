@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 
-import { createPrevisActor, createPrevisCamera, createPrevisLight, createPrevisObject, previsFocalLengthToFov, PREVIS_ACTOR_COLORS } from "@/lib/canvas/previs/previs-scene";
+import { createPrevisActor, createPrevisCamera, createPrevisLight, createPrevisObject, PREVIS_ACTOR_COLORS } from "@/lib/canvas/previs/previs-scene";
+import { previsHorizontalFov } from "@/lib/canvas/previs/previs-optics";
 import type { PrevisCamera, PrevisLight, PrevisObject, PrevisScene, PrevisShot } from "@/types/previs";
 
 /**
@@ -57,7 +58,7 @@ function templateCamera(input: { name: string; position: PrevisCamera["transform
         transform: { ...base.transform, position: input.position },
         target: input.target,
         focalLength: input.focalLength,
-        fov: previsFocalLengthToFov(input.focalLength),
+        fov: previsHorizontalFov(input.focalLength),
         aperture: input.aperture,
         focusDistance: input.focusDistance,
     };

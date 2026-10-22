@@ -1,3 +1,4 @@
+import { createClientUUID } from "@/lib/client-id";
 import { App, Button, Input, InputNumber, Progress } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { EmptyState } from "@/components/ui/product/empty-state";
@@ -112,7 +113,7 @@ export function WorkflowTestWorkbench({ provider, workflowId, workflowKind = "wo
         const limit = Math.max(1, slots[kind]);
         const next = Array.from(selected)
             .slice(0, limit)
-            .map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) }));
+            .map((file) => ({ id: createClientUUID(), file, url: URL.createObjectURL(file) }));
         setFiles((current) => {
             current[kind].forEach((item) => URL.revokeObjectURL(item.url));
             return { ...current, [kind]: next };
@@ -293,7 +294,7 @@ function WorkflowNode({ id, title, icon, position, onMove, wide = false, childre
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     };
     return (
-        <section className={`workflow-test-node${wide ? " is-wide" : ""}`} style={{ transform: `translate(${position.x}px, ${position.y}px)` }} data-node-id={id}>
+        <section className={`workflow-test-node${wide ? " is-wide" : ""}`} style={{ transform: `translate(${position.x}px, ${position.y}px)` }} data-node-id={id} data-popover-anchor-container>
             <div className="workflow-test-node-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag}>
                 <span>{icon}</span>
                 <strong title={title}>{title}</strong>

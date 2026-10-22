@@ -25,6 +25,7 @@ import {
     generationWorkflowMetadata,
     isGenerationCanceled,
     canvasImageReferenceLimitError,
+    resetGenerationTaskMetadata,
     resolveMetadataReferences,
     resolveStoredReferenceImages,
     runBackendCanvasGenerationTask,
@@ -37,6 +38,7 @@ import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { generationFailureMetadata, unchangedModeratedPrompt } from "@/lib/generation-error";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { videoEnhanceSourceReference, videoEnhanceTaskInput, type VideoEnhanceParams } from "@/lib/canvas/canvas-video-enhance";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
 import { skillRuntime, type SkillRuntimeMetadata } from "@/services/skill-runtime";
@@ -205,6 +207,36 @@ export function useCanvasGenerationRetry({
                 }
                 return;
             }
+            // 画质增强节点按自身保存的增强参数重建请求，不能沿用源节点的生成配置。
+            const videoEnhance = node.metadata?.videoEnhance;
+            if (videoEnhance) {
+                const sourceVideoNode = nodesRef.current.find((item) => item.id === videoEnhance.sourceNodeId);
+                if (!sourceVideoNode || (!sourceVideoNode.metadata?.storageKey && !sourceVideoNode.metadata?.content)) {
+                    message.error("源视频节点已删除或为空，无法重新增强；没有提交任务");
+                    return;
+                }
+                const params: VideoEnhanceParams = { model: videoEnhance.model, resolution: videoEnhance.resolution, fps: videoEnhance.fps, bitrateLevel: videoEnhance.bitrateLevel, bitrate: videoEnhance.bitrate };
+                const retryContext = node.metadata?.taskId ? await createGenerationRetryContext(node.metadata.taskId, node.metadata.attemptGroupId) : {};
+                const controller = startGenerationRequest(node.id, sourceVideoNode.id, node.id);
+                setRunningNodeId(node.id);
+                setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...resetGenerationTaskMetadata(item.metadata, "loading"), errorDetails: undefined } } : item));
+                let retryTaskId: string | undefined;
+                try {
+                    await runCanvasGenerationTaskToConsumer(
+                        { ...videoEnhanceTaskInput({ config: effectiveConfig, params, source: videoEnhanceSourceReference(sourceVideoNode), sourceNodeId: sourceVideoNode.id, projectId, nodeId: node.id, signal: controller.signal }), ...retryContext },
+                        { bindTask: (task) => { retryTaskId = task.id; bindGenerationTask(node.id, task); }, consumeTask: (task) => applyGenerationTaskResult(node.id, task) },
+                    );
+                } catch (error) {
+                    if (controller.signal.aborted || isGenerationCanceled(error)) return;
+                    const details = error instanceof Error ? error.message : "画质增强失败";
+                    message.error(details);
+                    if (!isCanvasGenerationDurableAckError(error)) setNodes((current) => current.map((item) => item.id === node.id && (!retryTaskId || item.metadata?.taskId === retryTaskId) ? { ...item, metadata: { ...item.metadata, status: "error", errorDetails: details } } : item));
+                } finally {
+                    finishGenerationRequest(node.id, controller);
+                    setRunningNodeId((current) => current === node.id ? null : current);
+                }
+                return;
+            }
             const retryMode = retryModeForNode(node.type);
             if (!retryMode) {
                 message.warning("当前节点不能使用通用生成重试");
@@ -355,7 +387,8 @@ export function useCanvasGenerationRetry({
                     : undefined;
 
             setRunningNodeId(node.id);
-            setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_LOADING, errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined } } : item)));
+            // 新尝试必须清掉上一次的任务字段，否则卡片会沿用旧 taskCreatedAt 继续计时。
+            setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...resetGenerationTaskMetadata(item.metadata, NODE_STATUS_LOADING), taskCreatedAt: new Date().toISOString(), errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined } } : item)));
             const controller = startGenerationRequest(node.id, sourceNode.id, node.id);
             const retryContext = node.metadata?.taskId ? await createGenerationRetryContext(node.metadata.taskId, node.metadata.attemptGroupId) : {};
             const runAndConsumeRetry = async (input: Parameters<typeof runBackendCanvasGenerationTask>[0]) => {

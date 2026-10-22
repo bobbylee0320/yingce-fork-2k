@@ -3,7 +3,8 @@ import { agentCopy, type CanvasAppearance } from "@/lib/canvas/agent-appearance"
 
 type AgentWelcomeProps = {
     appearance: CanvasAppearance;
-    nodeCount: number;
+    /** null 表示当前不在画布中。 */
+    nodeCount: number | null;
     onChooseSkill: () => void;
     onDraftPrompt: (prompt: string) => void;
 };
@@ -33,11 +34,11 @@ export function AgentWelcome({ appearance, nodeCount, onChooseSkill, onDraftProm
                     </span>
                     <ArrowUpRight className="agent-welcome-arrow" aria-hidden="true" />
                 </button>
-                <button type="button" disabled={nodeCount === 0} onClick={() => onDraftPrompt("请先阅读当前画布，梳理素材与节点之间的关系，给出接下来的创作建议。先不要修改节点或提交生成任务。")}>
+                <button type="button" disabled={!nodeCount} onClick={() => onDraftPrompt("请先阅读当前画布，梳理素材与节点之间的关系，给出接下来的创作建议。先不要修改节点或提交生成任务。")}>
                     <Layers3 aria-hidden="true" />
                     <span>
                         <strong>一起梳理当前画布</strong>
-                        <small>{nodeCount > 0 ? `${nodeCount} 个节点，看看下一步可以做什么` : "添加节点后，一起梳理创作思路"}</small>
+                        <small>{nodeCount === null ? "进入一个画布后可用" : nodeCount > 0 ? `${nodeCount} 个节点，看看下一步可以做什么` : "添加节点后，一起梳理创作思路"}</small>
                     </span>
                     <ArrowUpRight className="agent-welcome-arrow" aria-hidden="true" />
                 </button>

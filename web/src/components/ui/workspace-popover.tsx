@@ -1,6 +1,8 @@
 import { cloneElement, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { observeMovablePopupAnchor } from "@/lib/movable-popup-anchor";
+
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
 
 type Props = {
@@ -40,6 +42,8 @@ export function WorkspacePopover({ open, onOpenChange, content, children, placem
             setPosition(null);
             return;
         }
+        const anchorElement = anchorRef.current;
+        if (!anchorElement) return;
         const update = () => {
             const anchor = anchorRef.current?.getBoundingClientRect();
             const popup = popupRef.current?.getBoundingClientRect();
@@ -58,12 +62,14 @@ export function WorkspacePopover({ open, onOpenChange, content, children, placem
         update();
         const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
         if (popupRef.current) observer?.observe(popupRef.current);
+        const stopMovingAnchor = observeMovablePopupAnchor(anchorElement, update);
         window.addEventListener("resize", update);
         window.addEventListener("scroll", update, true);
         document.addEventListener("pointerdown", outside, true);
         document.addEventListener("keydown", keyboard);
         return () => {
             observer?.disconnect();
+            stopMovingAnchor();
             window.removeEventListener("resize", update);
             window.removeEventListener("scroll", update, true);
             document.removeEventListener("pointerdown", outside, true);

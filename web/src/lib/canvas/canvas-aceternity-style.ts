@@ -15,8 +15,9 @@ export function canvasDockStyle(theme: CanvasTheme, color: string = theme.toolba
         "--dock-command-danger": theme.accent.danger,
         "--dock-tooltip-bg": theme.spatial.elevated,
         "--dock-tooltip-border": theme.toolbar.border,
-        "--dock-switch-track": "#000000",
-        "--dock-switch-thumb": "#ffffff",
-        "--dock-switch-thumb-text": "#000000",
+        // 分段控件跟随画布主题：浅色为白色滑块，深色为抬亮的灰色滑块。
+        "--dock-switch-track": theme.toolbar.itemHover,
+        "--dock-switch-thumb": theme.node.panel,
+        "--dock-switch-thumb-text": theme.toolbar.activeText,
     } as CSSProperties;
 }

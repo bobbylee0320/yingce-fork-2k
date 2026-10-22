@@ -45,9 +45,6 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		return nil, &AppError{Status: 503, Code: 503, Message: "服务正在维护，暂不接受新的生成任务", Retryable: true}
 	}
 	prompt := strings.TrimSpace(req.Prompt)
-	if prompt == "" {
-		return nil, errors.New("prompt is required")
-	}
 	taskType := strings.TrimSpace(req.Type)
 	if err := validateTaskType(taskType); err != nil {
 		return nil, err
@@ -55,6 +52,19 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	normalizedInput, err := normalizeTaskInput(req.Input)
 	if err != nil {
 		return nil, err
+	}
+	// 视频处理（kind=processing）以源视频为主体，不要求 prompt；提示词由服务端生成，
+	// 源时长、帧率档和处理参数在这里按资源记录与后台配置重算。
+	processing, err := s.prepareVideoProcessingTask(userID, normalizedInput)
+	if err != nil {
+		return nil, err
+	}
+	if processing != nil {
+		prompt = processing.Prompt
+		normalizedInput["prompt"] = prompt
+	}
+	if prompt == "" {
+		return nil, errors.New("prompt is required")
 	}
 	// Fail admission before queueing or charging; the worker validates again in
 	// case a tool is deleted or its visibility changes while queued.

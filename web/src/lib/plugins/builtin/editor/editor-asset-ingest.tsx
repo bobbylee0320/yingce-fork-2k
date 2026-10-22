@@ -3,6 +3,7 @@
 // "仅时间线作用域"直连媒体（nodeId=asset:<id>）。导入链路：uploadResourceFile →
 // linkProjectAsset（后端按资源元数据合成资产记录）→ refreshAssets。
 
+import { createClientUUID } from "@/lib/client-id";
 import { useEffect, useRef, useState } from "react";
 import { Boxes, Check, ChevronDown, ChevronRight, Clapperboard, Film, FolderOpen, HardDrive, Image as ImageIcon, Loader2, Music2, Plus, X } from "lucide-react";
 
@@ -414,7 +415,7 @@ export function EditorAssetIngest() {
         const trackId = trackIdForKind(kind, project);
         const startMs = trackEndMs(project, trackId);
         const clip = makeClipFromAsset(asset, {
-            id: `asset:${asset.id}:${crypto.randomUUID()}`,
+            id: `asset:${asset.id}:${createClientUUID()}`,
             trackId,
             startMs,
             defaultDurationMs: kind === "image" ? 3_000 : 5_000,

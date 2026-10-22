@@ -58,6 +58,7 @@ export type TextCapabilityConfig = {
 };
 
 export type ImageSizeParameter = "none" | "size" | "aspect_ratio";
+export type ImageResponseFormat = "auto" | "b64_json" | "url";
 
 /**
  * 普通视频模型提示词字符数的默认上限。
@@ -93,7 +94,7 @@ export type ImageCapabilityConfig = {
     /** Protocol-declared mapping where quality values select image resolution. */
     resolutionUsesQuality?: boolean;
     transparentBackground: { supported: boolean; default: boolean };
-    responseFormat: { supported: boolean };
+    responseFormat: { supported: boolean; default?: ImageResponseFormat };
     outputFormat: { supported: boolean };
     maxOutputs: number;
 };
@@ -129,7 +130,25 @@ export type VideoCapabilityConfig = {
     watermark: { supported: boolean; default: boolean };
     operations: string[];
     defaultOperation: string;
+    /** 仅 kind=processing 的视频处理模型（如画质增强）配置；生成模型为空。 */
+    processing?: VideoProcessingConfig;
 };
+
+export type VideoProcessingFpsPolicy = "keep_source" | "user_select";
+
+export type VideoProcessingConfig = {
+    fpsPolicy: VideoProcessingFpsPolicy;
+    fpsOptions?: number[];
+    maxSourceSeconds?: number;
+};
+
+/** 与后端一致：轮询上限 1 小时，按 RTF≈20 估算源视频默认不超过 180 秒。 */
+export const DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS = 180;
+export const VOLCENGINE_MEDIAKIT_ENHANCE_VIDEO_PROTOCOL = "volcengine-mediakit-enhance-video";
+/** 火山 MediaKit 画质增强（大模型版）支持的目标分辨率，按从低到高排列。 */
+export const VIDEO_ENHANCE_RESOLUTIONS = ["720p", "1080p", "2k", "4k"] as const;
+/** 目标档对应的短边像素，用于判断是否低于源视频。 */
+export const VIDEO_ENHANCE_SHORT_EDGE: Record<string, number> = { "720p": 720, "1080p": 1080, "2k": 1440, "4k": 2160 };
 
 export type VideoScreenSpecConfig = Pick<VideoCapabilityConfig, "ratios" | "defaultRatio" | "resolutions" | "defaultResolution">;
 
@@ -139,6 +158,16 @@ export const STANDARD_IMAGE_SIZE_VALUES = ["1:1", "3:2", "2:3", "4:3", "3:4", "1
 export function normalizeCapabilityString(value: string) {
     const normalized = value.trim();
     return normalized.startsWith("string:") ? normalized.slice("string:".length) : normalized;
+}
+
+function normalizeImageResponseFormat(value: unknown): ImageResponseFormat {
+    return value === "b64_json" || value === "url" ? value : "auto";
+}
+
+export function imageResponseFormatFor(profile: Pick<ImageCapabilityConfig, "responseFormat">): Exclude<ImageResponseFormat, "auto"> | undefined {
+    if (!profile.responseFormat.supported) return undefined;
+    const value = normalizeImageResponseFormat(profile.responseFormat.default);
+    return value === "auto" ? undefined : value;
 }
 
 function normalizeCapabilityStrings(values: string[]) {
@@ -168,6 +197,10 @@ export function normalizeModelCapabilityConfig(config: ModelCapabilityConfig): M
                       ...config.image.quality,
                       values: normalizeCapabilityStrings(config.image.quality.values),
                       default: normalizeCapabilityString(config.image.quality.default),
+                  },
+                  responseFormat: {
+                      ...config.image.responseFormat,
+                      default: normalizeImageResponseFormat(config.image.responseFormat?.default),
                   },
               }
             : undefined,
@@ -262,7 +295,7 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
         resolution: { supported: false, values: [], default: "auto" },
         quality: { supported: true, values: ["auto", "low", "medium", "high"], default: "auto" },
         transparentBackground: { supported: true, default: false },
-        responseFormat: { supported: true },
+        responseFormat: { supported: true, default: "auto" },
         outputFormat: { supported: true },
         maxOutputs: 15,
     };
@@ -496,6 +529,20 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.resolutions = flash ? ["720P"] : ["720P", "960P", "2K"];
         video.defaultResolution = "720P";
         video.operations.push("reference_to_video", "audio_to_video");
+    }
+    if (protocol === VOLCENGINE_MEDIAKIT_ENHANCE_VIDEO_PROTOCOL) {
+        // 与后端默认值一致：只接收一个源视频，帧率默认保持原片。
+        video.references = { ...video.references, minImages: 0, maxImages: 0, maxImageBytes: 0, maxVideos: 1, maxVideoDurationSeconds: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, maxAudios: 0 };
+        video.duration = { selection: "range", min: 1, max: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, step: 1, default: 5 };
+        video.ratios = [];
+        video.defaultRatio = "";
+        video.resolutions = [...VIDEO_ENHANCE_RESOLUTIONS];
+        video.defaultResolution = "1080p";
+        video.generateAudio = { supported: false, default: false };
+        video.watermark = { supported: false, default: false };
+        video.operations = ["enhance"];
+        video.defaultOperation = "enhance";
+        video.processing = { fpsPolicy: "keep_source", maxSourceSeconds: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS };
     }
     return { version: 1, text, image: defaultImageCapabilityConfig(protocol, model), video };
 }

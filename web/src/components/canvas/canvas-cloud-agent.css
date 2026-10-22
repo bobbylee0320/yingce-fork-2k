@@ -1,4 +1,5 @@
-.canvas-agent-panel {
+.canvas-agent-panel,
+.agent-context-popover {
     /* Canvas theme -> material tokens. Only the floating shell blurs the canvas. */
     --agent-material-solid: color-mix(in srgb, var(--agent-ink) 3%, var(--agent-surface-base));
     --agent-material-glass: color-mix(in srgb, var(--agent-material-solid) 68%, transparent);
@@ -11,6 +12,9 @@
     --agent-radius-surface: calc(var(--radius) * 2.5);
     --agent-material-shadow: 0 24px 80px var(--agent-shadow-color);
     --agent-focus-ring: color-mix(in srgb, var(--agent-accent) 65%, var(--agent-ink));
+}
+
+.canvas-agent-panel {
     container-type: inline-size;
     overscroll-behavior: contain;
     isolation: isolate;
@@ -24,9 +28,22 @@
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .canvas-agent-panel {
         background: linear-gradient(145deg, var(--agent-material-sheen), transparent 55%), var(--agent-material-glass);
-        -webkit-backdrop-filter: blur(32px) saturate(145%);
-        backdrop-filter: blur(32px) saturate(145%);
+        -webkit-backdrop-filter: blur(20px) saturate(140%);
+        backdrop-filter: blur(20px) saturate(140%);
     }
+
+    /* 面板下方的画布每帧都在变：平移/缩放/拖拽节点时毛玻璃要逐帧重新模糊整块区域，
+       是 Agent 打开后画布掉帧的主因。交互期换成实色，静止后恢复。 */
+    :root:has([data-canvas-viewport-interacting="true"], [data-canvas-node-dragging="true"]) .canvas-agent-panel {
+        background: var(--agent-material-solid);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+/* 交互期暂停面板内的循环动画，避免和画布争抢重绘。 */
+:root:has([data-canvas-viewport-interacting="true"], [data-canvas-node-dragging="true"]) .canvas-agent-panel * {
+    animation-play-state: paused !important;
 }
 
 .agent-panel-header {
@@ -166,19 +183,22 @@
 
 .agent-context-popover.ant-popover,
 .agent-context-popover .ant-popover-content,
-.agent-context-popover .ant-popover-inner {
+.agent-context-popover .ant-popover-container {
     box-shadow: none;
 }
 
-.agent-context-popover .ant-popover-inner {
-    overflow: hidden;
+.agent-context-popover .ant-popover-container {
+    max-height: calc(100dvh - 32px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 0;
     border: 1px solid color-mix(in srgb, var(--agent-ink) 12%, transparent);
     border-radius: 16px;
     background: var(--agent-surface-raised, var(--background));
 }
 
-.agent-context-popover .ant-popover-inner-content {
+.agent-context-popover .ant-popover-content {
     padding: 0;
 }
 
@@ -1739,7 +1759,7 @@
 
 .canvas-agent-launcher-label {
     position: absolute;
-    bottom: -17px;
+    bottom: -34px;
     left: 50%;
     padding: 3px 7px;
     border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
@@ -1764,6 +1784,45 @@
     display: none;
 }
 
+.canvas-agent-launcher.canvas-agent-launcher-media {
+    position: fixed;
+    overflow: visible;
+    border-radius: 12px;
+    box-shadow: none;
+}
+
+.canvas-agent-launcher-media::before {
+    display: none;
+}
+
+.canvas-agent-launcher-media > img,
+.canvas-agent-launcher-media > .canvas-agent-keyed-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.canvas-agent-launcher-media > .canvas-agent-keyed-video {
+    border-radius: 12px;
+    transform: scale(1.18);
+}
+
+.canvas-agent-keyed-video {
+    position: absolute;
+    inset: 0;
+}
+
+.canvas-agent-video-source {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
 .canvas-agent-launcher-status {
     position: absolute;
     top: 6px;
@@ -1774,6 +1833,11 @@
     border-radius: 50%;
     background: #57b786;
     box-shadow: 0 2px 7px rgba(23, 90, 61, 0.28);
+}
+
+.canvas-agent-launcher-media > .canvas-agent-launcher-status {
+    top: 28%;
+    right: 22%;
 }
 
 .canvas-agent-launcher-status.is-pending {

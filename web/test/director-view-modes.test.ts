@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Euler, Vector3 } from "three";
+import { previsAspectValue, previsVerticalFov } from "../src/lib/canvas/previs/previs-optics";
 
 import {
     PREVIS_DEFAULT_VIEW_MODE,
@@ -120,7 +121,8 @@ describe("CAM 取景解算", () => {
         expect(framing?.cameraId).toBe(camera.id);
         expect(framing?.position).toEqual(camera.transform.position);
         expect(framing?.target).toEqual(camera.target);
-        expect(framing?.fov).toBe(camera.fov);
+        // 焦段是光学真源：fov 由焦段与镜头画幅换算，而不是读存储的 fov。
+        expect(framing?.fov).toBeCloseTo(previsVerticalFov(camera.focalLength, previsAspectValue(scene.shots[0].aspectRatio)), 6);
         expect(framing?.near).toBe(camera.near);
         expect(framing?.far).toBe(camera.far);
     });
@@ -174,7 +176,8 @@ describe("CAM 取景解算", () => {
 
 function sceneWithOptics(optics: { fov?: number; near?: number; far?: number }): PrevisScene {
     const base = createPrevisScene();
-    const camera = { ...base.cameras[0], ...optics };
+    // 焦段置为非法值，让这些用例直接验证存储 fov 的可用性边界。
+    const camera = { ...base.cameras[0], focalLength: Number.NaN, ...optics };
     return { ...base, cameras: [camera], shots: [{ ...base.shots[0], cameraId: camera.id }] };
 }
 

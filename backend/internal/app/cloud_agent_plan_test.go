@@ -142,6 +142,27 @@ func TestCloudAgentAskUserAcceptsDynamicForm(t *testing.T) {
 	}
 }
 
+func TestCloudAgentAskUserAcceptsMultiSelectField(t *testing.T) {
+	call := cloudAgentCall{ID: "ask-multi-select"}
+	call.Function.Name = "ask_user"
+	call.Function.Arguments = `{"question":"确认视频输出","fields":[{"id":"outputs","title":"输出内容","type":"multi_select","options":[{"id":"video","label":"视频","recommended":true},{"id":"cover","label":"封面"}],"defaultValue":["video"]}]}`
+	result, err := cloudAgentAskUser(call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := result.(map[string]any)
+	fields, ok := body["fields"].([]map[string]any)
+	if !ok || len(fields) != 1 {
+		t.Fatalf("multi_select fields = %#v", body["fields"])
+	}
+	if fields[0]["type"] != "multi_select" {
+		t.Fatalf("multi_select type was lost: %+v", fields[0])
+	}
+	if values, ok := fields[0]["defaultValue"].([]string); !ok || len(values) != 1 || values[0] != "video" {
+		t.Fatalf("multi_select defaultValue = %#v", fields[0]["defaultValue"])
+	}
+}
+
 func TestCloudAgentAskUserTracksConfirmationRoundsAndDefaults(t *testing.T) {
 	call := cloudAgentCall{ID: "ask-1"}
 	call.Function.Name = "ask_user"

@@ -189,6 +189,7 @@ func (s *Service) StartWorker() {
 	s.startResourceDeletionWorker(ctx)
 	s.startSkillSyncWorker(ctx)
 	s.startPaymentWorker(ctx)
+	s.startBillingAutoRefundWorker()
 	go s.syncAgentSessionLimit()
 	s.runWorkerLoop(func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Second)

@@ -1,3 +1,4 @@
+import { createClientUUID } from "@/lib/client-id";
 import { changeCanvasEditLease, type CanvasEditProof, type CanvasSyncStatus } from "@/services/api/user-data";
 import { getActiveUserScope } from "@/lib/user-scope";
 
@@ -177,10 +178,14 @@ export function createCanvasEditLeaseClient(deps: Dependencies) {
                 };
                 entries.set(nodeId, entry);
             }
+            const wasPending = entry.savedVersion < entry.version;
             entry.version++;
             entry.lastInput = deps.now();
-            if (!entry.pending && !entry.error && entry.expires <= deps.now() && !state(canvasId, nodeId).remote) void acquire(canvasId, nodeId, entry);
-            emit();
+            const acquiring = !entry.pending && !entry.error && entry.expires <= deps.now() && !state(canvasId, nodeId).remote;
+            if (acquiring) void acquire(canvasId, nodeId, entry);
+            // 每次按键都 emit 会让所有订阅者（Agent 面板、文本编辑器）逐字重渲染；
+            // 只有可观察状态（草稿待保存、开始申请租约）变化时才通知。
+            if (!wasPending || acquiring) emit();
             return true;
         },
         async retry(canvasId: string, nodeId: string) {
@@ -271,20 +276,29 @@ export function createCanvasEditLeaseClient(deps: Dependencies) {
         status(canvasId: string, status: CanvasSyncStatus, token?: symbol) {
             checkScope();
             // A poll already in flight cannot undo a newer admission verdict.
-            if (!token || token === observation(canvasId)) agents.set(canvasId, status.agent ?? null);
-            remote.set(
-                canvasId,
-                new Map(
-                    status.leases.map((lease) => [
-                        lease.nodeId,
-                        {
-                            sessionId: lease.sessionId,
-                            expires: deps.now() + Math.max(0, Date.parse(lease.expiresAt) - Date.parse(status.serverTime)),
-                        },
-                    ]),
-                ),
+            let changed = false;
+            if (!token || token === observation(canvasId)) {
+                const previous = agents.get(canvasId);
+                const next = status.agent ?? null;
+                // 轮询每 2 秒返回新对象；内容相同则保留旧引用并跳过通知。
+                if (!sameAgentActivity(previous, next) || !agents.has(canvasId)) {
+                    agents.set(canvasId, next);
+                    changed = true;
+                }
+            }
+            const previousLeases = remote.get(canvasId);
+            const nextLeases = new Map(
+                status.leases.map((lease) => [
+                    lease.nodeId,
+                    {
+                        sessionId: lease.sessionId,
+                        expires: deps.now() + Math.max(0, Date.parse(lease.expiresAt) - Date.parse(status.serverTime)),
+                    },
+                ]),
             );
-            emit();
+            if (!previousLeases || previousLeases.size !== nextLeases.size || [...nextLeases].some(([nodeId, lease]) => previousLeases.get(nodeId)?.sessionId !== lease.sessionId)) changed = true;
+            remote.set(canvasId, nextLeases);
+            if (changed) emit();
         },
         async tick(canvasId: string) {
             checkScope();
@@ -322,14 +336,18 @@ export function createCanvasEditLeaseClient(deps: Dependencies) {
                 entry.pending = pending;
                 await pending;
             }
-            emit();
         },
     };
+}
+
+function sameAgentActivity(left: CanvasSyncStatus["agent"] | undefined, right: CanvasSyncStatus["agent"] | undefined) {
+    if (!left || !right) return !left && !right;
+    return left.runId === right.runId && left.status === right.status && left.cleanupPending === right.cleanupPending;
 }
 
 export const canvasEditLeases = createCanvasEditLeaseClient({
     change: changeCanvasEditLease,
     now: () => Date.now(),
     scope: getActiveUserScope,
-    sessionId: () => crypto.randomUUID(),
+    sessionId: () => createClientUUID(),
 });

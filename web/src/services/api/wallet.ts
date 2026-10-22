@@ -264,6 +264,16 @@ export function updateAdminCreditPolicy(policy: CreditPolicy) {
     return http.patch<{ policy: CreditPolicy }>("/admin/settings/credits", policy);
 }
 
+export type BillingAutoRefundSetting = { enabled: boolean; updatedAt?: string };
+
+export function getAdminBillingAutoRefund() {
+    return http.get<{ setting: BillingAutoRefundSetting }>("/admin/settings/billing-auto-refund");
+}
+
+export function updateAdminBillingAutoRefund(enabled: boolean) {
+    return http.patch<{ setting: BillingAutoRefundSetting }>("/admin/settings/billing-auto-refund", { enabled });
+}
+
 export function getAdminLinuxDOSetting() {
     return http.get<{ setting: LinuxDOSetting }>("/admin/settings/linuxdo");
 }

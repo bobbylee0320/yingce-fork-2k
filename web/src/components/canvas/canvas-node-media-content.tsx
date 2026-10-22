@@ -18,7 +18,7 @@ import { bindCanvasVideoHoverPreview } from "@/lib/canvas/canvas-video-hover-pre
 import { resolveVideoMediaUrl } from "@/services/file-storage";
 import { hydrateCanvasVideoPreview } from "@/services/canvas-video-preview";
 import { type CanvasTheme } from "@/lib/canvas-theme";
-import { fitImageMaterialNodeSize, fitNodeSize } from "@/lib/canvas/canvas-node-size";
+import { fitImageMaterialNodeSize, fitImageNodeSize } from "@/lib/canvas/canvas-node-size";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { prepareCanvasImage } from "@/services/canvas-image-loader";
 import { getResourceAccess, refreshResource, resourceIdFromStorageKey, resolveResourceAccessURL } from "@/services/api/resources";
@@ -105,9 +105,15 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
     const [currentTimeMs, setCurrentTimeMs] = useState(0);
     const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
     const [videoReady, setVideoReady] = useState(false);
+    // 播放器身份是节点上的媒体（storageKey），不是当前签名地址：续签只换 src，不重建播放器、不退回静态预览。
+    const playerKey = node.metadata?.storageKey || node.id;
 
     useEffect(() => {
         setVideoReady(false);
+    }, [playerKey]);
+
+    useEffect(() => {
+        if (!url) setVideoReady(false);
     }, [url]);
 
     useEffect(() => {
@@ -160,7 +166,7 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
             {url ? (
                 <div className={`relative z-[1] transition-opacity duration-150 ${videoReady ? "opacity-100" : "opacity-0"}`} style={{ width: fitWidth, height: Math.round(fitHeight) }}>
                     <VideoPlayer
-                        key={url}
+                        key={playerKey}
                         src={url}
                         mimeType={node.metadata?.mimeType}
                         title={node.title || "视频"}
@@ -504,12 +510,12 @@ export function ImageContent({
         updateMediaNode?.(node.id, (current) => {
             const metadata = current.metadata;
             const needsMetadata = metadata?.naturalWidth !== naturalWidth || metadata?.naturalHeight !== naturalHeight;
-            if (current.metadata?.freeResize || current.metadata?.manualSize) {
+            if (current.metadata?.freeResize || current.metadata?.manualSize || current.metadata?.locked) {
                 return needsMetadata ? { ...current, metadata: { ...metadata, naturalWidth, naturalHeight } } : current;
             }
             // 独立素材使用有界预览框；解码回调不能重新把细长文字放大成超宽节点。
             const materialPreview = metadata?.imageLayerMaterial || (metadata?.isBatchRoot && batchPreviewNodes?.some((child) => child.metadata?.imageLayerMaterial));
-            const size = materialPreview ? fitImageMaterialNodeSize(naturalWidth, naturalHeight) : fitNodeSize(naturalWidth, naturalHeight);
+            const size = materialPreview ? fitImageMaterialNodeSize(naturalWidth, naturalHeight) : fitImageNodeSize(naturalWidth, naturalHeight);
             const needsResize = Math.abs(size.width - current.width) >= 1 || Math.abs(size.height - current.height) >= 1;
             if (!needsMetadata && !needsResize) return current;
             return {

@@ -292,7 +292,8 @@ export function useCanvasProjectLifecycle({
             agentActive = Boolean(status.agent);
             canvasEditLeases.status(projectId, status, token);
             const current = useCanvasStore.getState().openProject(projectId);
-            if (current && status.revision !== current.revision) await refreshCanvasAfterAgent(projectId, "sync");
+            // Agent 运行时 SSE 增量会先把本地 revision 推前；轮询响应落后时不应再拉整份快照。
+            if (current && (!Number.isSafeInteger(current.revision) || status.revision > current.revision!)) await refreshCanvasAfterAgent(projectId, "sync");
         }, undefined, {
             interval: () => connected && !agentActive ? 30000 : 2000,
             listen: (wake) => subscribeCanvasRealtime(projectId, (state, event) => {

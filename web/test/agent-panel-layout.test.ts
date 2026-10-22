@@ -54,9 +54,11 @@ describe("Agent window layout", () => {
 
 describe("Agent submission sync preflight contract", () => {
     it("scopes submit and approval saves to the active canvas before Agent POST", () => {
-        const source = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-cloud-agent-panel.tsx"), "utf8");
-        expect(source.match(/await prepareCanvasForCloudAction\(canvasId\)/g)).toHaveLength(2);
-        expect(source).toContain('if (decision === "approve") {');
+        const source = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-cloud-agent-panel.tsx"), "utf8").replace(/\r\n/g, "\n");
+        // 提交同步当前页面绑定的画布；审批同步该轮运行自己的画布（离开画布后仍能审批写回）。无画布时都跳过。
+        expect(source).toContain("if (canvasId) await prepareCanvasForCloudAction(canvasId);");
+        expect(source).toContain('if (decision === "approve" && run.canvasId) {');
+        expect(source).toContain("await prepareCanvasForCloudAction(run.canvasId);");
         expect(source).not.toContain("cloudNodeIds");
         expect(source).toContain("submitDisabled={otherAgentRunning");
         expect(source).toContain("重新读取记录");

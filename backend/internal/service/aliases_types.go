@@ -2,6 +2,9 @@ package service
 
 import "yingce/backend/internal/app"
 
+type AgentAvatarBundleManifest = app.AgentAvatarBundleManifest
+type AgentAvatarBundleImport = app.AgentAvatarBundleImport
+
 const (
 	WorkbenchKindImage = app.WorkbenchKindImage
 	WorkbenchKindVideo = app.WorkbenchKindVideo
@@ -26,6 +29,10 @@ type (
 	AgentMemorySettingRequest              = app.AgentMemorySettingRequest
 	AgentMemoryCompactView                 = app.AgentMemoryCompactView
 	AgentMemoryCompactSummary              = app.AgentMemoryCompactSummary
+	AgentMemoryProposalDecision            = app.AgentMemoryProposalDecision
+	AgentMemoryRevisionRestore             = app.AgentMemoryRevisionRestore
+	AgentMemoryProposalView                = app.AgentMemoryProposalView
+	AgentMemoryRevisionView                = app.AgentMemoryRevisionView
 	APICallLogPage                         = app.APICallLogPage
 	APICallLogQuery                        = app.APICallLogQuery
 	AccountFileStorageUsage                = app.AccountFileStorageUsage
@@ -115,6 +122,8 @@ type (
 	ChannelOrderItem                       = app.ChannelOrderItem
 	ChannelOrderRequest                    = app.ChannelOrderRequest
 	ChannelRequest                         = app.ChannelRequest
+	SystemChannelExport                    = app.SystemChannelExport
+	SystemChannelImportResult              = app.SystemChannelImportResult
 	ProviderCatalogVerifyRequest           = app.ProviderCatalogVerifyRequest
 	ProviderCatalogInstallRequest          = app.ProviderCatalogInstallRequest
 	CharacterAssetSummary                  = app.CharacterAssetSummary
@@ -148,6 +157,7 @@ type (
 	CreationRunOutput                      = app.CreationRunOutput
 	CreationSubmissionOutput               = app.CreationSubmissionOutput
 	CreditPolicy                           = app.CreditPolicy
+	BillingAutoRefundSetting               = app.BillingAutoRefundSetting
 	DiagnosticBundle                       = app.DiagnosticBundle
 	DiagnosticClientEvent                  = app.DiagnosticClientEvent
 	DiagnosticExportRequest                = app.DiagnosticExportRequest

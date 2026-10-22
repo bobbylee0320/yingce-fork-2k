@@ -7,7 +7,7 @@ import { releasePrevisFocusAfterPointer } from "@/lib/canvas/previs/previs-short
 import type { PrevisRenderMode } from "@/types/previs";
 
 type PrevisViewportDockProps = {
-    transformMode: "translate" | "rotate" | "scale";
+    transformMode: "select" | "translate" | "rotate" | "scale";
     renderMode: PrevisRenderMode;
     /** 当前模式允许的渲染视图。dock 只展示这些，避免成为绕过模式门控的第二条路径。 */
     renderModes: PrevisRenderMode[];
@@ -32,18 +32,36 @@ const RENDER_VIEW_BUTTONS: Array<{ mode: PrevisRenderMode; label: string; icon: 
 export function PrevisViewportDock({ transformMode, renderMode, renderModes, onTransformModeChange, onRenderModeChange, onAddActor, onAddBox, onAddLight, onAddCamera, onAlignCamera }: PrevisViewportDockProps) {
     return (
         <nav className="previs-viewport-dock" aria-label="预演台视口工具">
-            <DockButton label="移动对象" active={transformMode === "translate"} onClick={() => onTransformModeChange("translate")}><Move3D /></DockButton>
-            <DockButton label="旋转对象" active={transformMode === "rotate"} onClick={() => onTransformModeChange("rotate")}><Rotate3D /></DockButton>
-            <DockButton label="缩放对象" active={transformMode === "scale"} onClick={() => onTransformModeChange("scale")}><Scaling /></DockButton>
+            <DockButton label="移动对象" active={transformMode === "translate"} onClick={() => onTransformModeChange("translate")}>
+                <Move3D />
+            </DockButton>
+            <DockButton label="旋转对象" active={transformMode === "rotate"} onClick={() => onTransformModeChange("rotate")}>
+                <Rotate3D />
+            </DockButton>
+            <DockButton label="缩放对象" active={transformMode === "scale"} onClick={() => onTransformModeChange("scale")}>
+                <Scaling />
+            </DockButton>
             <DockDivider />
-            <DockButton label="添加演员" onClick={onAddActor}><UserRound /></DockButton>
-            <DockButton label="添加立方体" onClick={onAddBox}><Box /></DockButton>
-            <DockButton label="添加灯光" onClick={onAddLight}><Lightbulb /></DockButton>
-            <DockButton label="添加摄影机" onClick={onAddCamera}><Camera /></DockButton>
-            <DockButton label="摄影机对齐当前视图" onClick={onAlignCamera}><Crosshair /></DockButton>
+            <DockButton label="添加演员" onClick={onAddActor}>
+                <UserRound />
+            </DockButton>
+            <DockButton label="添加立方体" onClick={onAddBox}>
+                <Box />
+            </DockButton>
+            <DockButton label="添加灯光" onClick={onAddLight}>
+                <Lightbulb />
+            </DockButton>
+            <DockButton label="添加摄影机" onClick={onAddCamera}>
+                <Camera />
+            </DockButton>
+            <DockButton label="摄影机对齐当前视图" onClick={onAlignCamera}>
+                <Crosshair />
+            </DockButton>
             <DockDivider />
             {RENDER_VIEW_BUTTONS.filter((item) => renderModes.includes(item.mode)).map((item) => (
-                <DockButton key={item.mode} label={item.label} active={renderMode === item.mode} onClick={() => onRenderModeChange(item.mode)}>{item.icon}</DockButton>
+                <DockButton key={item.mode} label={item.label} active={renderMode === item.mode} onClick={() => onRenderModeChange(item.mode)}>
+                    {item.icon}
+                </DockButton>
             ))}
         </nav>
     );

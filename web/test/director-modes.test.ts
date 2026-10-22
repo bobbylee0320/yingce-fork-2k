@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import { PREVIS_DEFAULT_MODE, PREVIS_MODES, previsModeCapabilities, resolvePrevisModeTransition, type PrevisMode } from "../src/lib/canvas/previs/previs-modes";
+import { normalizePrevisMode, PREVIS_DEFAULT_MODE, PREVIS_MODES, previsModeCapabilities, resolvePrevisModeTransition, type PrevisMode } from "../src/lib/canvas/previs/previs-modes";
 import { createPrevisScene } from "../src/lib/canvas/previs/previs-scene";
 import { createPrevisSceneFromTemplate } from "../src/lib/canvas/previs/previs-templates";
 import { usePrevisWorkbenchStore } from "../src/stores/canvas/use-previs-workbench-store";
 
-const ALL_MODES: PrevisMode[] = ["layout", "pose", "animate", "camera"];
+const ALL_MODES: PrevisMode[] = ["layout", "animate"];
 
-describe("四模式骨架", () => {
-    test("恰好四个一级模式，顺序为摆场/姿态/动画/摄影机", () => {
+describe("两模式骨架", () => {
+    test("只有摆场 / 动画两个一级模式", () => {
         expect(PREVIS_MODES.map((item) => item.mode)).toEqual(ALL_MODES);
-        expect(PREVIS_MODES.map((item) => item.label)).toEqual(["摆场", "姿态", "动画", "摄影机"]);
+        expect(PREVIS_MODES.map((item) => item.label)).toEqual(["摆场", "动画"]);
     });
 
     test("默认模式是摆场", () => {
@@ -18,11 +18,19 @@ describe("四模式骨架", () => {
         expect(usePrevisWorkbenchStore.getState().mode).toBe("layout");
     });
 
-    test("每个模式都有可读标签与提示，保证可发现", () => {
+    test("每个模式都有可读标签与提示", () => {
         for (const item of PREVIS_MODES) {
             expect(item.label.length).toBeGreaterThan(0);
             expect(item.hint.length).toBeGreaterThan(0);
         }
+    });
+
+    test("旧的 pose / camera 模式并入摆场，未知值也回落摆场", () => {
+        expect(normalizePrevisMode("pose")).toBe("layout");
+        expect(normalizePrevisMode("camera")).toBe("layout");
+        expect(normalizePrevisMode("nope")).toBe("layout");
+        expect(normalizePrevisMode(undefined)).toBe("layout");
+        expect(normalizePrevisMode("animate")).toBe("animate");
     });
 });
 
@@ -35,43 +43,24 @@ describe("能力矩阵", () => {
         }
     });
 
-    test("摆场隐藏骨骼；姿态与动画显示骨骼", () => {
-        expect(previsModeCapabilities("layout").bones).toBe(false);
-        expect(previsModeCapabilities("camera").bones).toBe(false);
-        expect(previsModeCapabilities("pose").bones).toBe(true);
-        expect(previsModeCapabilities("animate").bones).toBe(true);
+    test("两个模式都能调姿势与骨骼（选中演员时）", () => {
+        for (const mode of ALL_MODES) expect(previsModeCapabilities(mode).bones).toBe(true);
     });
 
-    test("只有摄影机模式突出 shot/camera 工具", () => {
-        for (const mode of ALL_MODES) {
-            expect(previsModeCapabilities(mode).cameraTools).toBe(mode === "camera");
-        }
+    test("两个模式都提供全部渲染视图", () => {
+        for (const mode of ALL_MODES) expect(previsModeCapabilities(mode).renderModes).toEqual(["beauty", "clay", "pose", "depth", "normal"]);
     });
 
-    test("摆场不提供深度/法线等高级视图；摄影机模式才提供", () => {
-        expect(previsModeCapabilities("layout").renderModes).toEqual(["beauty", "clay"]);
-        expect(previsModeCapabilities("layout").renderModes).not.toContain("depth");
-        expect(previsModeCapabilities("layout").renderModes).not.toContain("pose");
-        expect(previsModeCapabilities("camera").renderModes).toContain("depth");
-        expect(previsModeCapabilities("camera").renderModes).toContain("normal");
-    });
-
-    test("姿态模式提供骨骼视图", () => {
-        expect(previsModeCapabilities("pose").renderModes).toContain("pose");
-    });
-
-    test("未知模式回落到默认模式的能力，不返回 undefined", () => {
+    test("未知模式回落到摆场能力，不返回 undefined", () => {
         expect(previsModeCapabilities("nope" as PrevisMode)).toEqual(previsModeCapabilities("layout"));
     });
 });
 
 describe("切换清理：离开动画不得残留后台动画写入", () => {
     test("离开动画模式一定停播并关掉 Auto Key", () => {
-        for (const mode of ["layout", "pose", "camera"] as PrevisMode[]) {
-            const next = resolvePrevisModeTransition({ mode, playing: true, autoKey: true, renderMode: "beauty" });
-            expect(next.playing).toBe(false);
-            expect(next.autoKey).toBe(false);
-        }
+        const next = resolvePrevisModeTransition({ mode: "layout", playing: true, autoKey: true, renderMode: "beauty" });
+        expect(next.playing).toBe(false);
+        expect(next.autoKey).toBe(false);
     });
 
     test("留在动画模式时保留播放与 Auto Key", () => {
@@ -80,14 +69,9 @@ describe("切换清理：离开动画不得残留后台动画写入", () => {
         expect(next.autoKey).toBe(true);
     });
 
-    test("renderMode 被夹回目标模式允许的集合", () => {
-        // 摄影机模式的深度视图不能带进摆场。
-        expect(resolvePrevisModeTransition({ mode: "layout", playing: false, autoKey: false, renderMode: "depth" }).renderMode).toBe("beauty");
-        // 姿态模式的骨骼视图同样不属于摆场。
-        expect(resolvePrevisModeTransition({ mode: "layout", playing: false, autoKey: false, renderMode: "pose" }).renderMode).toBe("beauty");
-        // 合法组合保持不变。
-        expect(resolvePrevisModeTransition({ mode: "camera", playing: false, autoKey: false, renderMode: "normal" }).renderMode).toBe("normal");
-        expect(resolvePrevisModeTransition({ mode: "layout", playing: false, autoKey: false, renderMode: "clay" }).renderMode).toBe("clay");
+    test("切模式保留渲染视图", () => {
+        expect(resolvePrevisModeTransition({ mode: "layout", playing: false, autoKey: false, renderMode: "depth" }).renderMode).toBe("depth");
+        expect(resolvePrevisModeTransition({ mode: "animate", playing: false, autoKey: false, renderMode: "pose" }).renderMode).toBe("pose");
     });
 });
 
@@ -101,29 +85,26 @@ describe("store 的 setMode", () => {
         store.getState().setMode("animate");
         store.getState().setPlaying(true);
         store.getState().setAutoKey(true);
-        expect(store.getState().playing).toBe(true);
-        expect(store.getState().autoKey).toBe(true);
-
         store.getState().setMode("layout");
         expect(store.getState().mode).toBe("layout");
         expect(store.getState().playing).toBe(false);
         expect(store.getState().autoKey).toBe(false);
     });
 
-    test("切模式不影响选择状态：draft 归属由 workbench 自己管", () => {
+    test("切模式不影响选择状态", () => {
         const store = usePrevisWorkbenchStore;
         store.getState().setSelectedObjectId("obj-1");
-        store.getState().setMode("camera");
+        store.getState().setMode("animate");
         expect(store.getState().selectedObjectId).toBe("obj-1");
-        store.getState().setMode("pose");
+        store.getState().setMode("layout");
         expect(store.getState().selectedObjectId).toBe("obj-1");
     });
 
-    test("切模式不重置 playhead：时间位置不因为换视图而丢", () => {
+    test("切模式不重置 playhead", () => {
         const store = usePrevisWorkbenchStore;
         store.getState().setMode("animate");
         store.getState().setPlayhead(2.5);
-        store.getState().setMode("pose");
+        store.getState().setMode("layout");
         expect(store.getState().playhead).toBe(2.5);
     });
 
@@ -134,53 +115,12 @@ describe("store 的 setMode", () => {
         expect(store.getState().mode).toBe("layout");
     });
 
-    test("摆场模式拒绝 pose/depth/normal，只接受 beauty/clay", () => {
+    test("摆场可直接切深度、法线、骨骼视图", () => {
         const store = usePrevisWorkbenchStore;
-        expect(store.getState().mode).toBe("layout");
-
-        store.getState().setRenderMode("clay");
-        expect(store.getState().renderMode).toBe("clay");
-
-        // 这三个不属于摆场：必须被拒绝，且不得把已有选择冲掉。
-        for (const rejected of ["pose", "depth", "normal"] as const) {
-            store.getState().setRenderMode(rejected);
-            expect(store.getState().renderMode).toBe("clay");
+        for (const mode of ["pose", "depth", "normal", "clay", "beauty"] as const) {
+            store.getState().setRenderMode(mode);
+            expect(store.getState().renderMode).toBe(mode);
         }
-    });
-
-    test("dock 的「骨骼视图」在摆场模式点了也无效：store 层夹住了所有路径", () => {
-        const store = usePrevisWorkbenchStore;
-        // dock 按钮等价于直接调 setRenderMode("pose")。
-        store.getState().setRenderMode("pose");
-        expect(store.getState().renderMode).toBe("beauty");
-    });
-
-    test("摄影机模式才接受 depth/normal", () => {
-        const store = usePrevisWorkbenchStore;
-        store.getState().setMode("camera");
-        store.getState().setRenderMode("depth");
-        expect(store.getState().renderMode).toBe("depth");
-        store.getState().setRenderMode("normal");
-        expect(store.getState().renderMode).toBe("normal");
-    });
-
-    test("姿态模式接受骨骼视图，但仍拒绝深度视图", () => {
-        const store = usePrevisWorkbenchStore;
-        store.getState().setMode("pose");
-        store.getState().setRenderMode("pose");
-        expect(store.getState().renderMode).toBe("pose");
-        store.getState().setRenderMode("depth");
-        expect(store.getState().renderMode).toBe("pose");
-    });
-
-    test("带着深度视图离开摄影机模式会被夹回 beauty，不残留非法组合", () => {
-        const store = usePrevisWorkbenchStore;
-        store.getState().setMode("camera");
-        store.getState().setRenderMode("depth");
-        expect(store.getState().renderMode).toBe("depth");
-
-        store.getState().setMode("layout");
-        expect(store.getState().renderMode).toBe("beauty");
     });
 });
 

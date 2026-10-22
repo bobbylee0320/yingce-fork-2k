@@ -248,10 +248,10 @@ func (s *Service) storeTaskMediaFile(task *model.Task, index int, path, mimeType
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
 			return nil, err
 		}
-	} else if kind == "audio" {
-		// Audio duration is the source of truth for per-second settlement. The
-		// media can still be saved when ffprobe is unavailable; settlement then
-		// moves the order to review instead of silently charging a fake length.
+	} else if kind == "audio" || kind == "video" {
+		// Audio and video-processing duration is the source of truth for per-second
+		// settlement. The media can still be saved when ffprobe is unavailable;
+		// settlement then falls back to provider usage or moves the order to review.
 		durationMs = probeMediaDurationMs(path)
 	}
 	day, err := s.reserveGeneratedResourceQuota(task.UserID, info.Size())

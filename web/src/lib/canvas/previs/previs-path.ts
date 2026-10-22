@@ -70,7 +70,7 @@ export function timePrevisPath(points: readonly PrevisVec3[], start: number, dur
     }
     if (!clean.length) return [];
     if (clean.length === 1) return [{ time: start, position: clean[0] }];
-    const lengths = clean.map((point, index) => index === 0 ? 0 : pointDistance(clean[index - 1], point));
+    const lengths = clean.map((point, index) => (index === 0 ? 0 : pointDistance(clean[index - 1], point)));
     const total = lengths.reduce((sum, value) => sum + value, 0);
     if (total <= POINT_EPSILON) return [{ time: start, position: clean[0] }];
     let travelled = 0;
@@ -92,13 +92,7 @@ export function previsPathHeading(points: readonly PrevisVec3[], index: number, 
     return Math.hypot(dx, dz) > POINT_EPSILON ? Math.atan2(dx, dz) : fallback;
 }
 
-export function buildPrevisPathKeyframes(input: {
-    base: PrevisTransform;
-    points: readonly PrevisVec3[];
-    start?: number;
-    duration: number;
-    orientToPath?: boolean;
-}): PrevisKeyframe[] {
+export function buildPrevisPathKeyframes(input: { base: PrevisTransform; points: readonly PrevisVec3[]; start?: number; duration: number; orientToPath?: boolean }): PrevisKeyframe[] {
     const start = input.start ?? 0;
     const simplified = simplifyPrevisPath(input.points, 0.025);
     const waypoints = timePrevisPath(simplified, start, input.duration);
@@ -108,8 +102,35 @@ export function buildPrevisPathKeyframes(input: {
         easing: "smooth",
         transform: {
             position: waypoint.position,
-            rotation: input.orientToPath ? [input.base.rotation[0], previsPathHeading(waypoints.map((item) => item.position), index, input.base.rotation[1]), input.base.rotation[2]] : input.base.rotation,
+            rotation: input.orientToPath
+                ? [
+                      input.base.rotation[0],
+                      previsPathHeading(
+                          waypoints.map((item) => item.position),
+                          index,
+                          input.base.rotation[1],
+                      ),
+                      input.base.rotation[2],
+                  ]
+                : input.base.rotation,
             scale: input.base.scale,
         },
+    }));
+}
+
+/**
+ * 拖动走位路径上的一个路径点：只改该关键帧的 XZ（Y 与时间不变），
+ * orientToPath 时重新计算全部朝向，保证拖完后演员仍面朝行进方向。
+ * index 越界或坐标非法时原样返回，调用方据此跳过提交。
+ */
+export function movePrevisPathKeyframe(keyframes: readonly PrevisKeyframe[], index: number, point: { x: number; z: number }, orientToPath = false): PrevisKeyframe[] {
+    const sorted = keyframes.toSorted((left, right) => left.time - right.time);
+    if (index < 0 || index >= sorted.length || !Number.isFinite(point.x) || !Number.isFinite(point.z)) return [...keyframes];
+    const moved = sorted.map((keyframe, itemIndex) => (itemIndex === index ? { ...keyframe, transform: { ...keyframe.transform, position: [point.x, keyframe.transform.position[1], point.z] as PrevisVec3 } } : keyframe));
+    if (!orientToPath) return moved;
+    const positions = moved.map((keyframe) => keyframe.transform.position);
+    return moved.map((keyframe, itemIndex) => ({
+        ...keyframe,
+        transform: { ...keyframe.transform, rotation: [keyframe.transform.rotation[0], previsPathHeading(positions, itemIndex, keyframe.transform.rotation[1]), keyframe.transform.rotation[2]] as PrevisVec3 },
     }));
 }

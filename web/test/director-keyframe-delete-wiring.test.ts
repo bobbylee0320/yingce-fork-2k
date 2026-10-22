@@ -45,7 +45,8 @@ describe("workbench 接入时间轴关键帧删除", () => {
         // commit 自身的语义：入历史 + writeAndPublish（coordinator 保存 + 镜像项目）。
         const commit = slice(workbench, "const commit = useCallback", "/** 暂存型手势");
         expect(commit).toContain("setHistory((items) => [...items.slice(-49), structuredClone(current)]);");
-        expect(commit).toContain("writeAndPublish(touchPrevisScene(updater(current)));");
+        // 提交前统一过落地规则（previs-grounding），仍然是同一条 writeAndPublish 通道。
+        expect(commit).toContain("writeAndPublish(touchPrevisScene(groundPrevisScene(updater(current)).scene));");
     });
 });
 

@@ -22,6 +22,8 @@ export type PriceTierFormValues = {
     resolution: string;
     videoSeconds: number;
     videoGenerateAudio: string;
+    /** 视频处理输出帧率档：le30 / le60 / le120，* 表示任意。 */
+    fpsBand: string;
     imageCount: number;
     providerModelKey?: string;
     billingMode: ChannelModel["billingMode"];
@@ -48,6 +50,7 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
         resolution: "*",
         videoSeconds: 0,
         videoGenerateAudio: "*",
+        fpsBand: "*",
         imageCount: 0,
         providerModelKey: "",
         billingMode: "fixed_request",
@@ -76,7 +79,7 @@ export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabi
         delete selector.quality;
         delete selector.resolution;
     }
-    const candidates = image?.parameters ? Object.values(selector) : [selector.operation, selector.imageResolution, selector.quality, selector.resolution, selector.size];
+    const candidates = image?.parameters ? Object.values(selector) : [selector.operation, selector.imageResolution, selector.quality, selector.resolution, selector.size, selector.fpsBand];
     const hasSpecificMatch = candidates.some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*");
     return {
         matchMode: hasSpecificMatch ? "advanced" : "default",
@@ -88,6 +91,7 @@ export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabi
         resolution: selector.resolution || tier.resolution || "*",
         videoSeconds: tier.videoSeconds || 0,
         videoGenerateAudio: selector.videoGenerateAudio || "*",
+        fpsBand: selector.fpsBand || "*",
         imageCount: Number(selector.imageCount || 0),
         providerModelKey: tier.providerModelKey || "",
         billingMode: tier.billingMode,
@@ -126,6 +130,7 @@ export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: Pri
     if (tier.operation && tier.operation !== "*") selector.operation = tier.operation;
     if (capability === "video") {
         if (tier.resolution && tier.resolution !== "*") selector.vquality = tier.resolution;
+        if (capabilityConfig?.video?.processing && tier.fpsBand && tier.fpsBand !== "*") selector.fpsBand = tier.fpsBand;
     }
     if (capability === "image") {
         if (capabilityConfig?.image?.parameters) {

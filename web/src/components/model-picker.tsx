@@ -1,7 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Check, ChevronDown, Coins } from "lucide-react";
 import { Popover } from "antd";
+
 import { WorkspacePopover } from "@/components/ui/workspace-popover";
+import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
 
 import { imageQualityLabel } from "@/lib/image-quality";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
@@ -621,6 +623,8 @@ export function ModelRecentHealthTrack({ availability, inPopover = false }: { av
 }
 
 function ModelAvailabilityBadge({ availability, available, showAvailability }: { availability?: PublicChannelModelAvailability; available: boolean; showAvailability: boolean }) {
+    const [open, setOpen] = useState(false);
+    const popoverRef = usePopoverAnchorAlign(open);
     if (!showAvailability) return null;
     const recentResults = availability?.recentResults ?? [];
     const successCount = recentResults.filter(Boolean).length;
@@ -665,7 +669,7 @@ function ModelAvailabilityBadge({ availability, available, showAvailability }: {
         </div>
     ) : null;
     return (
-        <Popover content={content} trigger={["hover", "focus"]} placement="topRight" arrow={false}>
+        <Popover ref={popoverRef} open={open} onOpenChange={setOpen} content={content} trigger={["hover", "focus"]} placement="topRight" arrow={false}>
             <span
                 className={`model-picker-availability is-${availability?.dataState || "unavailable"}`}
                 role="img"

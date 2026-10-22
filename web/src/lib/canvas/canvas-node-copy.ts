@@ -57,6 +57,8 @@ export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyM
     // 原节点的提交标记不能证明副本已保存；继承后，普通保存会把新副本误判为未确认结果并排除。
     delete metadata.generationEffectKeys;
     delete metadata.generationBatches;
+    delete metadata.batchInputSignature;
+    delete metadata.batchResultInputSignature;
     delete metadata.batchRootId;
     delete metadata.batchChildIds;
     delete metadata.batchFailedCount;
@@ -98,34 +100,62 @@ export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyM
     }
     metadata.frame = node.metadata?.frame ? { ...node.metadata.frame } : undefined;
     metadata.referenceSetId = remapOwnedNodeId(node.metadata?.referenceSetId, idMap);
-    metadata.referenceAssetNodeIds = node.metadata?.referenceAssetNodeIds
-        ?.map((nodeId) => remapOwnedNodeId(nodeId, idMap))
-        .filter((nodeId): nodeId is string => Boolean(nodeId));
+    metadata.referenceAssetNodeIds = node.metadata?.referenceAssetNodeIds?.map((nodeId) => remapOwnedNodeId(nodeId, idMap)).filter((nodeId): nodeId is string => Boolean(nodeId));
     metadata.videoStartFrameNodeId = remapReferenceId(node.metadata?.videoStartFrameNodeId, idMap);
     metadata.videoEndFrameNodeId = remapReferenceId(node.metadata?.videoEndFrameNodeId, idMap);
     metadata.previsPreviewNodeId = remapOwnedNodeId(node.metadata?.previsPreviewNodeId, idMap);
     metadata.previsDepthNodeId = remapOwnedNodeId(node.metadata?.previsDepthNodeId, idMap);
+    metadata.previsDepthVideoNodeId = remapOwnedNodeId(node.metadata?.previsDepthVideoNodeId, idMap);
     metadata.previsNormalNodeId = remapOwnedNodeId(node.metadata?.previsNormalNodeId, idMap);
 
     const characterViewNodeIds = node.metadata?.characterViewNodeIds;
-    const copiedCharacterViewNodeIds = characterViewNodeIds ? {
-        front: remapOwnedNodeId(characterViewNodeIds.front, idMap),
-        side: remapOwnedNodeId(characterViewNodeIds.side, idMap),
-        back: remapOwnedNodeId(characterViewNodeIds.back, idMap),
-    } : undefined;
-    metadata.characterViewNodeIds = copiedCharacterViewNodeIds && Object.values(copiedCharacterViewNodeIds).some(Boolean)
-        ? copiedCharacterViewNodeIds
+    const copiedCharacterViewNodeIds = characterViewNodeIds
+        ? {
+              front: remapOwnedNodeId(characterViewNodeIds.front, idMap),
+              side: remapOwnedNodeId(characterViewNodeIds.side, idMap),
+              back: remapOwnedNodeId(characterViewNodeIds.back, idMap),
+          }
         : undefined;
-    metadata.emotionEdit = node.metadata?.emotionEdit ? {
-        ...node.metadata.emotionEdit,
-        sourceNodeId: remapReferenceId(node.metadata.emotionEdit.sourceNodeId, idMap)!,
-        faceBox: { ...node.metadata.emotionEdit.faceBox },
-        editRegion: node.metadata.emotionEdit.editRegion ? { ...node.metadata.emotionEdit.editRegion } : undefined,
-    } : undefined;
-    metadata.storyboard = node.metadata?.storyboard ? {
-        rows: node.metadata.storyboard.rows.map((row) => copyStoryboardRow(row, idMap)),
-        visibleColumns: [...node.metadata.storyboard.visibleColumns],
-        referenceNodeIds: remapReferenceIds(node.metadata.storyboard.referenceNodeIds, idMap) || [],
-    } : undefined;
+    metadata.characterViewNodeIds = copiedCharacterViewNodeIds && Object.values(copiedCharacterViewNodeIds).some(Boolean) ? copiedCharacterViewNodeIds : undefined;
+    metadata.emotionEdit = node.metadata?.emotionEdit
+        ? {
+              ...node.metadata.emotionEdit,
+              sourceNodeId: remapReferenceId(node.metadata.emotionEdit.sourceNodeId, idMap)!,
+              faceBox: { ...node.metadata.emotionEdit.faceBox },
+              editRegion: node.metadata.emotionEdit.editRegion ? { ...node.metadata.emotionEdit.editRegion } : undefined,
+          }
+        : undefined;
+    metadata.storyboard = node.metadata?.storyboard
+        ? {
+              rows: node.metadata.storyboard.rows.map((row) => copyStoryboardRow(row, idMap)),
+              visibleColumns: [...node.metadata.storyboard.visibleColumns],
+              referenceNodeIds: remapReferenceIds(node.metadata.storyboard.referenceNodeIds, idMap) || [],
+          }
+        : undefined;
+    metadata.batchTable = node.metadata?.batchTable
+        ? {
+              ...node.metadata.batchTable,
+              referenceColumns: node.metadata.batchTable.referenceColumns?.map((column) => ({ ...column })),
+              textColumns: node.metadata.batchTable.textColumns?.map((column) => ({ ...column })),
+              referenceColumnInputs: node.metadata.batchTable.referenceColumnInputs
+                  ? Object.fromEntries(Object.entries(node.metadata.batchTable.referenceColumnInputs).map(([columnId, ids]) => [columnId, ids.map((nodeId) => idMap.get(nodeId) || nodeId)]))
+                  : undefined,
+              rows: node.metadata.batchTable.rows.map((row) => ({
+                  ...row,
+                  // 图片按列定位；空槽与重复引用都不能在复制时去重或移位。
+                  inputNodeIds: row.inputNodeIds.map((nodeId) => idMap.get(nodeId) || nodeId),
+                  textNodeIds: row.textNodeIds?.map((nodeId) => idMap.get(nodeId) || nodeId),
+                  outputNodeId: remapOwnedNodeId(row.outputNodeId, idMap),
+                  generatedInputSignature: undefined,
+                  cells: row.cells ? { ...row.cells } : undefined,
+              })),
+              storyboardRows: node.metadata.batchTable.storyboardRows?.map((row) => copyStoryboardRow(row, idMap)),
+              storyboardSourceNodeIds: remapReferenceIds(node.metadata.batchTable.storyboardSourceNodeIds, idMap),
+          }
+        : undefined;
+    metadata.batchSourceNodeId = remapOwnedNodeId(node.metadata?.batchSourceNodeId, idMap);
+    metadata.batchRowId = metadata.batchSourceNodeId ? node.metadata?.batchRowId : undefined;
+    metadata.batchOperation = metadata.batchSourceNodeId ? node.metadata?.batchOperation : undefined;
+    metadata.batchInputNodeIds = node.metadata?.batchInputNodeIds?.map((nodeId) => idMap.get(nodeId) || nodeId);
     return metadata;
 }

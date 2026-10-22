@@ -61,7 +61,8 @@ func (r *Repository) CanvasAgentActivity(userID, canvasID string) (*CanvasAgentA
 // Must run first in the task-creation transaction, before reads/credit writes.
 // The canvas row serializes admission across processes as well as browsers.
 func (r *Repository) requireExclusiveCanvasAgent(task *model.Task) error {
-	if task.Operation != "cloud_agent" {
+	// 未绑定画布的平台级对话不占画布，也不需要画布行锁。
+	if task.Operation != "cloud_agent" || task.ProjectID == "" {
 		return nil
 	}
 	if err := r.LockCanvasMutation(task.UserID, task.ProjectID); err != nil {

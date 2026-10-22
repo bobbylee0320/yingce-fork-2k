@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { Camera, Check, Focus, Minus, Move3d, PanelLeft, Plus, Rotate3d, Route, Scale3d, Scan, SlidersHorizontal, WandSparkles } from "lucide-react";
+import { Camera, Check, Focus, Keyboard, Minus, MousePointer2, Move3d, PanelLeft, Plus, Rotate3d, Route, Scale3d, Scan, SlidersHorizontal, WandSparkles } from "lucide-react";
 
 import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -8,8 +8,9 @@ import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { PREVIS_VIEW_MODES, type PrevisViewMode } from "@/lib/canvas/previs/previs-view-modes";
 import type { PrevisCamera } from "@/types/previs";
+import { PREVIS_TOOL_LABELS, type PrevisToolMode } from "@/lib/canvas/previs/previs-shortcuts";
 
-type TransformMode = "translate" | "rotate" | "scale";
+type TransformMode = PrevisToolMode;
 
 export type PrevisCanvasDockProps = {
     theme: CanvasTheme;
@@ -32,6 +33,8 @@ export type PrevisCanvasDockProps = {
     onToggleScenePanel: () => void;
     inspectorOpen: boolean;
     onToggleInspector: () => void;
+    shortcutHelpOpen: boolean;
+    onToggleShortcutHelp: () => void;
 };
 
 /**
@@ -73,16 +76,17 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
             value: props.transformMode,
             onChange: (value) => props.onTransformModeChange(value as TransformMode),
             options: [
-                { id: "previs-translate", value: "translate", label: "移动对象 (W)", icon: <Move3d /> },
-                { id: "previs-rotate", value: "rotate", label: "旋转对象 (E)", icon: <Rotate3d /> },
-                { id: "previs-scale", value: "scale", label: "缩放对象 (R)", icon: <Scale3d /> },
+                { id: "previs-select", value: "select", label: PREVIS_TOOL_LABELS.select, icon: <MousePointer2 /> },
+                { id: "previs-translate", value: "translate", label: PREVIS_TOOL_LABELS.translate, icon: <Move3d /> },
+                { id: "previs-rotate", value: "rotate", label: PREVIS_TOOL_LABELS.rotate, icon: <Rotate3d /> },
+                { id: "previs-scale", value: "scale", label: PREVIS_TOOL_LABELS.scale, icon: <Scale3d /> },
             ],
         },
         { id: "previs-trajectory", label: trajectoryLabel, icon: <Route />, active: props.trajectoryDrawing, onClick: props.onToggleTrajectory },
         { kind: "separator", id: "previs-sep-view" },
         {
             id: "previs-view-mode",
-            label: `取景：${currentView.label}`,
+            label: `取景：${currentView.label}（C 切换 3D / 机位）`,
             wide: true,
             quiet: true,
             expands: true,
@@ -90,13 +94,14 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
             icon: <span className="inline-flex h-full items-center justify-center whitespace-nowrap text-[var(--fs-caption)] font-semibold leading-none tracking-wide">{currentView.label}</span>,
             onClick: () => setViewMenuOpen((value) => !value),
         },
-        { id: "previs-focus", label: "聚焦选中对象", icon: <Focus />, onClick: props.onFocusSelected },
-        { id: "previs-frame", label: "适配全部对象", icon: <Scan />, onClick: props.onFrameScene },
+        { id: "previs-focus", label: "聚焦选中对象 (F)", icon: <Focus />, onClick: props.onFocusSelected },
+        { id: "previs-frame", label: "适配全部对象 (A)", icon: <Scan />, onClick: props.onFrameScene },
         { id: "previs-zoom-out", label: "拉远视角", icon: <Minus />, onClick: () => props.onZoom(1.38) },
         { id: "previs-zoom-in", label: "拉近视角", icon: <Plus />, onClick: () => props.onZoom(0.72) },
         { kind: "separator", id: "previs-sep-panels" },
         { id: "previs-timeline", label: "动画时间轴", icon: <WandSparkles />, active: props.timelineOpen, onClick: props.onOpenTimeline },
         { id: "previs-inspector", label: props.inspectorOpen ? "收起属性面板" : "打开属性面板", icon: <SlidersHorizontal />, active: props.inspectorOpen, expands: true, onClick: props.onToggleInspector },
+        { id: "previs-shortcuts", label: "快捷键 (?)", icon: <Keyboard />, active: props.shortcutHelpOpen, onClick: props.onToggleShortcutHelp },
     ];
 
     return (
@@ -141,7 +146,9 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
                         </div>
                         {props.cameras.length ? (
                             <>
-                                <div className="pv-canvas-dock__menu-title is-sub"><span>机位</span></div>
+                                <div className="pv-canvas-dock__menu-title is-sub">
+                                    <span>机位</span>
+                                </div>
                                 <div className="pv-canvas-dock__camera-list">
                                     {props.cameras.map((camera) => {
                                         const current = props.viewMode === "camera" && camera.id === props.viewedCameraId;

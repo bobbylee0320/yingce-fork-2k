@@ -1,3 +1,4 @@
+import { createClientUUID } from "@/lib/client-id";
 import { App, Button, Input, Skeleton } from "antd";
 import { Check, ChevronLeft, ChevronRight, CircleAlert, Coins, CreditCard, History, RefreshCw, TicketCheck, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -193,7 +194,7 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
         }
         setPaymentCreating(true);
         try {
-            if (!idempotencyKey.current) idempotencyKey.current = crypto.randomUUID();
+            if (!idempotencyKey.current) idempotencyKey.current = createClientUUID();
             const result = await createPaymentOrder({ productId: selectedProduct.id, providerId: selectedProvider.id, idempotencyKey: idempotencyKey.current });
             idempotencyKey.current = "";
             setPaymentOrder(result.order);

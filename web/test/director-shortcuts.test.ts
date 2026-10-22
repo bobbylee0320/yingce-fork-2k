@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { PREVIS_INTERACTIVE_SELECTOR, blocksPrevisShortcut, isPrevisInteractiveNode, releasePrevisFocusAfterPointer, resolvePrevisShortcut, type PrevisKeyEvent } from "../src/lib/canvas/previs/previs-shortcuts";
+import { PREVIS_INTERACTIVE_SELECTOR, PREVIS_SHORTCUT_GUIDE, blocksPrevisShortcut, isPrevisInteractiveNode, releasePrevisFocusAfterPointer, resolvePrevisShortcut, type PrevisKeyEvent } from "../src/lib/canvas/previs/previs-shortcuts";
 
 const press = (overrides: Partial<PrevisKeyEvent> & { key: string }): PrevisKeyEvent => ({ ...overrides });
 
@@ -34,11 +34,25 @@ describe("对象操作快捷键", () => {
         expect(resolvePrevisShortcut(press({ key: "Escape" }))).toEqual({ kind: "deselect" });
     });
 
-    test("没有执行路径的键不解析：F 聚焦、F2 重命名、Ctrl+D 复制", () => {
-        expect(resolvePrevisShortcut(press({ key: "f" }))).toBeNull();
+    test("Q 选择工具；F/A/C/P/? 对应聚焦、适配、切机位、截图、帮助；Ctrl/⌘+D 复制", () => {
+        expect(resolvePrevisShortcut(press({ key: "q" }))).toEqual({ kind: "transform-mode", mode: "select" });
+        expect(resolvePrevisShortcut(press({ key: "f" }))).toEqual({ kind: "focus-selected" });
+        expect(resolvePrevisShortcut(press({ key: "a" }))).toEqual({ kind: "frame-scene" });
+        expect(resolvePrevisShortcut(press({ key: "c" }))).toEqual({ kind: "toggle-camera-view" });
+        expect(resolvePrevisShortcut(press({ key: "p" }))).toEqual({ kind: "capture-screenshot" });
+        expect(resolvePrevisShortcut(press({ key: "?", shiftKey: true }))).toEqual({ kind: "toggle-help" });
+        expect(resolvePrevisShortcut(press({ key: "d", ctrlKey: true }))).toEqual({ kind: "duplicate-selected" });
+        expect(resolvePrevisShortcut(press({ key: "d", metaKey: true }))).toEqual({ kind: "duplicate-selected" });
+    });
+
+    test("没有执行路径的键不解析：F2 重命名、Ctrl+Shift+D", () => {
         expect(resolvePrevisShortcut(press({ key: "F2" }))).toBeNull();
-        expect(resolvePrevisShortcut(press({ key: "d", ctrlKey: true }))).toBeNull();
-        expect(resolvePrevisShortcut(press({ key: "d", metaKey: true }))).toBeNull();
+        expect(resolvePrevisShortcut(press({ key: "d", ctrlKey: true, shiftKey: true }))).toBeNull();
+    });
+
+    test("快捷键说明表覆盖每个工具与解析出的按键", () => {
+        const labels = PREVIS_SHORTCUT_GUIDE.flatMap((group) => group.items.map((item) => item.keys.join("+")));
+        for (const key of ["Q", "W", "E", "R", "F", "A", "C", "P", "?", "Space", "Esc", "Delete", "H"]) expect(labels).toContain(key);
     });
 
     test("空格切换播放", () => {
@@ -71,7 +85,7 @@ describe("修饰键与未知键边界", () => {
     });
 
     test("未映射的键返回 null", () => {
-        for (const key of ["q", "1", "ArrowUp", "Tab", "", "F5"]) {
+        for (const key of ["x", "1", "ArrowUp", "Tab", "", "F5"]) {
             expect(resolvePrevisShortcut(press({ key }))).toBeNull();
         }
     });

@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { PREVIS_DEFAULT_MODE, previsModeCapabilities, resolvePrevisModeTransition, type PrevisMode } from "@/lib/canvas/previs/previs-modes";
 import { PREVIS_DEFAULT_VIEW_MODE, type PrevisViewMode } from "@/lib/canvas/previs/previs-view-modes";
 import type { PrevisRenderMode } from "@/types/previs";
+import type { PrevisToolMode } from "@/lib/canvas/previs/previs-shortcuts";
 
 type PrevisWorkbenchStore = {
     selectedObjectId: string | null;
@@ -11,7 +12,8 @@ type PrevisWorkbenchStore = {
     mode: PrevisMode;
     /** 取景模式（3D/CAM/五个正交轴向）。纯视口状态，不影响一级模式的能力矩阵。 */
     viewMode: PrevisViewMode;
-    transformMode: "translate" | "rotate" | "scale";
+    /** 选择（Q）只点选不显示 gizmo；移动/旋转/缩放对应 W/E/R。 */
+    transformMode: PrevisToolMode;
     renderMode: PrevisRenderMode;
     playhead: number;
     playing: boolean;
@@ -42,7 +44,7 @@ const initialState = {
     selectedObjectId: null,
     selectedBone: null,
     selectedLightId: null,
-    transformMode: "translate" as const,
+    transformMode: "translate" as PrevisToolMode,
     renderMode: "beauty" as const,
     playhead: 0,
     playing: false,

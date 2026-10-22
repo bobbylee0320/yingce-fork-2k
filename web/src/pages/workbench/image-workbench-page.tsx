@@ -1,3 +1,4 @@
+import { createClientUUID } from "@/lib/client-id";
 import { App, Button, Input, InputNumber, Modal, Progress, Segmented, Select, Spin, Switch, Tooltip } from "antd";
 import { Check, Camera, ChevronDown, Clapperboard, Expand, FileImage, History, ImagePlus, Images, LoaderCircle, Mic, Palette, Plus, RotateCcw, Search, ShoppingBag, Sparkles, Upload, UserRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -529,7 +530,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         const picked = accepted.slice(0, Math.max(0, maxCount - currentCount));
         if (picked.length < accepted.length) message.warning("部分素材超过当前输入槽位数量上限，未添加");
         const pending: WorkbenchReference[] = picked.map((file) => ({
-            id: crypto.randomUUID(),
+            id: createClientUUID(),
             name: file.name,
             kind: (file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "audio") as WorkbenchReference["kind"],
             previewUrl: URL.createObjectURL(file),
@@ -749,7 +750,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         setReferences([]);
         const restoredReferences = await Promise.all(
             snapshot.references.map(async (reference, index): Promise<WorkbenchReference> => ({
-                id: crypto.randomUUID(),
+                id: createClientUUID(),
                 name: `${reference.kind === "image" ? "图片" : reference.kind === "video" ? "视频" : "音频"} ${index + 1}`,
                 kind: reference.kind,
                 resourceId: reference.resourceId,

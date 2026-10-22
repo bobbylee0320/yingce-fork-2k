@@ -9,6 +9,7 @@ import { alignCanvasNodes, layoutCanvasAuto, layoutCanvasFlow, layoutCanvasNodes
 import { applyCanvasConnectionPromptSync } from "@/lib/canvas/canvas-resource-references";
 import { createCanvasNode, isHiddenBatchChild, removeCanvasNodes } from "@/lib/canvas/canvas-project-domain";
 import { isolateCopiedNodeMetadata, nextCopiedNodeTitle } from "@/lib/canvas/canvas-node-copy";
+import { createCanvasImageEditCopy } from "@/lib/canvas/canvas-image-edit-copy";
 import { copyImageLayerSources } from "@/lib/canvas/canvas-image-layers";
 import { CanvasNodeType, type CanvasConnection, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ContextMenuState, type Position } from "@/types/canvas";
 import { cloneCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
@@ -200,9 +201,18 @@ export function useCanvasNodeOperations({
             return;
         }
 
-        const positions = layoutCanvasAuto(candidates, connectionsRef.current);
+        // 不参与整理但仍然可见的节点（框架、锁定节点、选区外节点）作为障碍，整理结果绕开它们。
+        const candidateIds = new Set(candidates.map((node) => node.id));
+        const nodeById = new Map(currentNodes.map((node) => [node.id, node]));
+        const obstacles = currentNodes.filter((node) => {
+            if (candidateIds.has(node.id) || isHiddenBatchChild(node, currentNodes)) return false;
+            const parent = node.parentId ? nodeById.get(node.parentId) : undefined;
+            // 框架子节点由框架外框代表；折叠框架里的子节点不可见。
+            return !parent || !isFrameNode(parent);
+        });
+        const positions = layoutCanvasAuto(candidates, connectionsRef.current, obstacles);
         commitNodes(currentNodes.map((node) => positions.has(node.id) ? { ...node, position: positions.get(node.id)! } : node));
-        message.success(hasSelection ? "已按媒体分类整理选中节点" : "已按媒体分类整理画布");
+        message.success(hasSelection ? "已整理选中节点" : "已整理画布");
     }, [commitNodes, connectionsRef, message, nodesRef, selectedNodeIdsRef]);
 
     const spreadSelectedNodes = useCallback(() => {
@@ -361,14 +371,23 @@ export function useCanvasNodeOperations({
         setContextMenu((current) => current?.type === "connection" && current.connectionId === connectionId ? null : current);
     }, [commitConnections, commitNodes, connectionsRef, nodesRef, setContextMenu, setSelectedConnectionId]);
 
-    const duplicateNode = useCallback((nodeId: string, duplicateMode: "variant" | "copy" = "variant") => {
+    const duplicateNode = useCallback((nodeId: string, duplicateMode: "variant" | "copy" | "linked-copy" = "variant") => {
         const source = nodesRef.current.find((node) => node.id === nodeId);
         if (!source) return;
+        if (duplicateMode === "linked-copy") {
+            const copy = createCanvasImageEditCopy(source, nodesRef.current);
+            if (!copy) return;
+            commitNodes([...nodesRef.current, copy.node]);
+            commitConnections([...connectionsRef.current, copy.connection]);
+            selectNodes(new Set([copy.node.id]));
+            setDialogNodeId(null);
+            return copy.node.id;
+        }
         const sources = isFrameNode(source) ? [source, ...getFrameChildren(source.id, nodesRef.current)] : copyImageLayerSources(source, nodesRef.current);
         const idMap = new Map(sources.map((node, index) => [node.id, `${node.type}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`]));
         const versionRootId = duplicateMode === "variant" && !isFrameNode(source) ? source.metadata?.versionOfNodeId || source.id : undefined;
         const versionLabel = versionRootId ? nextCanvasVersionLabel(versionRootId, nodesRef.current) : undefined;
-        const copyTitle = duplicateMode === "copy" ? nextCopiedNodeTitle(source.title, nodesRef.current.map((node) => node.title)) : undefined;
+        const copyTitle = duplicateMode !== "variant" ? nextCopiedNodeTitle(source.title, nodesRef.current.map((node) => node.title)) : undefined;
         const copiedNodes = sources.map((node) => {
             const metadata = isolateCopiedNodeMetadata(node, idMap);
             if (node.type === CanvasNodeType.Drawing) {

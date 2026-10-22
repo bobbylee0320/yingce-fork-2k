@@ -196,10 +196,10 @@ func cloudAgentAskUser(call cloudAgentCall, states ...*cloudAgentRuntime) (any, 
 				Detail      string `json:"detail"`
 				Recommended bool   `json:"recommended"`
 			} `json:"options"`
-			DefaultValue string `json:"defaultValue"`
-			Required     bool   `json:"required"`
-			AllowCustom  bool   `json:"allowCustom"`
-			Placeholder  string `json:"placeholder"`
+			DefaultValue json.RawMessage `json:"defaultValue"`
+			Required     bool            `json:"required"`
+			AllowCustom  bool            `json:"allowCustom"`
+			Placeholder  string          `json:"placeholder"`
 		} `json:"fields"`
 		AllowFreeform *bool `json:"allowFreeform"`
 		Round         int   `json:"round"`
@@ -225,7 +225,7 @@ func cloudAgentAskUser(call cloudAgentCall, states ...*cloudAgentRuntime) (any, 
 		options = append(options, entry)
 	}
 	fields := make([]map[string]any, 0, len(args.Fields))
-	validTypes := map[string]bool{"single_select": true, "segmented": true, "text": true, "textarea": true, "model_picker": true}
+	validTypes := map[string]bool{"single_select": true, "multi_select": true, "segmented": true, "text": true, "textarea": true, "model_picker": true}
 	for _, field := range args.Fields {
 		id := strings.TrimSpace(field.ID)
 		title := strings.TrimSpace(field.Title)
@@ -233,8 +233,19 @@ func cloudAgentAskUser(call cloudAgentCall, states ...*cloudAgentRuntime) (any, 
 			continue
 		}
 		entry := map[string]any{"id": truncateRunes(id, 80), "title": truncateRunes(title, 80), "type": field.Type, "required": field.Required, "allowCustom": field.AllowCustom}
-		if value := strings.TrimSpace(field.DefaultValue); value != "" {
-			entry["defaultValue"] = truncateRunes(value, 200)
+		var defaultValue string
+		if len(field.DefaultValue) > 0 && json.Unmarshal(field.DefaultValue, &defaultValue) == nil {
+			if value := strings.TrimSpace(defaultValue); value != "" {
+				entry["defaultValue"] = truncateRunes(value, 200)
+			}
+		} else {
+			var defaultValues []string
+			if len(field.DefaultValue) > 0 && json.Unmarshal(field.DefaultValue, &defaultValues) == nil && len(defaultValues) > 0 {
+				if len(defaultValues) > 8 {
+					defaultValues = defaultValues[:8]
+				}
+				entry["defaultValue"] = defaultValues
+			}
 		}
 		if placeholder := strings.TrimSpace(field.Placeholder); placeholder != "" {
 			entry["placeholder"] = truncateRunes(placeholder, 200)

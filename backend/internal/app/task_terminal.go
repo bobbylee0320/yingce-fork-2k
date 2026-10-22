@@ -60,6 +60,10 @@ type audioDurationTaskOutput interface {
 	AudioOutputDurationMs(task model.Task) (int64, error)
 }
 
+type videoProcessingTaskSettlement interface {
+	settleVideoProcessingBilling(task model.Task, providerRequestID string) (bool, error)
+}
+
 func newTaskTerminalCoordinator(s *Service) *taskTerminalCoordinator {
 	return &taskTerminalCoordinator{
 		repo:              s.repo,
@@ -238,6 +242,12 @@ func (c *taskTerminalCoordinator) handleSuccess(task *model.Task) error {
 		}
 	}
 	settleBilling := func() error {
+		// 视频处理（画质增强等）按秒订单按实际输出时长结算；拿不到时长时返回错误进入待核对。
+		if processing, ok := c.outputs.(videoProcessingTaskSettlement); ok && completedTask != nil && capabilityFromTaskType(task.Type) == "video" {
+			if handled, err := processing.settleVideoProcessingBilling(*completedTask, ""); handled || err != nil {
+				return err
+			}
+		}
 		if audioBilling, ok := c.billing.(audioDurationTaskBilling); ok && capabilityFromTaskType(task.Type) == "audio" {
 			orderReader, readerOK := c.billing.(billingOrderReader)
 			if readerOK {

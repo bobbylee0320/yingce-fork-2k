@@ -122,6 +122,15 @@ func TestCloudAgentCanvasApprovalPreviewRejectsUnknownTargetInsteadOfFallingBack
 	if err == nil || !strings.Contains(err.Error(), "只能更新现有") {
 		t.Fatalf("unknown target was not rejected: %v", err)
 	}
+	// 不存在的节点 ID 是可恢复的参数错误，不能把整轮 Agent 判为失败。
+	var fieldErr *cloudAgentFieldArgumentError
+	if !errors.As(err, &fieldErr) || fieldErr.Field != "ops[0].id" || fieldErr.Issue != "not_found" {
+		t.Fatalf("unknown target should be a repairable field error on ops[0].id, got %v", err)
+	}
+	var argumentErr *cloudAgentArgumentError
+	if !errors.As(err, &argumentErr) {
+		t.Fatalf("unknown target should unwrap to cloudAgentArgumentError, got %v", err)
+	}
 }
 
 // 漏 patch 必须是**可恢复的参数错误**：运行期会把它当工具结果回给模型重试，

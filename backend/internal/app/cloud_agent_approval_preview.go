@@ -225,7 +225,8 @@ func applyCloudAgentCanvasPlan(doc map[string]any, ops []agentCanvasOp) ([]cloud
 				return nil, &cloudAgentArgumentError{BadAuthRequest("更新节点必须提供 patch")}
 			}
 			if index < 0 {
-				return nil, BadAuthRequest("只能更新现有且受 Agent 支持的节点")
+				// 节点 ID 不存在同样是模型可自行纠正的参数错误，与连线端点 not_found 一致。
+				return nil, cloudAgentFieldError(fmt.Sprintf("ops[%d].id", opIndex), "not_found", "只能更新现有且受 Agent 支持的节点；该节点不在当前画布，请重新读取画布并使用真实节点 ID")
 			}
 			capability, ok := cloudAgentNodeCapabilityForNode(nodes[index])
 			if !ok || !capability.CanUpdate {
@@ -571,7 +572,7 @@ func cloudAgentApprovalCallHash(call cloudAgentCall) string {
 	// server revalidates the prepared dependency hash below, which deliberately
 	// ignores layout-only edits such as moving a node.
 	arguments := call.Function.Arguments
-	if call.Function.Name == "generate_media" || call.Function.Name == "image_layer_split" {
+	if cloudAgentMediaTool(call.Function.Name) {
 		var object map[string]any
 		if err := json.Unmarshal([]byte(arguments), &object); err == nil {
 			delete(object, "snapshotHash")

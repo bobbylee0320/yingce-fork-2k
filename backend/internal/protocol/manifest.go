@@ -306,6 +306,15 @@ func ValidateManifest(manifest Manifest) error {
 		if len(provider.Capabilities) == 0 || len(provider.Scopes) == 0 {
 			return fmt.Errorf("provider contribution %q requires capabilities and scopes", provider.ID)
 		}
+		switch provider.Kind {
+		case "", ProviderKindGeneration:
+		case ProviderKindProcessing:
+			if len(provider.Capabilities) != 1 || provider.Capabilities[0] == CapabilityText {
+				return fmt.Errorf("processing provider %q must declare exactly one media capability", provider.ID)
+			}
+		default:
+			return fmt.Errorf("unsupported provider kind %q", provider.Kind)
+		}
 		for _, capability := range provider.Capabilities {
 			if capability != CapabilityText && capability != CapabilityImage && capability != CapabilityVideo && capability != CapabilityAudio {
 				return fmt.Errorf("unsupported protocol capability %q", capability)
@@ -416,6 +425,7 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.Metadata.Cancel = operationSummaryPtr(provider.Cancel)
 	manifest.Metadata.ContentType = provider.Create.ContentType
 	manifest.Metadata.RequiresPublicMediaURLs = provider.RequiresPublicMediaURLs
+	manifest.Metadata.Kind = provider.Kind
 	manifest.Metadata.Execution = manifest.Runtime.Backend
 	manifest.Create = provider.Create
 	manifest.Agent = provider.Agent

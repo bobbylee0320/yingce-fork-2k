@@ -1,15 +1,28 @@
 import { nanoid } from "nanoid";
 import { Color, Euler, Quaternion } from "three";
 
-import type { PrevisActorArchetype, PrevisActorProfile, PrevisAspectRatio, PrevisBoneKeyframe, PrevisBoneTrack, PrevisCamera, PrevisHumanoidBone, PrevisKeyframe, PrevisKeyframeDeleteTarget, PrevisKeyframeEasing, PrevisLight, PrevisObject, PrevisPose, PrevisQuat, PrevisScene, PrevisTransform, PrevisVec3 } from "@/types/previs";
+import type {
+    PrevisActorArchetype,
+    PrevisActorProfile,
+    PrevisAspectRatio,
+    PrevisBoneKeyframe,
+    PrevisBoneTrack,
+    PrevisCamera,
+    PrevisHumanoidBone,
+    PrevisKeyframe,
+    PrevisKeyframeDeleteTarget,
+    PrevisKeyframeEasing,
+    PrevisLight,
+    PrevisObject,
+    PrevisPose,
+    PrevisQuat,
+    PrevisScene,
+    PrevisTransform,
+    PrevisVec3,
+} from "@/types/previs";
 
-export const PREVIS_DEFAULT_ACTOR_URL = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r185/examples/models/gltf/Xbot.glb";
 export const PREVIS_LEGACY_DEFAULT_ACTOR_COLOR = "#f1f3f5";
-export const PREVIS_ACTOR_COLORS = [
-    "#2f7de1", "#d84949", "#dfae3f", "#34a276", "#8b5cf6", "#e879f9",
-    "#f97316", "#06b6d4", "#84cc16", "#ec4899", "#a78bfa", "#fb7185",
-    "#22d3ee", "#4ade80", "#facc15", "#f472b6", "#818cf8", "#34d399",
-] as const;
+export const PREVIS_ACTOR_COLORS = ["#2f7de1", "#d84949", "#dfae3f", "#34a276", "#8b5cf6", "#e879f9", "#f97316", "#06b6d4", "#84cc16", "#ec4899", "#a78bfa", "#fb7185", "#22d3ee", "#4ade80", "#facc15", "#f472b6", "#818cf8", "#34d399"] as const;
 
 export const PREVIS_ACTOR_ARCHETYPES = [
     { value: "adult", label: "大人" },
@@ -22,12 +35,18 @@ export const PREVIS_ACTOR_ARCHETYPES = [
 
 export function previsActorProfileForArchetype(archetype: PrevisActorArchetype = "adult"): PrevisActorProfile {
     switch (archetype) {
-        case "child": return { height: 0.72, headRatio: 1.28, shoulderWidth: 0.78, torsoRatio: 0.82, accessory: "none" };
-        case "elderly": return { height: 0.92, headRatio: 1.04, shoulderWidth: 0.9, torsoRatio: 1, accessory: "cane" };
-        case "man": return { height: 1.04, headRatio: 0.94, shoulderWidth: 1.16, torsoRatio: 1, accessory: "none" };
-        case "woman": return { height: 1, headRatio: 1, shoulderWidth: 0.86, torsoRatio: 1.02, accessory: "none" };
-        case "monster": return { height: 1.12, headRatio: 1.18, shoulderWidth: 1.34, torsoRatio: 1.08, accessory: "horns" };
-        default: return { height: 1, headRatio: 1, shoulderWidth: 1, torsoRatio: 1, accessory: "none" };
+        case "child":
+            return { height: 0.72, headRatio: 1.28, shoulderWidth: 0.78, torsoRatio: 0.82, accessory: "none" };
+        case "elderly":
+            return { height: 0.92, headRatio: 1.04, shoulderWidth: 0.9, torsoRatio: 1, accessory: "cane" };
+        case "man":
+            return { height: 1.04, headRatio: 0.94, shoulderWidth: 1.16, torsoRatio: 1, accessory: "none" };
+        case "woman":
+            return { height: 1, headRatio: 1, shoulderWidth: 0.86, torsoRatio: 1.02, accessory: "none" };
+        case "monster":
+            return { height: 1.12, headRatio: 1.18, shoulderWidth: 1.34, torsoRatio: 1.08, accessory: "horns" };
+        default:
+            return { height: 1, headRatio: 1, shoulderWidth: 1, torsoRatio: 1, accessory: "none" };
     }
 }
 
@@ -85,13 +104,13 @@ export function createPrevisActor(name = "演员", position: PrevisVec3 = [0, 0,
     return {
         ...createPrevisObject("box", name, position, color),
         kind: "actor",
-        primitive: undefined,
-        url: PREVIS_DEFAULT_ACTOR_URL,
-        mimeType: "model/gltf-binary",
+        // 标准人偶由代码生成：不带 url，离线可用，前端模板/工作台/Agent 三条路径外观一致。
+        primitive: "character",
         pose: "stand",
         archetype,
         actorProfile: previsActorProfileForArchetype(archetype),
         rig: { status: "unmapped", boneMap: {}, animationNames: [] },
+        motions: [],
         motionClips: [],
         boneOverrides: {},
         boneTracks: [],
@@ -124,11 +143,6 @@ export function uniquePrevisName(existing: readonly string[], requested: string)
     return `${base} ${index}`;
 }
 
-/** 35mm 全画幅水平视角换算。摄影机检查器与场景模板共用，避免两处各写一份光学。 */
-export function previsFocalLengthToFov(focalLength: number) {
-    return (2 * Math.atan(36 / (2 * Math.max(1, focalLength))) * 180) / Math.PI;
-}
-
 export function createPrevisLight(type: PrevisLight["type"], name: string, position: PrevisVec3, intensity = 1): PrevisLight {
     return { id: nanoid(), name, type, transform: previsIdentityTransform(position), color: "#ffffff", intensity, angle: Math.PI / 4, penumbra: 0.35, castShadow: type !== "ambient" };
 }
@@ -149,12 +163,12 @@ export function upsertPrevisKeyframe(keyframes: PrevisKeyframe[], time: number, 
 export function upsertPrevisBoneKeyframe(tracks: PrevisBoneTrack[], bone: PrevisHumanoidBone, time: number, rotation: PrevisQuat) {
     const track = tracks.find((item) => item.bone === bone);
     const nextKeyframes = upsertBoneKeyframe(track?.keyframes || [], time, rotation);
-    return track ? tracks.map((item) => item.bone === bone ? { ...item, keyframes: nextKeyframes } : item) : [...tracks, { bone, keyframes: nextKeyframes }];
+    return track ? tracks.map((item) => (item.bone === bone ? { ...item, keyframes: nextKeyframes } : item)) : [...tracks, { bone, keyframes: nextKeyframes }];
 }
 
 function upsertBoneKeyframe(keyframes: PrevisBoneKeyframe[], time: number, rotation: PrevisQuat) {
     const current = keyframes.find((item) => Math.abs(item.time - time) < PREVIS_KEYFRAME_EPSILON);
-    const next = current ? keyframes.map((item) => item.id === current.id ? { ...item, rotation } : item) : [...keyframes, { id: nanoid(), time, rotation }];
+    const next = current ? keyframes.map((item) => (item.id === current.id ? { ...item, rotation } : item)) : [...keyframes, { id: nanoid(), time, rotation }];
     return next.toSorted((a, b) => a.time - b.time);
 }
 
@@ -213,7 +227,7 @@ export function removePrevisSceneKeyframe(scene: PrevisScene, target: PrevisKeyf
 export function setPrevisSceneKeyframeEasing(scene: PrevisScene, target: PrevisKeyframeDeleteTarget, easing: PrevisKeyframeEasing): PrevisScene {
     const update = <T extends { id: string; easing?: PrevisKeyframeEasing }>(keyframes: T[]) => {
         if (!keyframes.some((item) => item.id === target.keyframeId)) return keyframes;
-        return keyframes.map((item) => item.id === target.keyframeId ? { ...item, easing } : item);
+        return keyframes.map((item) => (item.id === target.keyframeId ? { ...item, easing } : item));
     };
 
     if (target.track === "camera") {
@@ -221,7 +235,7 @@ export function setPrevisSceneKeyframeEasing(scene: PrevisScene, target: PrevisK
         if (!camera) return scene;
         const keyframes = update(camera.keyframes);
         if (keyframes === camera.keyframes) return scene;
-        return { ...scene, cameras: scene.cameras.map((item) => item.id === camera.id ? { ...item, keyframes } : item) };
+        return { ...scene, cameras: scene.cameras.map((item) => (item.id === camera.id ? { ...item, keyframes } : item)) };
     }
 
     const object = scene.objects.find((item) => item.id === target.objectId);
@@ -229,7 +243,7 @@ export function setPrevisSceneKeyframeEasing(scene: PrevisScene, target: PrevisK
     if (target.track === "object-transform") {
         const keyframes = update(object.keyframes);
         if (keyframes === object.keyframes) return scene;
-        return { ...scene, objects: scene.objects.map((item) => item.id === object.id ? { ...item, keyframes } : item) };
+        return { ...scene, objects: scene.objects.map((item) => (item.id === object.id ? { ...item, keyframes } : item)) };
     }
 
     const tracks = object.boneTracks || [];
@@ -237,8 +251,8 @@ export function setPrevisSceneKeyframeEasing(scene: PrevisScene, target: PrevisK
     if (!track) return scene;
     const keyframes = update(track.keyframes);
     if (keyframes === track.keyframes) return scene;
-    const boneTracks = tracks.map((item) => item.bone === target.bone ? { ...item, keyframes } : item);
-    return { ...scene, objects: scene.objects.map((item) => item.id === object.id ? { ...item, boneTracks } : item) };
+    const boneTracks = tracks.map((item) => (item.bone === target.bone ? { ...item, keyframes } : item));
+    return { ...scene, objects: scene.objects.map((item) => (item.id === object.id ? { ...item, boneTracks } : item)) };
 }
 
 /** 缓动属于前一枚关键帧到下一枚关键帧的区间。旧数据未声明时保持线性。 */
@@ -293,27 +307,89 @@ export function interpolatePrevisBoneRotation(base: PrevisQuat, keyframes: Previ
 }
 
 export function previsBoneLabel(bone: string) {
-    return ({
-        hips: "骨盆", spine: "脊柱", chest: "胸腔", neck: "颈部", head: "头部",
-        leftShoulder: "左肩", leftUpperArm: "左上臂", leftLowerArm: "左前臂", leftHand: "左手",
-        rightShoulder: "右肩", rightUpperArm: "右上臂", rightLowerArm: "右前臂", rightHand: "右手",
-        leftUpperLeg: "左大腿", leftLowerLeg: "左小腿", leftFoot: "左脚",
-        rightUpperLeg: "右大腿", rightLowerLeg: "右小腿", rightFoot: "右脚",
-        leftThumb1: "左拇指·根", leftThumb2: "左拇指·中", leftThumb3: "左拇指·尖",
-        leftIndex1: "左食指·根", leftIndex2: "左食指·中", leftIndex3: "左食指·尖",
-        leftMiddle1: "左中指·根", leftMiddle2: "左中指·中", leftMiddle3: "左中指·尖",
-        leftRing1: "左无名指·根", leftRing2: "左无名指·中", leftRing3: "左无名指·尖",
-        leftPinky1: "左小指·根", leftPinky2: "左小指·中", leftPinky3: "左小指·尖",
-        rightThumb1: "右拇指·根", rightThumb2: "右拇指·中", rightThumb3: "右拇指·尖",
-        rightIndex1: "右食指·根", rightIndex2: "右食指·中", rightIndex3: "右食指·尖",
-        rightMiddle1: "右中指·根", rightMiddle2: "右中指·中", rightMiddle3: "右中指·尖",
-        rightRing1: "右无名指·根", rightRing2: "右无名指·中", rightRing3: "右无名指·尖",
-        rightPinky1: "右小指·根", rightPinky2: "右小指·中", rightPinky3: "右小指·尖",
-    } as Record<string, string>)[bone] || bone;
+    return (
+        (
+            {
+                hips: "骨盆",
+                spine: "脊柱",
+                chest: "胸腔",
+                neck: "颈部",
+                head: "头部",
+                leftShoulder: "左肩",
+                leftUpperArm: "左上臂",
+                leftLowerArm: "左前臂",
+                leftHand: "左手",
+                rightShoulder: "右肩",
+                rightUpperArm: "右上臂",
+                rightLowerArm: "右前臂",
+                rightHand: "右手",
+                leftUpperLeg: "左大腿",
+                leftLowerLeg: "左小腿",
+                leftFoot: "左脚",
+                rightUpperLeg: "右大腿",
+                rightLowerLeg: "右小腿",
+                rightFoot: "右脚",
+                leftThumb1: "左拇指·根",
+                leftThumb2: "左拇指·中",
+                leftThumb3: "左拇指·尖",
+                leftIndex1: "左食指·根",
+                leftIndex2: "左食指·中",
+                leftIndex3: "左食指·尖",
+                leftMiddle1: "左中指·根",
+                leftMiddle2: "左中指·中",
+                leftMiddle3: "左中指·尖",
+                leftRing1: "左无名指·根",
+                leftRing2: "左无名指·中",
+                leftRing3: "左无名指·尖",
+                leftPinky1: "左小指·根",
+                leftPinky2: "左小指·中",
+                leftPinky3: "左小指·尖",
+                rightThumb1: "右拇指·根",
+                rightThumb2: "右拇指·中",
+                rightThumb3: "右拇指·尖",
+                rightIndex1: "右食指·根",
+                rightIndex2: "右食指·中",
+                rightIndex3: "右食指·尖",
+                rightMiddle1: "右中指·根",
+                rightMiddle2: "右中指·中",
+                rightMiddle3: "右中指·尖",
+                rightRing1: "右无名指·根",
+                rightRing2: "右无名指·中",
+                rightRing3: "右无名指·尖",
+                rightPinky1: "右小指·根",
+                rightPinky2: "右小指·中",
+                rightPinky3: "右小指·尖",
+            } as Record<string, string>
+        )[bone] || bone
+    );
 }
 
 export function previsPoseLabel(pose: PrevisPose) {
-    return ({ neutral: "自然", stand: "站立", t_pose: "T 型", walk: "行走", run: "跑步", sit: "坐姿", squat: "蹲下", kneel_single: "单膝跪", kneel_double: "双膝跪", hands_hips: "叉腰", lean: "倚靠", bow: "鞠躬", think: "思考", fight: "格斗", kick: "踢球", throw: "投掷", push: "推进", wave: "招手", reach: "伸手", arms_crossed: "抱臂", phone: "看手机" } as Record<PrevisPose, string>)[pose];
+    return (
+        {
+            neutral: "自然",
+            stand: "站立",
+            t_pose: "T 型",
+            walk: "行走",
+            run: "跑步",
+            sit: "坐姿",
+            squat: "蹲下",
+            kneel_single: "单膝跪",
+            kneel_double: "双膝跪",
+            hands_hips: "叉腰",
+            lean: "倚靠",
+            bow: "鞠躬",
+            think: "思考",
+            fight: "格斗",
+            kick: "踢球",
+            throw: "投掷",
+            push: "推进",
+            wave: "招手",
+            reach: "伸手",
+            arms_crossed: "抱臂",
+            phone: "看手机",
+        } as Record<PrevisPose, string>
+    )[pose];
 }
 
 export function previsPoseBoneDeltas(pose: PrevisPose): Partial<Record<PrevisHumanoidBone, PrevisQuat>> {
@@ -324,7 +400,16 @@ export function previsPoseBoneDeltas(pose: PrevisPose): Partial<Record<PrevisHum
         stand: armsDown,
         t_pose: {},
         walk: { ...armsDown, leftUpperArm: poseQuaternion(0.36, 0, 1.2), rightUpperArm: poseQuaternion(-0.36, 0, 1.2), leftUpperLeg: poseQuaternion(-0.32, 0, 0), rightUpperLeg: poseQuaternion(0.32, 0, 0) },
-        run: { ...armsDown, leftUpperArm: poseQuaternion(0.75, 0, 1.05), rightUpperArm: poseQuaternion(-0.75, 0, 1.05), leftLowerArm: poseQuaternion(-0.7, 0, 0), rightLowerArm: poseQuaternion(-0.7, 0, 0), leftUpperLeg: poseQuaternion(-0.65, 0, 0), rightUpperLeg: poseQuaternion(0.55, 0, 0), rightLowerLeg: poseQuaternion(0.8, 0, 0) },
+        run: {
+            ...armsDown,
+            leftUpperArm: poseQuaternion(0.75, 0, 1.05),
+            rightUpperArm: poseQuaternion(-0.75, 0, 1.05),
+            leftLowerArm: poseQuaternion(-0.7, 0, 0),
+            rightLowerArm: poseQuaternion(-0.7, 0, 0),
+            leftUpperLeg: poseQuaternion(-0.65, 0, 0),
+            rightUpperLeg: poseQuaternion(0.55, 0, 0),
+            rightLowerLeg: poseQuaternion(0.8, 0, 0),
+        },
         sit: { ...armsDown, leftUpperLeg: poseQuaternion(-1.35, 0, 0), rightUpperLeg: poseQuaternion(-1.35, 0, 0), leftLowerLeg: poseQuaternion(1.25, 0, 0), rightLowerLeg: poseQuaternion(1.25, 0, 0) },
         squat: { ...armsDown, hips: poseQuaternion(0.25, 0, 0), leftUpperLeg: poseQuaternion(-0.75, 0, 0), rightUpperLeg: poseQuaternion(-0.75, 0, 0), leftLowerLeg: poseQuaternion(1.2, 0, 0), rightLowerLeg: poseQuaternion(1.2, 0, 0) },
         kneel_single: { ...armsDown, leftUpperLeg: poseQuaternion(-0.95, 0, 0), leftLowerLeg: poseQuaternion(1.45, 0, 0), rightUpperLeg: poseQuaternion(-0.35, 0, 0), rightLowerLeg: poseQuaternion(0.75, 0, 0) },
@@ -333,7 +418,15 @@ export function previsPoseBoneDeltas(pose: PrevisPose): Partial<Record<PrevisHum
         lean: { ...armsDown, hips: poseQuaternion(0, 0, 0.18), spine: poseQuaternion(0, 0, -0.12), head: poseQuaternion(0, 0, -0.08) },
         bow: { ...armsDown, hips: poseQuaternion(0.5, 0, 0), spine: poseQuaternion(0.28, 0, 0), head: poseQuaternion(-0.18, 0, 0) },
         think: { ...armsDown, rightUpperArm: poseQuaternion(-0.25, 0, 0.55), rightLowerArm: poseQuaternion(-1.35, 0, 0.3), head: poseQuaternion(0.05, -0.22, 0) },
-        fight: { leftUpperArm: poseQuaternion(-0.65, 0, 0.7), rightUpperArm: poseQuaternion(-0.55, 0, 0.65), leftLowerArm: poseQuaternion(-1.2, 0, 0), rightLowerArm: poseQuaternion(-1.25, 0, 0), chest: poseQuaternion(0, 0.2, 0), leftUpperLeg: poseQuaternion(-0.15, 0, 0), rightUpperLeg: poseQuaternion(0.2, 0, 0) },
+        fight: {
+            leftUpperArm: poseQuaternion(-0.65, 0, 0.7),
+            rightUpperArm: poseQuaternion(-0.55, 0, 0.65),
+            leftLowerArm: poseQuaternion(-1.2, 0, 0),
+            rightLowerArm: poseQuaternion(-1.25, 0, 0),
+            chest: poseQuaternion(0, 0.2, 0),
+            leftUpperLeg: poseQuaternion(-0.15, 0, 0),
+            rightUpperLeg: poseQuaternion(0.2, 0, 0),
+        },
         kick: { ...armsDown, leftUpperArm: poseQuaternion(0.3, 0, 1.1), rightUpperArm: poseQuaternion(-0.3, 0, 1.1), rightUpperLeg: poseQuaternion(-1.1, 0, 0), rightLowerLeg: poseQuaternion(0.35, 0, 0) },
         throw: { leftUpperArm: poseQuaternion(-0.35, 0.2, 0.35), rightUpperArm: poseQuaternion(-1.2, 0, 0.25), rightLowerArm: poseQuaternion(-1.05, 0, 0), chest: poseQuaternion(0, -0.3, 0) },
         push: { leftUpperArm: poseQuaternion(-0.9, 0, 0.3), rightUpperArm: poseQuaternion(-0.9, 0, 0.3), leftLowerArm: poseQuaternion(-0.35, 0, 0), rightLowerArm: poseQuaternion(-0.35, 0, 0), chest: poseQuaternion(0.15, 0, 0) },

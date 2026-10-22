@@ -134,6 +134,13 @@ func cloudAgentPrevisSpatialLayout(scene map[string]any) map[string]any {
 			"keyframeCount": len(creationMaps(obj["keyframes"])),
 			"hasMotionPath": obj["motionPath"] != nil,
 		}
+		if motions := creationMaps(obj["motions"]); len(motions) > 0 {
+			projected := make([]map[string]any, 0, len(motions))
+			for _, motion := range motions {
+				projected = append(projected, map[string]any{"id": stringValue(motion["id"]), "motion": stringValue(motion["motion"]), "start": motion["start"], "duration": motion["duration"]})
+			}
+			entry["motions"] = projected
+		}
 		if binding, ok := obj["characterBinding"].(map[string]any); ok {
 			entry["characterBinding"] = map[string]any{
 				"characterAssetId":   stringValue(binding["characterAssetId"]),

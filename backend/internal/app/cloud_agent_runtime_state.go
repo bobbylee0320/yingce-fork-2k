@@ -121,7 +121,8 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 		// execution identity. Durable rows are always validated below.
 		return nil
 	}
-	if state.Request.CanvasID == "" || state.Request.Prompt == "" || state.Request.PermissionMode == "" {
+	// CanvasID 可为空（平台级对话），由 validateCloudAgentRequest 保证无画布时不带画布上下文。
+	if state.Request.Prompt == "" || state.Request.PermissionMode == "" {
 		return errors.New("Agent runtime request is incomplete")
 	}
 	if err := validateCloudAgentRequest(&state.Request); err != nil {
@@ -147,6 +148,14 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 	}
 	if state.LessonEligibleToolSuccesses < 0 || state.RememberLessonSuccesses < 0 {
 		return errors.New("Agent lesson success counters are invalid")
+	}
+	if len(state.PendingLessonDrafts) > cloudAgentRememberLessonMaxPerRun {
+		return errors.New("Agent pending lesson draft count is invalid")
+	}
+	for _, draft := range state.PendingLessonDrafts {
+		if strings.TrimSpace(draft.ID) == "" || strings.TrimSpace(draft.Topic) == "" || strings.TrimSpace(draft.Situation) == "" || len(draft.Evidence) > 8 {
+			return errors.New("Agent pending lesson draft is invalid")
+		}
 	}
 	if state.ConfirmationRounds < 0 || state.ConfirmationRounds > cloudAgentMaxConfirmationRounds {
 		return errors.New("Agent runtime confirmation round is invalid")
@@ -463,6 +472,9 @@ func cloudAgentPruneReadCacheForCheckpoint(state *cloudAgentRuntime, limit int) 
 func cloudAgentSave(run *model.CloudAgentExecution, state *cloudAgentRuntime) error {
 	if run == nil || state == nil {
 		return errors.New("Agent runtime state is missing")
+	}
+	if cloudAgentRunTerminal(run.Status) {
+		state.PendingLessonDrafts = nil
 	}
 	// 轮内唯一裁剪 = 图片：超出保留轮次的看图结果换成文字回执（正文一律保留）。
 	// 上游每一步都会重新读取历史里的图片并按视觉 token 计费，保留整段历史既贵又没有新信息。

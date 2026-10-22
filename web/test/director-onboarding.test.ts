@@ -421,30 +421,25 @@ describe("步骤内容契约", () => {
         expect(new Set(PREVIS_ONBOARDING_STEPS.map((step) => step.id)).size).toBe(PREVIS_ONBOARDING_STEPS.length);
     });
 
-    test("每一步都给出对应一级模式，覆盖摆场、姿态、动画和摄影机", () => {
+    test("每一步都给出对应一级模式：只有走位在动画模式", () => {
         const byId = Object.fromEntries(PREVIS_ONBOARDING_STEPS.map((step) => [step.id, step]));
         expect(byId.actor.mode).toBe("layout");
         expect(byId.move.mode).toBe("layout");
-        expect(byId.pose.mode).toBe("pose");
+        expect(byId.pose.mode).toBe("layout");
         expect(byId.path.mode).toBe("animate");
-        expect(byId.camera.mode).toBe("camera");
-        expect(byId.apply.mode).toBe("camera");
+        expect(byId.camera.mode).toBe("layout");
+        expect(byId.apply.mode).toBe("layout");
         for (const step of PREVIS_ONBOARDING_STEPS) {
-            if (step.mode) expect(["layout", "pose", "animate", "camera"]).toContain(step.mode);
+            if (step.mode) expect(["layout", "animate"]).toContain(step.mode);
         }
     });
 
     test("步骤文案指向真实入口，不把浏览步骤称为任务完成", () => {
         const content = PREVIS_ONBOARDING_STEPS.map((step) => `${step.title} ${step.detail}`).join("\n");
-        for (const label of ["快速添加", "移动工具", "姿态模式", "Transform 关键帧", "CAM", "应用到镜头"]) expect(content).toContain(label);
+        for (const label of ["添加", "移动工具", "姿态", "画走位", "CAM", "回写构图"]) expect(content).toContain(label);
     });
 });
 
-/**
- * 组件契约用源码断言：web 没有 jsdom/testing-library（见 package.json），
- * 这里与 create-library-button.test.ts 同一手法 —— 守住无障碍与 token 边界，
- * 而不是假装渲染过组件。
- */
 describe("引导浮层契约", () => {
     const componentPath = resolve(import.meta.dir, "../src/components/canvas/previs/canvas-previs-onboarding.tsx");
     const source = readFileSync(componentPath, "utf8");

@@ -4,7 +4,6 @@ import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, C
 
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 import { CanvasImageLayerControls } from "./canvas-image-layer-controls";
-import { CanvasTextLeaseIndicator } from "./use-canvas-text-lease";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasNodeRenderLOD } from "@/lib/canvas/canvas-node-lod";
@@ -18,6 +17,7 @@ import { ART_CRITIQUE_NODE_TYPE } from "@/lib/art-critique/contracts";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import type { NodeResizeCorner } from "@/lib/canvas/node-resize-geometry";
 import { useCanvasNodeResize } from "./use-canvas-node-resize";
+import { useCanvasNodeResizeStyle } from "./canvas-node-resize-motion";
 import { CanvasNodeContent, CanvasNodeImageInfo, CanvasNodeProducedModel } from "./canvas-node-content";
 
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -141,6 +141,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     const assetTags = data.metadata?.assetTags?.filter((tag) => tag.trim()) || [];
     const scriptMinHeight = data.type === CanvasNodeType.Script ? storyboardMinNodeHeight(data.metadata?.storyboardComposerHeight) : null;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const nodeRef = useRef<HTMLDivElement>(null);
+    const resizeMotion = useCanvasNodeResizeStyle(nodeRef, data, dragOffset);
     const handleResizePointerDown = useCanvasNodeResize(data, scale, scriptMinHeight, onResize, readOnly);
 
     useEffect(() => {
@@ -193,7 +195,9 @@ export const CanvasNode = React.memo(function CanvasNode({
 
     return (
         <div
+            ref={nodeRef}
             data-node-id={data.id}
+            data-popover-anchor-container
             data-node-lod={effectiveRenderLOD}
             className={`node-element absolute flex select-none flex-col ${dragOffset ? "cursor-grabbing" : data.type === CanvasNodeType.Drawing ? "cursor-pointer" : "cursor-default"} ${isSelected && data.type === CanvasNodeType.Video ? "z-[var(--z-node-toolbar)]" : isSelected || isFocusRelated || isConnectionTarget ? "z-[var(--z-node-active)]" : "z-[var(--z-node)]"}`}
             style={{
@@ -211,6 +215,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 onHoverEnd(data.id);
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
+            onPointerDownCapture={() => resizeMotion?.finishAll()}
         >
             {showChrome ? <NodeExternalHeader
                 node={data}
@@ -226,7 +231,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                 onCommit={commitTitle}
                 onCancel={() => { setTitleDraft(data.title); setIsEditingTitle(false); }}
             /> : null}
-            {showChrome ? <div className="pointer-events-none absolute left-0 top-full pt-1"><CanvasTextLeaseIndicator nodeId={data.id} canvasId={drawingProjectId} /></div> : null}
             <div
                 className="canvas-node-shell relative h-full w-full overflow-visible rounded-[var(--node-radius)]"
                 data-node-state={nodeState}

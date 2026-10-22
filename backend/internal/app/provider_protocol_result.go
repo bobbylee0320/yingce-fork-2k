@@ -58,6 +58,9 @@ func finishProtocolResult(ctx context.Context, config providerConfig, mode strin
 		return nil, errors.New("声明式协议已完成但没有返回媒体地址")
 	}
 	if output, handled, err := recoverProtocolMedia(ctx, config, mode, references); handled {
+		if err == nil {
+			attachProtocolUsage(output, mode, result)
+		}
 		return output, err
 	}
 	items := make([]interface{}, 0, len(references))
@@ -78,14 +81,26 @@ func finishProtocolResult(ctx context.Context, config providerConfig, mode strin
 		item := map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}
 		items = append(items, item)
 	}
+	var output map[string]interface{}
 	switch mode {
 	case "image":
-		return map[string]interface{}{"mode": "image", "images": items}, nil
+		output = map[string]interface{}{"mode": "image", "images": items}
 	case "video":
-		return map[string]interface{}{"mode": "video", "video": items[0]}, nil
+		output = map[string]interface{}{"mode": "video", "video": items[0]}
 	default:
-		return map[string]interface{}{"mode": "audio", "audio": items[0]}, nil
+		output = map[string]interface{}{"mode": "audio", "audio": items[0]}
 	}
+	attachProtocolUsage(output, mode, result)
+	return output, nil
+}
+
+// attachProtocolUsage 把视频结果的上游 usage（如输出时长、帧率）写入任务结果，
+// 供按实际输出时长结算时在资源未探测到时长时兜底。
+func attachProtocolUsage(output map[string]interface{}, mode string, result *protocol.Result) {
+	if output == nil || result == nil || mode != "video" || len(result.Usage) == 0 {
+		return
+	}
+	output["usage"] = result.Usage
 }
 
 // finishProtocolAdapterResult 优先消费 create/poll 已返回的内联或 URL 结果，只有插件明确声明独立结果端点时才下载。

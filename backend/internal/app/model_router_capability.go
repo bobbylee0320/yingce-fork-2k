@@ -427,7 +427,9 @@ func normalizeImageSizeIntent(spec CapabilitySpec, intent ModelRequestIntent) Mo
 	if spec.ImageSize.Parameter == "size" {
 		options["size"] = strings.TrimSpace(preset.Size)
 	} else {
-		options["size"] = normalizeDeclaredImageRatio(preset.Ratio)
+		// Equivalent ratios may match, but providers validate declared enum text
+		// (for example 21:9, not its reduced numeric representation 7:3).
+		options["size"] = strings.TrimSpace(preset.Ratio)
 	}
 	intent.Options = options
 	return intent
@@ -654,7 +656,7 @@ func isCapabilityOptionFor(capability string, name string) bool {
 	case "image":
 		return name == "size" || name == "quality" || name == "imageResolution" || name == "transparentBackground" || name == "count"
 	case "video":
-		return name == "size" || name == "videoSeconds" || name == "vquality" || name == "videoGenerateAudio" || name == "videoWatermark"
+		return name == "size" || name == "videoSeconds" || name == "vquality" || name == "videoGenerateAudio" || name == "videoWatermark" || name == "fpsBand"
 	case "audio":
 		return name == "audioVoice" || name == "audioFormat" || name == "audioSpeed" || name == "audioInstructions"
 	case "text":

@@ -9,15 +9,26 @@
  * 否则用户改名时会误删对象、按 Space 激活按钮时会误切换播放。
  */
 
+/** 工具模式：选择只点选；移动/旋转/缩放显示对应 gizmo。 */
+export type PrevisToolMode = "select" | "translate" | "rotate" | "scale";
+
 /**
- * 语义动作。只保留预演台里已经存在真实执行路径的动作：
- * 变换模式（PrevisViewportDock 的 W/E/R）、删除选中对象或灯光、
- * 撤销/重做（顶栏按钮）、切换选中对象显隐（检查器「可见」开关）、
- * 取消选择、播放/暂停（时间轴 transport）。
- *
- * 聚焦、复制、重命名没有对应实现，不在这里造无处可去的动作。
+ * 语义动作。每个动作都有真实执行路径（工作台 runShortcut），不造无处可去的键。
  */
-export type PrevisShortcutAction = { kind: "transform-mode"; mode: "translate" | "rotate" | "scale" } | { kind: "delete-selected" } | { kind: "undo" } | { kind: "redo" } | { kind: "toggle-visibility" } | { kind: "deselect" } | { kind: "toggle-play" };
+export type PrevisShortcutAction =
+    | { kind: "transform-mode"; mode: PrevisToolMode }
+    | { kind: "delete-selected" }
+    | { kind: "duplicate-selected" }
+    | { kind: "undo" }
+    | { kind: "redo" }
+    | { kind: "toggle-visibility" }
+    | { kind: "deselect" }
+    | { kind: "toggle-play" }
+    | { kind: "focus-selected" }
+    | { kind: "frame-scene" }
+    | { kind: "toggle-camera-view" }
+    | { kind: "capture-screenshot" }
+    | { kind: "toggle-help" };
 
 /** 只取事件的必要形状，便于测试构造，也避免耦合真实 KeyboardEvent。 */
 export type PrevisKeyEvent = {
@@ -30,10 +41,57 @@ export type PrevisKeyEvent = {
     isInteractiveTarget?: boolean;
 };
 
-const TRANSFORM_KEYS: Record<string, "translate" | "rotate" | "scale"> = {
+const TRANSFORM_KEYS: Record<string, PrevisToolMode> = {
+    q: "select",
     w: "translate",
     e: "rotate",
     r: "scale",
+};
+
+/**
+ * 快捷键说明的唯一真源：dock 提示、底部提示条、帮助面板与文档都从这里取，
+ * 避免「按键改了、提示没改」。keys 用于展示，不参与解析。
+ */
+export const PREVIS_SHORTCUT_GUIDE: Array<{ group: string; items: Array<{ keys: string[]; label: string }> }> = [
+    {
+        group: "选择与变换",
+        items: [
+            { keys: ["Q"], label: "选择工具（只点选，不显示手柄）" },
+            { keys: ["W"], label: "移动" },
+            { keys: ["E"], label: "旋转" },
+            { keys: ["R"], label: "缩放" },
+            { keys: ["Esc"], label: "取消选择" },
+            { keys: ["Delete"], label: "删除选中对象 / 灯光" },
+            { keys: ["Ctrl/⌘", "D"], label: "复制选中对象" },
+            { keys: ["H"], label: "显示 / 隐藏选中对象" },
+        ],
+    },
+    {
+        group: "视图",
+        items: [
+            { keys: ["F"], label: "聚焦选中对象" },
+            { keys: ["A"], label: "适配全部对象" },
+            { keys: ["C"], label: "切换 3D / 机位视图" },
+        ],
+    },
+    {
+        group: "时间轴与输出",
+        items: [
+            { keys: ["Space"], label: "播放 / 暂停" },
+            { keys: ["Ctrl/⌘", "Z"], label: "撤销" },
+            { keys: ["Ctrl/⌘", "Shift", "Z"], label: "重做" },
+            { keys: ["P"], label: "截取当前镜头画面" },
+            { keys: ["?"], label: "显示 / 隐藏快捷键" },
+        ],
+    },
+];
+
+/** 工具名附带按键，dock 与提示条共用。 */
+export const PREVIS_TOOL_LABELS: Record<PrevisToolMode, string> = {
+    select: "选择 (Q)",
+    translate: "移动 (W)",
+    rotate: "旋转 (E)",
+    scale: "缩放 (R)",
 };
 
 /**
@@ -41,7 +99,7 @@ const TRANSFORM_KEYS: Record<string, "translate" | "rotate" | "scale"> = {
  *
  * 约定：
  * - 交互控件语境一律不解析，交还给控件本身；
- * - 带修饰键的组合优先（Undo/Redo），避免 Ctrl+R 被当作 scale；
+ * - 带修饰键的组合优先（Undo/Redo/Duplicate），避免 Ctrl+R 被当作 scale；
  * - 单字母快捷键不区分大小写，Shift+W 仍是 translate；
  * - Redo 同时接受 Ctrl/Cmd+Shift+Z 与 Ctrl/Cmd+Y。
  */
@@ -57,14 +115,20 @@ export function resolvePrevisShortcut(event: PrevisKeyEvent): PrevisShortcutActi
         if (event.altKey) return null;
         if (lower === "z") return event.shiftKey ? { kind: "redo" } : { kind: "undo" };
         if (lower === "y") return { kind: "redo" };
+        if (lower === "d" && !event.shiftKey) return { kind: "duplicate-selected" };
         return null;
     }
 
     if (event.altKey) return null;
+    if (key === "?") return { kind: "toggle-help" };
 
     if (lower in TRANSFORM_KEYS) return { kind: "transform-mode", mode: TRANSFORM_KEYS[lower] };
     if (key === "Delete" || key === "Backspace") return { kind: "delete-selected" };
     if (lower === "h") return { kind: "toggle-visibility" };
+    if (lower === "f") return { kind: "focus-selected" };
+    if (lower === "a") return { kind: "frame-scene" };
+    if (lower === "c") return { kind: "toggle-camera-view" };
+    if (lower === "p") return { kind: "capture-screenshot" };
     if (key === "Escape") return { kind: "deselect" };
     if (key === " " || key === "Spacebar") return { kind: "toggle-play" };
 

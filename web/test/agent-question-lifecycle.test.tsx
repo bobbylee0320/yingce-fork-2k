@@ -134,3 +134,59 @@ test("同一表单保留已选值，切换新问题后使用新默认值", async
         await fixture.dispose();
     }
 });
+
+test("视频规格单选可修改，多选字段提交稳定 ID 数组", async () => {
+    const fixture = await questionFixture({
+        kind: "form",
+        questionId: "video-specs",
+        question: "确认视频参数",
+        options: [],
+        fields: [
+            {
+                id: "aspectRatio",
+                title: "画幅",
+                type: "single_select",
+                defaultValue: "9:16",
+                options: [
+                    { id: "9:16", label: "9:16" },
+                    { id: "16:9", label: "16:9" },
+                ],
+            },
+            {
+                id: "resolution",
+                title: "清晰度",
+                type: "segmented",
+                defaultValue: "720P",
+                options: [
+                    { id: "480P", label: "480P" },
+                    { id: "720P", label: "720P" },
+                ],
+            },
+            {
+                id: "outputs",
+                title: "输出",
+                type: "multi_select",
+                defaultValue: ["video", "cover"],
+                options: [
+                    { id: "video", label: "视频" },
+                    { id: "cover", label: "封面" },
+                    { id: "subtitle", label: "字幕" },
+                ],
+            },
+        ],
+    });
+    const button = (label: string) => Array.from(fixture.host.querySelectorAll("button")).find((item) => item.textContent === label)!;
+    try {
+        expect(button("9:16").getAttribute("aria-pressed")).toBe("true");
+        expect(button("视频").getAttribute("aria-pressed")).toBe("true");
+        await act(async () => button("16:9").click());
+        await act(async () => button("480P").click());
+        await act(async () => button("字幕").click());
+        await act(async () => button("确认并继续").click());
+        const answer = JSON.parse(fixture.answers[0]);
+        expect(answer.answers).toEqual({ aspectRatio: "16:9", resolution: "480P", outputs: ["video", "cover", "subtitle"] });
+        expect(answer.displayAnswers).toEqual({ aspectRatio: "16:9", resolution: "480P", outputs: ["视频", "封面", "字幕"] });
+    } finally {
+        await fixture.dispose();
+    }
+});

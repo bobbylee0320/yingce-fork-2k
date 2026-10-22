@@ -12,7 +12,6 @@ import { CanvasVideoPromptTools } from "./canvas-video-prompt-tools";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import { getEditableSelection, setEditableSelection } from "./canvas-mention-editable";
 import { composerReferences, insertComposerPreset } from "./canvas-composer-references";
-import { CanvasTextLeaseIndicator } from "./use-canvas-text-lease";
 
 type ComposerProps = {
     nodeId: string; canvasId: string;
@@ -80,7 +79,6 @@ export function CanvasConfigComposer({ nodeId, canvasId, value, inputs, skillRef
                         if (!readOnly && event.key === "/" && !simple && !event.nativeEvent.isComposing) requestAnimationFrame(() => { rememberCaret(); setPresetsOpen(true); });
                     }} />
             </div>
-            <CanvasTextLeaseIndicator nodeId={nodeId} canvasId={canvasId} />
         </section>
     );
 }

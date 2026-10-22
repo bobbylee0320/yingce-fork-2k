@@ -29,25 +29,52 @@ export type CanvasNodeSelectionPreview = {
 
 const nodeDragPreviewDomStates = new WeakMap<HTMLDivElement, NodeDragPreviewDomState>();
 const nodeSelectionPreviewDomStates = new WeakMap<HTMLDivElement, NodeSelectionPreviewDomState>();
-const liveViewportElements = new WeakMap<HTMLDivElement, { worldLayer: HTMLElement | null }>();
+const liveViewportElements = new WeakMap<HTMLDivElement, { worldLayer: HTMLElement | null; gridLayer: HTMLElement | null }>();
+
+/** 网格层向左上多铺的像素，需大于最大网格间距，保证平移取模后仍覆盖视口。 */
+export const CANVAS_GRID_BLEED = 64;
+
+/**
+ * 网格跟随视口平移与缩放：间距随 k 缩放，并在 [base*2/3, base*4/3) 内按 2 倍折叠，
+ * 保持屏幕密度稳定。平移只改 transform（合成层），缩放才改 background-size。
+ */
+export function canvasGridMetrics(viewport: ViewportTransform, base: number) {
+    let spacing = base * viewport.k;
+    if (!Number.isFinite(spacing) || spacing <= 0) spacing = base;
+    while (spacing < (base * 2) / 3) spacing *= 2;
+    while (spacing >= (base * 4) / 3) spacing /= 2;
+    const wrap = (value: number) => ((value % spacing) + spacing) % spacing;
+    return { spacing, offsetX: wrap(viewport.x + CANVAS_GRID_BLEED), offsetY: wrap(viewport.y + CANVAS_GRID_BLEED) };
+}
+
+function applyCanvasGridViewport(gridLayer: HTMLElement, viewport: ViewportTransform) {
+    const base = Number(gridLayer.dataset.canvasGridBase) || 24;
+    const { spacing, offsetX, offsetY } = canvasGridMetrics(viewport, base);
+    const size = `${spacing}px ${spacing}px`;
+    if (gridLayer.style.backgroundSize !== size) gridLayer.style.backgroundSize = size;
+    gridLayer.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
+}
 
 export function applyCanvasLiveViewport(container: HTMLDivElement | null, viewport: ViewportTransform, notify = true) {
     if (!container) return;
     const committedScale = Number(container.style.getPropertyValue("--canvas-committed-scale")) || viewport.k;
     let elements = liveViewportElements.get(container);
     if (!elements) {
-        elements = {
-            worldLayer: container.querySelector<HTMLElement>("[data-canvas-world-layer]"),
-        };
+        elements = { worldLayer: null, gridLayer: null };
         liveViewportElements.set(container, elements);
     }
+    if (!elements.worldLayer?.isConnected) elements.worldLayer = container.querySelector<HTMLElement>("[data-canvas-world-layer]");
+    // 网格层会随“点/线/空白”切换挂载与卸载，失联后重新查找。
+    if (!elements.gridLayer?.isConnected) elements.gridLayer = container.querySelector<HTMLElement>("[data-canvas-grid-layer]");
     const worldLayer = elements.worldLayer;
     if (worldLayer) {
         // 平移期间直接更新合成层，避免修改容器继承变量导致所有节点重新计算样式。
         worldLayer.style.transformOrigin = "0 0";
         worldLayer.style.transform = `translate3d(${viewport.x}px, ${viewport.y}px, 0) scale(${viewport.k / committedScale})`;
-        worldLayer.style.willChange = container.dataset.canvasViewportInteracting === "true" ? "transform" : "";
+        const willChange = container.dataset.canvasViewportInteracting === "true" ? "transform" : "";
+        if (worldLayer.style.willChange !== willChange) worldLayer.style.willChange = willChange;
     }
+    if (elements.gridLayer) applyCanvasGridViewport(elements.gridLayer, viewport);
     // 交互期不要修改根容器上的继承变量。它们会让整棵节点 DOM 子树失效并
     // 触发样式重算；交互结束后由 CanvasViewport 的 committed render 一次性校正。
     // 标题和选框在交互期暂时跟随世界层缩放，换取连续帧的合成路径。

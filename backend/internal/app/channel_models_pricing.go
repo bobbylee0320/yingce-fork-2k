@@ -243,6 +243,17 @@ func normalizeChannelModelTierSelector(capability string, input ChannelModelPric
 			if value != "true" && value != "false" {
 				return nil, "", 0, BadAuthRequest("视频价格档音频条件必须为 true、false 或 *")
 			}
+		case "fpsBand":
+			if capability != "video" {
+				return nil, "", 0, BadAuthRequest("只有视频模型可以按帧率档配置价格档")
+			}
+			value = strings.ToLower(value)
+			if value == "*" {
+				continue
+			}
+			if value != "le30" && value != "le60" && value != "le120" {
+				return nil, "", 0, BadAuthRequest("视频价格档帧率条件必须为 le30、le60、le120 或 *")
+			}
 		default:
 			if capability != "image" {
 				return nil, "", 0, BadAuthRequest("价格档不支持规格字段：" + key)

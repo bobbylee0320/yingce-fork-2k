@@ -1,6 +1,6 @@
-import { Fragment, useId, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { Popover } from "antd";
-import { AlignLeft, ArrowUpRight, Check, ChevronUp, Clapperboard, FolderKanban, Images, Palette, Pencil, Plus, Sparkles, Type, Upload, X } from "lucide-react";
+import { AlignLeft, ArrowUp, Check, ChevronUp, Clapperboard, FolderKanban, Images, LayoutGrid, Palette, Pencil, Plus, Sparkles, Type, Upload, Workflow, X } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
@@ -26,75 +26,122 @@ export function CanvasLinkedProjectEmptyState({ projectName, hasChapter, onAddFi
     );
 }
 
-export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onStartFreeform, onUpload, onAddText, onAddScript }: {
+const ENTRY_SUGGESTIONS = [
+    "一个外卖员意外捡到会说话的猫",
+    "都市甜宠：总裁和实习生的契约婚姻",
+    "古风悬疑：雨夜古宅里的第三声钟响",
+];
+
+export function CanvasShortDramaEmptyState({ onCreatePipeline, onSubmitPrompt, onStartFreeform, onUpload, onAddText, onAddScript }: {
     onCreatePipeline: () => void;
-    onOpenAgent: () => void;
+    /** 空字符串表示只打开 Agent，不自动提交。 */
+    onSubmitPrompt: (prompt: string) => void;
     onStartFreeform: () => void;
     onUpload: () => void;
     onAddText: () => void;
     onAddScript: () => void;
 }) {
     const theme = canvasThemes[useActiveTheme()];
+    const [prompt, setPrompt] = useState("");
+    const stageRef = useRef<HTMLDivElement>(null);
     const entryStyle = {
         "--canvas-entry-text": theme.node.text,
         "--canvas-entry-muted": theme.node.muted,
         "--canvas-entry-accent": theme.accent.primary,
+        "--canvas-entry-on-accent": theme.accent.onPrimary,
+        "--canvas-entry-surface": theme.spatial.elevated,
+        "--canvas-entry-border": theme.toolbar.border,
+        "--canvas-entry-shadow": theme.spatial.shadow,
     } as CSSProperties;
+    const submit = () => {
+        const value = prompt.trim();
+        if (!value) return;
+        onSubmitPrompt(value);
+        setPrompt("");
+    };
+    useCanvasEntryClickRipple(stageRef);
     return (
-        <div className="canvas-entry-stage" style={entryStyle}>
+        <div ref={stageRef} className="canvas-entry-stage" style={entryStyle}>
+            <CanvasEntryAmbientRipple />
             <div className="canvas-entry-shell" data-canvas-no-zoom data-canvas-wheel-scroll>
-                <header className="canvas-entry-header">
-                    <div className="canvas-entry-heading-copy">
-                        <h2><span>让灵感，</span><strong>开始成片。</strong></h2>
-                        <p>从一句想法开始，和 Agent 一起创作。</p>
+                <span className="canvas-entry-eyebrow"><Sparkles aria-hidden="true" />AI 短剧工作台</span>
+                <h2 className="canvas-entry-title">让灵感，<strong>开始成片。</strong></h2>
+                <p className="canvas-entry-subtitle">写下一句故事，Agent 帮你拆剧本、定角色、出分镜和视频。</p>
+                <form
+                    className="canvas-entry-composer"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        submit();
+                    }}
+                >
+                    <textarea
+                        value={prompt}
+                        rows={2}
+                        placeholder="描述你想拍的故事…"
+                        aria-label="描述你想拍的故事"
+                        onChange={(event) => setPrompt(event.target.value)}
+                        onKeyDown={(event) => {
+                            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                                event.preventDefault();
+                                submit();
+                            }
+                        }}
+                    />
+                    <div className="canvas-entry-composer-bar">
+                        <button type="button" className="canvas-entry-ghost" onClick={onUpload}><Upload aria-hidden="true" />导入素材</button>
+                        <span className="canvas-entry-hint">Enter 发送 · Shift+Enter 换行</span>
+                        <button type="submit" className="canvas-entry-send" disabled={!prompt.trim()} aria-label="交给 Agent"><ArrowUp aria-hidden="true" /></button>
                     </div>
-                    <CanvasEntryFilmMark />
-                </header>
-                <div className="canvas-entry-actions">
-                    <button type="button" className="canvas-entry-agent" onClick={onOpenAgent}>
-                        <span className="canvas-entry-agent-label">交给 Agent</span>
-                        <span className="canvas-entry-agent-arrow"><ArrowUpRight aria-hidden="true" /></span>
-                    </button>
-                    <div className="canvas-entry-secondary-actions">
-                        <button type="button" onClick={onCreatePipeline}>自己创作<ArrowUpRight aria-hidden="true" /></button>
-                        <button type="button" onClick={onStartFreeform}>空白画布<ArrowUpRight aria-hidden="true" /></button>
-                    </div>
+                </form>
+                <div className="canvas-entry-suggestions" role="list" aria-label="灵感示例">
+                    {ENTRY_SUGGESTIONS.map((item) => (
+                        <button key={item} type="button" role="listitem" onClick={() => setPrompt(item)}>{item}</button>
+                    ))}
                 </div>
-                <div className="canvas-entry-footer">
-                    <div className="canvas-entry-quick-actions">
-                        <button type="button" onClick={onUpload}><Upload aria-hidden="true" />导入素材</button>
-                        <button type="button" onClick={onAddText}><Type aria-hidden="true" />新建文本</button>
-                        <button type="button" onClick={onAddScript}><Clapperboard aria-hidden="true" />空白分镜</button>
-                    </div>
+                <div className="canvas-entry-paths">
+                    <button type="button" onClick={onCreatePipeline}><Workflow aria-hidden="true" /><span><strong>自己创作</strong><small>按短剧流程搭好节点</small></span></button>
+                    <button type="button" onClick={onAddScript}><Clapperboard aria-hidden="true" /><span><strong>空白分镜</strong><small>直接写分镜表</small></span></button>
+                    <button type="button" onClick={onAddText}><Type aria-hidden="true" /><span><strong>新建文本</strong><small>先记下想法</small></span></button>
+                    <button type="button" onClick={onStartFreeform}><LayoutGrid aria-hidden="true" /><span><strong>空白画布</strong><small>不预设流程</small></span></button>
                 </div>
             </div>
         </div>
     );
 }
 
-function CanvasEntryFilmMark() {
-    const id = useId();
+/** 背景常驻涟漪：只动 transform/opacity，走合成层，不触发布局。 */
+function CanvasEntryAmbientRipple() {
     return (
-        <svg className="canvas-entry-film-mark" viewBox="0 0 112 112" fill="none" aria-hidden="true" focusable="false">
-            <defs>
-                <linearGradient id={`${id}-front`} x1="27" y1="18" x2="76" y2="91" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="var(--canvas-entry-metal-highlight)" />
-                    <stop offset="0.42" stopColor="var(--canvas-entry-metal-mid)" />
-                    <stop offset="0.66" stopColor="var(--canvas-entry-metal-highlight)" />
-                    <stop offset="1" stopColor="var(--canvas-entry-metal-shadow)" />
-                </linearGradient>
-                <linearGradient id={`${id}-edge`} x1="36" y1="21" x2="86" y2="83" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="var(--canvas-entry-metal-mid)" />
-                    <stop offset="1" stopColor="var(--canvas-entry-metal-shadow)" />
-                </linearGradient>
-            </defs>
-            <path d="M35 17 92 50Q98 54 92 58L35 91 26 86 82 54 26 22Z" fill={`url(#${id}-edge)`} />
-            <path d="M26 22 82 54 26 86V22ZM36 39V69L62 54 36 39Z" fill={`url(#${id}-front)`} fillRule="evenodd" />
-            <path d="M26 22 82 54 26 86V22Z" stroke="var(--canvas-entry-metal-highlight)" strokeOpacity="0.45" strokeWidth="0.6" strokeLinejoin="round" />
-            <path d="M36 39V69L62 54" stroke="var(--canvas-entry-metal-shadow)" strokeWidth="1" strokeLinejoin="round" />
-            <path d="m35 17 57 33" stroke="var(--canvas-entry-metal-highlight)" strokeOpacity="0.5" strokeWidth="0.6" />
-        </svg>
+        <div className="canvas-entry-ripple" aria-hidden="true">
+            <span /><span /><span /><span />
+        </div>
     );
+}
+
+/** 点击画布空白处时从点击位置扩散一圈涟漪；入口卡片内部的点击不触发。 */
+function useCanvasEntryClickRipple(stageRef: RefObject<HTMLDivElement | null>) {
+    useEffect(() => {
+        const stage = stageRef.current;
+        const viewport = stage?.closest<HTMLElement>("[data-canvas-viewport]") ?? stage?.parentElement;
+        if (!stage || !viewport) return;
+        if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+        const handle = (event: PointerEvent) => {
+            const target = event.target instanceof Element ? event.target : null;
+            if (target?.closest(".canvas-entry-shell,[data-canvas-no-zoom]") || event.button !== 0) return;
+            const rect = stage.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
+            const wave = document.createElement("span");
+            wave.className = "canvas-entry-click-ripple";
+            wave.style.left = `${x}px`;
+            wave.style.top = `${y}px`;
+            stage.appendChild(wave);
+            wave.addEventListener("animationend", () => wave.remove(), { once: true });
+        };
+        viewport.addEventListener("pointerdown", handle);
+        return () => viewport.removeEventListener("pointerdown", handle);
+    }, [stageRef]);
 }
 
 export function CanvasFreeformEmptyState({ commands }: { commands: CanvasCreateCommand[] }) {
