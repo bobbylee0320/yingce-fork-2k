@@ -5,9 +5,64 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"yingce/backend/internal/repository"
 )
 
 func stringPtr(value string) *string { return &value }
+
+func cloudAgentCaptureMutationPreview() (cloudAgentMutationRecorder, func() (cloudAgentApprovalPreview, bool)) {
+	var captured cloudAgentApprovalPreview
+	var seen bool
+	recorder := func(_ *repository.Repository, input cloudAgentMutationInput) error {
+		if input.Preview == nil {
+			return errors.New("mutation preview is missing")
+		}
+		captured, seen = *input.Preview, true
+		return nil
+	}
+	return recorder, func() (cloudAgentApprovalPreview, bool) { return captured, seen }
+}
+
+func assertCloudAgentAppliedPreview(t testing.TB, preview cloudAgentApprovalPreview, summary string) {
+	t.Helper()
+	if len(preview.Items) == 0 || preview.Status != "applied" || preview.Title != "画布修改已写入" ||
+		(summary != "" && !strings.Contains(preview.Description, summary)) || strings.Contains(preview.Description, "批准后才会写入") {
+		t.Fatalf("write preview does not describe a completed operation: %+v", preview)
+	}
+}
+
+func TestCloudAgentAppliedPreviewUsesSpecializedItemSummaries(t *testing.T) {
+	preview := cloudAgentApprovalPreview{
+		Title:       "确认修改分镜脚本",
+		Description: "Agent 准备修改分镜脚本。批准后才会写入画布。",
+		Items: []cloudAgentApprovalPreviewItem{
+			{Operation: "edit_storyboard", Summary: "修改《追逐戏》第 1 镜景别为近景"},
+			{Operation: "previs_apply_patch", Summary: "为演员甲添加挥手动作"},
+		},
+	}
+
+	applied := cloudAgentCanvasAppliedPreview(preview)
+	assertCloudAgentAppliedPreview(t, applied, "修改《追逐戏》第 1 镜景别为近景")
+	if !strings.Contains(applied.Description, "为演员甲添加挥手动作") {
+		t.Fatalf("applied preview lost additional operation summaries: %+v", applied)
+	}
+	if preview.Status != "" || !strings.Contains(preview.Description, "批准后才会写入") {
+		t.Fatalf("preparing the preview mutated the approval version: %+v", preview)
+	}
+}
+
+func TestCloudAgentMediaSubmittedPreviewUsesSubmittedStage(t *testing.T) {
+	approval := cloudAgentMediaApprovalPreview(&cloudAgentMediaPlan{Args: cloudAgentMediaArgs{Mode: "video", Title: "雨夜追逐"}}, "")
+	submitted := cloudAgentMediaSubmittedPreview(approval)
+	if submitted.Status != "submitted" || submitted.Title != "生成任务已提交" || !strings.Contains(submitted.Description, "生成任务已提交") ||
+		!strings.Contains(submitted.Description, "生成结果尚未完成") || strings.Contains(submitted.Description, "尚未提交生成") {
+		t.Fatalf("submitted media preview reports the wrong stage: %+v", submitted)
+	}
+	if !strings.Contains(approval.Description, "尚未提交生成") || approval.Status != "" {
+		t.Fatalf("draft approval preview changed its waiting semantics: %+v", approval)
+	}
+}
 
 func TestCloudAgentCanvasApprovalPreviewDescribesUpdateTargetAndFields(t *testing.T) {
 	doc, err := creationDocument(`{"nodes":[{"id":"video-1","type":"video","title":"满月庆祝视频草稿","metadata":{"content":"已提交结果","prompt":"private prompt","status":"succeeded"}}],"connections":[]}`)

@@ -188,13 +188,11 @@ type cloudAgentRuntime struct {
 	// StepLimits 是本步实际生效的执行边界（管理员策略解析结果），只用于构造请求：
 	// 不进状态 JSON——每次推进都按当时的策略重新解析，改配置无需重发本轮。
 	StepLimits cloudAgentStepLimits `json:"-"`
-	// ImageInspectCounts 记录本轮内每张图被查看的次数，用于"同一张图不要反复看"的护栏。
+	// ImageInspectCounts 记录本轮内每张图的观察次数，用于回执标注重复观察；不阻止补充观察。
 	ImageInspectCounts map[string]int `json:"imageInspectCounts,omitempty"`
-	// ImageInspectionReads 以“节点 + 资源 + 画布 revision”为 key，避免同一张图在
-	// 同一版本的画布里反复触发视觉输入。画布内容变化后 key 自然变化，允许重新识别。
+	// ImageInspectionReads 以“节点 + 资源 + 画布 revision”为 key，记录同一图片是否在本轮交付过。
 	ImageInspectionReads map[string]int `json:"imageInspectionReads,omitempty"`
-	// ImageInspectCalls 记录本轮所有图片识别工具调用次数（包括只回执文字的重复调用）。
-	// 它与 ImageInspectCounts 一起进检查点，防止模型通过 refresh 或切换节点绕过总预算。
+	// ImageInspectCalls 记录本轮附送的图片数，批量调用按图片逐张计入总预算。
 	ImageInspectCalls int `json:"imageInspectCalls,omitempty"`
 	// ReadToolCalls 记录本轮会读取运行时只读快照的工具调用次数。除了同参缓存护栏，
 	// 还需要一个跨参数的总上限，防止模型通过不断变化 offset/nodeIds 绕过重复读取保护。

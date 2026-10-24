@@ -67,6 +67,23 @@ description: 信封、错误码与 OpenAPI
 
 上传头像先通过共享裁剪弹窗选择 1:1 区域，支持拖动、缩放裁剪框、键盘调整与重置；确认后导出最大 512×512 的 PNG 到待保存预览，点击“保存头像”才上传。取消裁剪保留原头像；待保存图片可重新调整裁剪。选择系统头像使用现有 AppModal、Avatar 与主题 token，支持 8 个预设，确认后才写入服务端。
 
+
+## 用户反馈
+
+所有反馈接口使用登录 Cookie 和标准业务信封。普通用户只能提交反馈、上传附件和读取本人列表；`/api/admin/feedbacks` 下的写入与全量列表由 service 强制校验管理员权限。
+
+| 接口 | 入参与结果 |
+| --- | --- |
+| `POST /api/feedbacks` | `{ type, title, content, contact?, attachments?, environment? }`；类型为 `bug/feature/improvement/other`，标题最多 200 个 UTF-8 字节、正文最多 10000 个 UTF-8 字节。附件和环境字段是 JSON 字符串；返回 `data` 反馈记录 |
+| `GET /api/feedbacks/my` | 返回当前账号自己的反馈列表，按创建时间倒序，包含处理状态、管理员答复与归档标志 |
+| `POST /api/feedbacks/attachments` | multipart 字段 `file`；支持 PNG/JPG/JPEG/WebP/GIF/BMP 与 MP4/WebM/MOV/AVI/MKV，单文件最大 50 MiB，请求体最大 55 MiB；文件通过现有资源服务保存，返回附件元数据 |
+| `GET /api/admin/feedbacks` | 支持 `type`、`status`、`keyword`、`archived`、`page`、`pageSize`；默认每页 20 条，`pageSize` 超过 100 时使用默认值。返回 `data={list,total,page,limit}`，按创建时间倒序 |
+| `PATCH /api/admin/feedbacks/{id}` | 可更新 `status=pending/processing/resolved/closed`、`adminReply`、`archived`；返回更新后的反馈记录 |
+| `POST /api/admin/feedbacks/{id}/archive`、`POST /api/admin/feedbacks/{id}/unarchive` | 归档或恢复历史反馈，返回更新后的反馈记录 |
+| `DELETE /api/admin/feedbacks/{id}` | 删除反馈记录，返回 `data={ok:true}` |
+
+
+
 ## Agent 画布权限与大事件
 
 自由画布和项目关联画布均使用 `canvas_projects`。Agent 运行时按登录账号和画布 ID 查询归属，不能把所属项目 ID 当作画布 ID；画布不存在、属于其他账号或数据库读取失败时，不声明读写及导出权限。
@@ -333,6 +350,9 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 文本模型能力合同包含 `contextWindowTokens`（输入加输出的总上下文窗口）和 `maxOutputTokens`（输出/推理上限）。Agent 每轮根据实际执行的渠道模型计算输入预算，并预留工具 schema、协议包装和恢复空间；逻辑模型按候选文本线路取安全交集，旧配置或能力解析失败回退 128K / 16K。1M 模型可通过后台能力配置使用更大输入预算。前后端的 Token 估算用于提前压缩和拒绝病态请求，最终仍以上游 tokenizer 和响应为准。运行 checkpoint 的 512KB 持久化上限只约束恢复状态，不限制模型上下文窗口。
 
 - `POST /agent/runs` 创建一轮；`POST /agent/runs/:id/messages` 以上一轮为父节点创建新的不可变轮次，两者返回 `{ run }`，追加后必须使用新的 `run.id` 订阅。
+- `GET /agent/conversations?canvasId=&limit=100&before=` 只读查询当前用户在该画布中参与过的对话，返回 `{ items, nextCursor? }`。每项包含 `id`（现有 `conversationId`）、`canvasId`、`title`、`latestRunId`、`status`、`revision`、`cleanupPending` 和时间；按最新轮 `createdAt`、`id` 倒序。对话换绑画布后，目录摘要仍取整个对话的最新轮次，不能使用旧画布内的最后一轮。画布必须属于当前用户。
+- `GET /agent/conversations/:id/runs?limit=100&after=` 返回 `{ items, nextCursor? }`，按 `createdAt`、`id` 升序恢复同一用户、同一对话的全部轮次，包括跨页面的轮次。两处 `limit` 为 1–100，分页游标直接回传服务端的 `nextCursor`。运行视图增加 `conversationId`、`userPrompt`、`idempotencyKey`，供另一设备恢复用户消息并去重；每轮仍只返回一页事件。首次恢复用 `GET /agent/runs/:id?fromStart=true&sinceSeq=0&eventLimit=500` 从第一条事件开始，再以 `latestSeq` 作为后续 `sinceSeq`，直到追平 `eventCount`；默认不带 `fromStart` 的尾部窗口行为不变。读取接口不创建模型或媒体任务。
+- 同一对话只允许从最新终态轮次接续。另一设备已经提交后续轮次时，旧父轮新请求返回 409，`reason: agent_conversation_stale_parent`，客户端先同步历史，不能自动重发。该检查与任务创建、积分预留同事务串行，覆盖新子轮尚未保存执行检查点的间隙；原请求的幂等回放仍先执行，画布独占和防重复生成规则保持。
 - `POST /agent/runs/:id/interjections` 向**正在运行**的轮次插入一句话，不新建轮次、不产生新的扣费身份。请求 `{ text, messageId }`，`text` 最多 4000 字符；同一 `messageId` 幂等。插话在下一次模型调用前注入；运行已结束返回 409，前端应回落为新一轮发送。步数耗尽或运行失败时发出 `user_interjection_dropped`，不会静默吞掉，也不会自动替用户开新一轮。
 - 请求字段：`canvasId`（空字符串为未绑定画布的对话）、`prompt`、受管 `logicalModelId` 或 `channelId` + `channelModelKey`、`permissionMode: "read_only" | "request_approval" | "auto"`、`reasoningMode`、`profileRevision`、`skillIds`、`contextScope: [] | ["canvas"]`、`focusNodeIds`（最多 8 个）、`focusNodeOmittedCount`、`budget: { maxCredits, maxGenerationTasks, maxVideoSeconds, maxSteps }` 和 `idempotencyKey`。前端多选超过 8 个时保留前 8 个并报告省略数量，不清空全部焦点；计数只提供事实，不授予访问权限。未绑定画布时上下文与焦点必须为空。不接受密钥、自定义 URL、客户端历史或未知字段。
 - 同用户同幂等键及相同请求返回同一运行；不同请求复用键返回 409。失败后重试同一提交应保留键。上一轮未完成时禁止追加；已完成、失败、取消或已拒绝的终态轮次作为不可变历史读取，即使其冻结的策略或节点能力版本早于当前服务，也可用于创建采用当前执行合同的新一轮，父运行不会被改写。旧版合同下仍活动或待审批的运行不得恢复执行。历史只保留最近 10 轮用户目标；运行历史与跨轮摘要仍受独立的持久化 JSON 保护，超限先丢掉更早的可重读正文并保留结构化事实，单轮仍超出当前模型能力预算时才提示缩小范围或新建对话；历史结构损坏返回明确 409，不投影为通用 500。

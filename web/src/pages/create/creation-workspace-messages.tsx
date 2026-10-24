@@ -25,6 +25,7 @@ import { Button } from "antd";
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { AudioReferencePreview } from "@/components/audio-reference-preview";
+import { creationResultEntries } from "./creation-result-urls";
 
 export function CreationMessageView({
     item,
@@ -212,19 +213,6 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
     );
 }
 
-/**
- * 历史 URL 只是短期 hint：签名已过期的地址不再直接交给 <img>/<video>，
- * 否则首帧就会出现 403（画面空白）。带 storageKey 的结果随后由续签流程补上新的地址。
- */
-function usableResultUrls(urls: string[]) {
-    const now = Date.now();
-    return urls.filter((url) => {
-        if (!url) return false;
-        const expires = /[?&]expires=(\d+)/.exec(url);
-        return !expires || Number(expires[1]) * 1000 > now;
-    });
-}
-
 export function MediaResult({
     item,
     onRetryFailure,
@@ -243,41 +231,39 @@ export function MediaResult({
     const assets = useAssetStore((state) => state.assets);
     const storedResultUrls = item.resultUrls || [];
     const resultStorageKeys = item.resultStorageKeys?.length ? item.resultStorageKeys : creationResultStorageKeys(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: storedResultUrls });
-    const [resolvedResultUrls, setResolvedResultUrls] = useState(() => usableResultUrls(storedResultUrls));
+    // 展示地址按 storageKey 保存；effect 重跑（素材库更新、续签）时不回退到历史 hint。
+    const [resolvedByKey, setResolvedByKey] = useState<Record<string, string>>({});
+    const [failedByKey, setFailedByKey] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         let active = true;
         const timers: ReturnType<typeof setTimeout>[] = [];
-        const updateResultUrl = (index: number, url: string) => {
-            if (!active) return;
-            setResolvedResultUrls((current) => {
-                const next = [...current];
-                next[index] = url;
-                return next;
-            });
+        const updateResultUrl = (storageKey: string, url: string) => {
+            if (!active || !url) return;
+            setResolvedByKey((current) => (current[storageKey] === url ? current : { ...current, [storageKey]: url }));
         };
         const refreshRemote = async (index: number, storageKey: string): Promise<void> => {
             try {
                 const access = await getResourceAccess(storageKey, "display");
                 if (!active) return;
-                updateResultUrl(index, resolveResourceAccessURL(access.url));
+                updateResultUrl(storageKey, resolveResourceAccessURL(access.url));
                 const refreshAt = access.refreshAt ? new Date(access.refreshAt).getTime() : Number.NaN;
                 const expiresAt = access.expiresAt ? new Date(access.expiresAt).getTime() : Number.NaN;
                 const nextRefreshAt = Number.isFinite(refreshAt) ? refreshAt : expiresAt;
                 const delay = Number.isFinite(nextRefreshAt) ? Math.max(10_000, nextRefreshAt - Date.now()) : 4 * 60_000;
                 timers.push(setTimeout(() => void refreshRemote(index, storageKey), delay));
             } catch {
-                if (active) timers.push(setTimeout(() => void refreshRemote(index, storageKey), 60_000));
+                if (!active) return;
+                setFailedByKey((current) => (current[storageKey] ? current : { ...current, [storageKey]: true }));
+                timers.push(setTimeout(() => void refreshRemote(index, storageKey), 60_000));
             }
         };
         if (!resultStorageKeys.length) {
-            setResolvedResultUrls(usableResultUrls(storedResultUrls));
             return () => {
                 active = false;
             };
         }
         // 历史记录只把 URL 当作短期 hint；真正恢复依赖稳定 storageKey，展示 URL 由访问缓存按需续签。
-        setResolvedResultUrls(usableResultUrls(storedResultUrls));
         const resolver = item.mode === "video" ? resolveMediaUrl : resolveImageUrl;
         void Promise.all(
             resultStorageKeys.map(async (storageKey, index) => {
@@ -286,7 +272,7 @@ export function MediaResult({
                     return;
                 }
                 const url = await resolver(storageKey, storedResultUrls[index] || "");
-                updateResultUrl(index, url);
+                updateResultUrl(storageKey, url);
             }),
         ).catch(() => {
             // 保留当前页面已有的 URL hint；若已过期，页面会走明确的媒体空态而不是回退到平台正文代理。
@@ -297,8 +283,10 @@ export function MediaResult({
         };
     }, [item.id, item.mode, resultStorageKeys.join("|"), storedResultUrls.join("|")]);
 
-    const alignedResultUrls = resultStorageKeys.length ? resolvedResultUrls : usableResultUrls(storedResultUrls);
-    const displayResultUrls = alignedResultUrls.filter(Boolean);
+    const isVideo = item.mode === "video";
+    const { entries: resultEntries, resolving } = creationResultEntries({ storageKeys: resultStorageKeys, storedUrls: storedResultUrls, resolvedByKey, failedByKey, isVideo, isRemoteKey: (storageKey) => Boolean(resourceIdFromStorageKey(storageKey)) });
+    const alignedResultUrls = resultStorageKeys.length ? resultStorageKeys.map((storageKey) => resultEntries.find((entry) => entry.key === storageKey)?.url || "") : resultEntries.map((entry) => entry.url);
+    const displayResultUrls = resultEntries.map((entry) => entry.url);
     const resultAssetIds = alignedResultUrls.length || resultStorageKeys.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: alignedResultUrls, resultStorageKeys }) : [];
     const expectedResultCount = resultStorageKeys.length || alignedResultUrls.length;
     const canContinueWithResults = expectedResultCount > 0 && resultAssetIds.length === expectedResultCount;
@@ -323,7 +311,8 @@ export function MediaResult({
                 </button>
             </div>
         );
-    if (!expectedResultCount || !displayResultUrls.length)
+    // 远端结果首次解析中不显示空态，避免先闪「没有返回可预览结果」再出现结果。
+    if (!expectedResultCount || (!displayResultUrls.length && !resolving))
         return (
             <div className="creation-media-empty">
                 没有返回可预览结果{" "}
@@ -332,7 +321,6 @@ export function MediaResult({
                 </button>
             </div>
         );
-    const isVideo = item.mode === "video";
     return (
         <div className="creation-media-result">
             {isVideo ? (
@@ -340,12 +328,13 @@ export function MediaResult({
                     type="button"
                     className="creation-video-result"
                     onClick={() => {
+                        if (!displayResultUrls[0]) return;
                         setPreviewType("video");
                         setPreviewUrl(displayResultUrls[0]);
                     }}
                     aria-label="预览生成视频"
                 >
-                    <video muted preload="metadata" src={displayResultUrls[0]} />
+                    {displayResultUrls[0] ? <video muted preload="metadata" src={displayResultUrls[0]} /> : null}
                     <span>
                         <Maximize2 />
                         预览视频
@@ -353,9 +342,9 @@ export function MediaResult({
                 </button>
             ) : (
                 <div className="creation-image-result-grid">
-                    {displayResultUrls.map((url) => (
+                    {resultEntries.map(({ key, url }) => (
                         <button
-                            key={url}
+                            key={key}
                             type="button"
                             className="creation-image-result"
                             onClick={() => {
@@ -378,7 +367,7 @@ export function MediaResult({
                     添加到画布
                 </Button>
                 {displayResultUrls.map((url, index) => (
-                    <a key={`${url}-download`} href={url} download>
+                    <a key={`download-${index}`} href={url} download>
                         {displayResultUrls.length > 1 ? (
                             `下载 ${index + 1}`
                         ) : (

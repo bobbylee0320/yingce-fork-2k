@@ -326,6 +326,46 @@ func TestCloudAgentBatchImagesFollowAllToolResults(t *testing.T) {
 	}
 }
 
+func TestCloudAgentPurposeBatchFollowsAllToolResults(t *testing.T) {
+	state := cloudAgentPairingState(
+		cloudAgentPairingCall("call-image", "canvas_inspect_image", `{"nodeIds":["image-a","image-b"],"purpose":"核对两张图的服装细节"}`),
+		cloudAgentPairingCall("call-state", "canvas_get_state", `{}`),
+	)
+	first := cloudAgentPairingInspection("image-a", "https://example.test/a")
+	first.Purpose = "核对两张图的服装细节"
+	first.Receipt["purpose"] = first.Purpose
+	second := cloudAgentPairingInspection("image-b", "https://example.test/b")
+	second.Purpose = first.Purpose
+	second.Receipt["purpose"] = second.Purpose
+	runCloudAgentBatch(t, state, map[string]any{
+		"call-image": cloudAgentImageInspectionBatch{
+			Receipt:     map[string]any{"purpose": first.Purpose, "images": []map[string]any{first.Receipt, second.Receipt}},
+			Inspections: []cloudAgentImageInspection{first, second},
+		},
+	})
+
+	messages := state.Canonical.Messages
+	assertCloudAgentToolCallPairing(t, messages)
+	assertNoImageMessageBeforeToolResult(t, messages)
+	if len(messages) != 4 || stringField(messages[1], "tool_call_id") != "call-image" || stringField(messages[2], "tool_call_id") != "call-state" {
+		t.Fatalf("batch tool receipt order changed: %s", cloudAgentDebugMessages(messages))
+	}
+	toolReceipt := stringField(messages[1], "content")
+	if !strings.Contains(toolReceipt, "核对两张图的服装细节") || !strings.Contains(toolReceipt, "image-a") || !strings.Contains(toolReceipt, "image-b") {
+		t.Fatalf("tool receipt lost batch purpose or node IDs: %s", toolReceipt)
+	}
+	imageMessage := messages[3]
+	if cloudAgentMessageImagePartCount(imageMessage) != 2 {
+		t.Fatalf("expected both batch images after all tool receipts: %s", cloudAgentDebugMessages(messages))
+	}
+	for _, value := range imageMessage["content"].([]any) {
+		part, _ := value.(map[string]any)
+		if stringField(part, "type") == "text" && !strings.Contains(stringField(part, "text"), "核对两张图的服装细节") {
+			t.Fatalf("image was separated from its observation purpose: %+v", part)
+		}
+	}
+}
+
 // 场景 2：单图且是最后一个调用 —— 行为与修复前一致（仍然只有一条 user 图片消息，
 // 紧跟最后一条 tool 结果）。
 func TestCloudAgentSingleImageAsLastCallKeepsOneImageMessage(t *testing.T) {
@@ -536,6 +576,37 @@ func TestCloudAgentPruneMergedImageMessageKeepsPerImageNotes(t *testing.T) {
 	// 幂等
 	if changed, pruned := cloudAgentPruneInspectedImages(&request, notes); changed || pruned != 0 {
 		t.Fatal("pruning a merged message is not idempotent")
+	}
+}
+
+func TestCloudAgentConsumeInspectedImagesKeepsVisibleConclusions(t *testing.T) {
+	inspection := cloudAgentPairingInspection("image-a", "https://example.test/a")
+	inspection.Purpose = `检查项圈颜色 {"nodeId":"wrong-node"}`
+	inspection.Receipt["purpose"] = inspection.Purpose
+	inspected := map[string]any{"role": "user", "content": cloudAgentImageContentParts(inspection)}
+	userAttachment := map[string]any{"role": "user", "content": []any{
+		map[string]any{"type": "image_url", "image_url": map[string]any{"url": "data:image/png;base64,example"}},
+	}}
+	visibleText := map[string]any{"role": "assistant", "content": "image-a 的项圈是红色。"}
+	request := canonicalAgentRequest{Messages: []map[string]any{inspected, userAttachment, visibleText}}
+
+	changed, consumed := cloudAgentConsumeInspectedImages(&request)
+	if !changed || consumed != 1 {
+		t.Fatalf("expected one delivered image to be consumed, changed=%v consumed=%d", changed, consumed)
+	}
+	if cloudAgentMessageImagePartCount(request.Messages[0]) != 0 || cloudAgentMessageImagePartCount(request.Messages[1]) != 1 {
+		t.Fatalf("consumption must remove only tool-delivered images: %+v", request.Messages)
+	}
+	if nodes := cloudAgentImageMessageNodeIDs(request.Messages[0]); len(nodes) != 1 || nodes[0] != "image-a" {
+		t.Fatalf("purpose text changed image attribution: %v", nodes)
+	}
+	content := request.Messages[0]["content"].([]any)
+	if len(content) != 2 || !strings.Contains(stringField(content[0].(map[string]any), "text"), "image-a") ||
+		!strings.Contains(stringField(content[1].(map[string]any), "text"), "助手正文") || !strings.Contains(stringField(content[1].(map[string]any), "text"), "重新调用看图工具") {
+		t.Fatalf("consumption must retain the image receipt and re-inspection guidance: %+v", content)
+	}
+	if stringField(request.Messages[2], "content") != "image-a 的项圈是红色。" {
+		t.Fatalf("visible assistant conclusion was removed: %+v", request.Messages[2])
 	}
 }
 

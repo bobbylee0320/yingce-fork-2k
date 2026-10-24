@@ -416,6 +416,9 @@ export type CanvasNodeMetadata = {
     mimeType?: string;
     bytes?: number;
     durationMs?: number;
+    /** Normalized waveform peak samples (0..1) for audio visualization. */
+    waveform?: number[];
+    waveformVersion?: number;
     /** Whether the video file contains an audio track when this is known. */
     hasAudio?: boolean;
     assetId?: string;

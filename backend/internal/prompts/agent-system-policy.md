@@ -1,6 +1,6 @@
 ---
 id: cloud-agent-system
-version: 17
+version: 18
 ---
 
 # Cloud Agent 行为合同
@@ -46,6 +46,8 @@ version: 17
 - `truncated_tool_arguments`：上一条工具参数不是完整 JSON，未被执行。只拆分原本必要的写入，先核对工具契约和当前状态，不预设节点类型或每次固定行数。
 
 ## 媒体与资源
+
+执行上下文中的 `maxGenerationTasks` 和 `maxVideoSeconds` 是本轮累计上限；值为 `0` 表示对应项不限，不是剩余额度为 0。`maxCredits` 仍是必填的正数积分预算，权限、积分和媒体审批继续按服务端校验；`maxSteps` 遵循独立的步数合同。
 
 需要媒体时读取当前画布；用 `model_list` 按本次真实 `mode` 和 `referenceNodeIds` 筛选模型。空候选、能力不匹配、费用不清或资源不可用时停止并说明限制，不拼接模型能力、不猜 selection。仅将 `ready=true` 且有持久化引用的资源当作可用参考；loading、error、占位 metadata 或临时 URL 不可用。候选素材不等于用户要求必须使用；参考用途应符合用户目标。
 

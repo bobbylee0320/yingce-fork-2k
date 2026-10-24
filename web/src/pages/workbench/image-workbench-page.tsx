@@ -1,6 +1,6 @@
 import { createClientUUID } from "@/lib/client-id";
 import { App, Button, Input, InputNumber, Modal, Progress, Segmented, Select, Spin, Switch, Tooltip } from "antd";
-import { Check, Camera, ChevronDown, Clapperboard, Expand, FileImage, History, ImagePlus, Images, LoaderCircle, Mic, Palette, Plus, RotateCcw, Search, ShoppingBag, Sparkles, Upload, UserRound, Video, X } from "lucide-react";
+import { Check, Camera, ChevronDown, ChevronUp, Clapperboard, Expand, FileImage, History, ImagePlus, Images, LoaderCircle, Mic, Palette, Plus, RotateCcw, Search, ShoppingBag, Sparkles, Upload, UserRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
@@ -1514,18 +1514,127 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
 }
 
 function CountPicker({ value, max, onChange }: { value: string; max: number; onChange: (value: string) => void }) {
-    const limit = Math.min(10, Math.max(1, max || 1));
+    const limit = Math.max(1, max || 15);
     const current = Math.min(limit, Math.max(1, Math.floor(Number(value) || 1)));
+    const isSelected = current >= 4;
+    const [draftValue, setDraftValue] = useState(() => (current >= 4 ? String(current) : "4"));
+
+    useEffect(() => {
+        if (current >= 4) {
+            setDraftValue(String(current));
+        }
+    }, [current]);
+
+    const handleSelectStepper = () => {
+        const num = Math.max(1, Math.min(limit, parseInt(draftValue, 10) || 4));
+        onChange(String(num));
+    };
+
+    const handleStepUp = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const base = current >= 4 ? current : (parseInt(draftValue, 10) || 4);
+        const next = Math.min(limit, base + 1);
+        setDraftValue(String(next));
+        onChange(String(next));
+    };
+
+    const handleStepDown = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const base = current >= 4 ? current : (parseInt(draftValue, 10) || 4);
+        const next = Math.max(1, base - 1);
+        setDraftValue(String(next));
+        onChange(String(next));
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setDraftValue(e.target.value);
+    };
+
+    const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        const num = Math.max(1, Math.min(limit, parseInt(e.target.value, 10) || 4));
+        setDraftValue(String(num));
+        onChange(String(num));
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.currentTarget.blur();
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            const base = current >= 4 ? current : (parseInt(draftValue, 10) || 4);
+            const next = Math.min(limit, base + 1);
+            setDraftValue(String(next));
+            onChange(String(next));
+        } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            const base = current >= 4 ? current : (parseInt(draftValue, 10) || 4);
+            const next = Math.max(1, base - 1);
+            setDraftValue(String(next));
+            onChange(String(next));
+        }
+    };
+
     return (
         <div className="workbench-count-picker">
-            <span>生成数量</span>
+            <span>生成张数</span>
             <div>
-                {Array.from({ length: limit }, (_, index) => index + 1).map((item) => (
-                    <button key={item} type="button" aria-pressed={current === item} className={current === item ? "is-active" : ""} onClick={() => onChange(String(item))}>
+                {Array.from({ length: Math.min(3, limit) }, (_, index) => index + 1).map((item) => (
+                    <button
+                        key={item}
+                        type="button"
+                        aria-pressed={current === item}
+                        className={current === item ? "is-active" : ""}
+                        onClick={() => onChange(String(item))}
+                    >
                         {item}
                     </button>
                 ))}
-                <InputNumber min={1} max={limit} precision={0} value={current} aria-label="输入生成数量" onChange={(next) => onChange(String(Math.min(limit, Math.max(1, Number(next) || 1))))} />
+                {limit >= 4 ? (
+                    <div
+                        className={`workbench-count-stepper ${isSelected ? "is-active" : ""}`}
+                        onClick={handleSelectStepper}
+                    >
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            aria-label="自定义生成张数"
+                            value={draftValue}
+                            onChange={handleInputChange}
+                            onBlur={handleInputBlur}
+                            onKeyDown={handleKeyDown}
+                            onFocus={(e) => {
+                                e.currentTarget.select();
+                                if (current < 4) {
+                                    handleSelectStepper();
+                                }
+                            }}
+                        />
+                        <div className="workbench-count-stepper-controls">
+                            <button
+                                type="button"
+                                tabIndex={-1}
+                                onClick={handleStepUp}
+                                disabled={current >= limit && isSelected}
+                                className="workbench-count-stepper-btn"
+                                title="增加 1 张"
+                                aria-label="增加 1 张"
+                            >
+                                <ChevronUp className="size-2.5" />
+                            </button>
+                            <button
+                                type="button"
+                                tabIndex={-1}
+                                onClick={handleStepDown}
+                                disabled={current <= 1 && isSelected}
+                                className="workbench-count-stepper-btn"
+                                title="减少 1 张"
+                                aria-label="减少 1 张"
+                            >
+                                <ChevronDown className="size-2.5" />
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
             </div>
         </div>
     );

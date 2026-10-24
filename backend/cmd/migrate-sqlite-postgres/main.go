@@ -371,6 +371,7 @@ func migrations() []tableMigration {
 		migrateTable[model.ToolFavorite]("tool_favorites"),
 		migrateTable[model.User]("users"),
 		migrateTable[model.UserAvatar]("user_avatars"),
+		migrateTable[model.UserFeedback]("user_feedbacks"),
 		migrateTable[model.AuthSession]("auth_sessions"),
 		migrateTable[model.LoginLog]("login_logs"),
 		migrateTable[model.UserIdentity]("user_identities"),

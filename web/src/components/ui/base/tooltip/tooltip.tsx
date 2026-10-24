@@ -1,4 +1,4 @@
-import { Fragment, isValidElement, type ComponentProps, type ReactNode } from "react";
+import { Fragment, isValidElement, useRef, type ComponentProps, type ReactNode } from "react";
 import { Focusable, Tooltip as RACTooltip, TooltipTrigger, type Placement } from "react-aria-components";
 
 import { cn } from "@/lib/utils";
@@ -40,6 +40,7 @@ export interface TooltipProps {
 export function Tooltip({ title, placement = "top", delay = 350, className, children }: TooltipProps) {
     if (!title) return <>{children}</>;
 
+    const triggerRef = useRef<HTMLSpanElement>(null);
     const child = isValidElement<{ disabled?: boolean; loading?: boolean; tabIndex?: number }>(children) ? children : null;
     const directTrigger =
         child && child.type !== Fragment && !child.props.disabled && !child.props.loading && (typeof child.type !== "string" || ["button", "a", "input", "select", "textarea", "summary"].includes(child.type) || child.props.tabIndex !== undefined);
@@ -48,13 +49,11 @@ export function Tooltip({ title, placement = "top", delay = 350, className, chil
         <TooltipTrigger delay={delay}>
             {/*
              * RAC 1.21 的 TooltipTrigger 通过 context 下发 hover/focus 处理与 triggerRef，
-             * 只有消费该上下文的组件才会真正挂上（原生 <span>/<button> 不会读）。直接套
-             * 普通 span 的写法因此既没有触发事件、也没有定位基准，鼠标悬停永远不弹。
-             * useFocus 只处理 target === currentTarget，不能依赖内层按钮焦点冒泡到 span。
-             * 直接把事件和 aria-describedby 交给启用的控件，不增加额外 Tab 停靠点。
-             * 自定义控件需透传 DOM props/ref；禁用或非交互内容仍由外壳接收悬停。
+             * 但外层包装元素或子元素重新渲染时容易丢失内部 ref 引用，导致浮层回退到 (0, 0)。
+             * 这里给外层 span 绑定稳定的 triggerRef 并直接透传给 RACTooltip，
+             * 确保气泡定位始终锚定在控件正上方，绝不飞至屏幕左上角。
              */}
-            <span className="inline-flex">
+            <span ref={triggerRef} className="inline-flex">
                 {directTrigger ? (
                     <Focusable>{child as ComponentProps<typeof Focusable>["children"]}</Focusable>
                 ) : (
@@ -63,7 +62,12 @@ export function Tooltip({ title, placement = "top", delay = 350, className, chil
                     </Focusable>
                 )}
             </span>
-            <RACTooltip placement={PLACEMENT_MAP[placement]} offset={6} className={cn("z-50 max-w-64 rounded-md border border-border bg-surface-strong px-2 py-1 text-xs leading-relaxed text-foreground shadow-md", "ra-pop-in", className)}>
+            <RACTooltip
+                triggerRef={triggerRef}
+                placement={PLACEMENT_MAP[placement]}
+                offset={6}
+                className={cn("z-50 max-w-64 rounded-md border border-border bg-surface-strong px-2 py-1 text-xs leading-relaxed text-foreground shadow-md", "ra-pop-in", className)}
+            >
                 {title}
             </RACTooltip>
         </TooltipTrigger>

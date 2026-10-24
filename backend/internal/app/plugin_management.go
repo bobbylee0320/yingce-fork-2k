@@ -15,6 +15,7 @@ const (
 	PluginAIArtCritique       = "ai-art-critique"
 	PluginMediaConversion     = "media-conversion"
 	PluginEditorShell         = "editor-shell"
+	PluginUserFeedback        = "user-feedback"
 
 	PluginOriginOfficial = "official"
 	PluginOriginSystem   = "system"
@@ -84,6 +85,10 @@ var officialApplicationPolicies = map[string]PluginManagementView{
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},
 	PluginEditorShell: {
+		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
+		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
+	},
+	PluginUserFeedback: {
 		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},
@@ -226,7 +231,7 @@ func (s *Service) pluginStateForUser(actor *model.User, pluginID string, items [
 		// explicitly saves a personal choice. Other official applications were
 		// already controlled by each user's local installation state.
 		if !userConfigured {
-			if pluginID == PluginMediaConversion {
+			if pluginID == PluginMediaConversion || pluginID == PluginUserFeedback {
 				userEnabled = true
 			} else if hasRuntime && pluginID == WorkflowPluginRunningHub {
 				userEnabled = runtimePlugin.Status == "enabled"

@@ -1104,10 +1104,11 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 			stepID = a.NodeID
 		}
 		operation := "generate_media_draft"
+		preview := cloudAgentMediaApprovalPreview(plan, "")
 		if task != nil {
 			operation = "generate_media_submit"
+			preview = cloudAgentMediaSubmittedPreview(preview)
 		}
-		preview := cloudAgentMediaApprovalPreview(plan, "")
 		return recorder[0](repo, cloudAgentMutationInput{
 			RunID:              a.DraftRunID,
 			UserID:             userID,

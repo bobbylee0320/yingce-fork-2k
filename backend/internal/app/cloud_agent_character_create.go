@@ -253,14 +253,15 @@ func applyCloudAgentCharacterCreate(repo *repository.Repository, userID, canvasI
 	if err := saveCloudAgentDocument(repo, canvas, doc, policy); err != nil {
 		return nil, err
 	}
+	appliedPreview := cloudAgentCanvasAppliedPreview(plan.Preview)
 	if len(recorder) > 0 && recorder[0] != nil {
-		if err := recorder[0](repo, cloudAgentMutationInput{UserID: userID, CanvasID: canvasID, StepID: call.ID, Operation: call.Function.Name, BeforeSnapshotHash: beforeHash, AfterSnapshotHash: cloudAgentCanvasHash(doc), BeforeJSON: beforeJSON, Preview: &plan.Preview}); err != nil {
+		if err := recorder[0](repo, cloudAgentMutationInput{UserID: userID, CanvasID: canvasID, StepID: call.ID, Operation: call.Function.Name, BeforeSnapshotHash: beforeHash, AfterSnapshotHash: cloudAgentCanvasHash(doc), BeforeJSON: beforeJSON, Preview: &appliedPreview}); err != nil {
 			return nil, err
 		}
 	}
 	return map[string]any{
 		"canvasId": canvasID, "nodeId": plan.Args.NodeID, "characterAssetId": created.Asset.ID, "versionId": card.VersionID,
 		"visualStatus": card.VisualStatus, "voiceStatus": card.VoiceStatus, "snapshotHash": cloudAgentCanvasHash(doc),
-		"summary": plan.Preview.Items[0].Summary,
+		"summary": appliedPreview.Description, "preview": appliedPreview,
 	}, nil
 }

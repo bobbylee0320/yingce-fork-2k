@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
-import { canvasThemes } from "@/lib/canvas-theme";
+import { CANVAS_CONNECTION_STROKE_WIDTH, canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { batchReferenceHandleY } from "@/lib/canvas/canvas-batch-table";
@@ -45,39 +45,12 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     const emphasized = active || hovered;
     const showVisual = !hideVisual && (visualMode === "full" || hovered);
     const showEmphasis = !hideVisual && emphasized;
-    const gradientId = `canvas-flow-${connection.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
     if (!pathD) return null;
 
     return (
         <g>
             {targetCell ? <title>{targetCell.label}{targetCell.clipped ? "（位于表格滚动区域外）" : ""}</title> : null}
             {targetCell?.clipped && !hideVisual && emphasized ? <text x={endX + 8} y={endY - 8} fill={theme.node.text} fontSize={12} style={{ pointerEvents: "none" }}>{targetCell.label} · 滚动查看</text> : null}
-            {showEmphasis ? <defs>
-                <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1={startX} y1={startY} x2={endX} y2={endY}>
-                    <stop offset="0%" stopColor={theme.node.muted} stopOpacity={0.18} />
-                    <stop offset="48%" stopColor={theme.accent.primary} stopOpacity={0.58} />
-                    <stop offset="100%" stopColor={theme.accent.primary} stopOpacity={0.34} />
-                </linearGradient>
-                {/* 流光头部的软化渐变：两端透明、中间亮，避免短划线看起来是硬色块 */}
-                <linearGradient id={`${gradientId}-comet`} x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor={theme.accent.primary} stopOpacity={0} />
-                    <stop offset="45%" stopColor={theme.accent.primary} stopOpacity={0.95} />
-                    <stop offset="100%" stopColor={theme.accent.primary} stopOpacity={0} />
-                </linearGradient>
-            </defs> : null}
-            {/* 光晕：只在强调态渲染。blur 是 filter，成本随线条数量线性上升，
-                常态几十条线全开会明显掉帧，所以刻意只给悬停/选中的那一条。
-                垫在底衬描边之下，不改动常态可读性那几层。 */}
-            {showEmphasis ? <path
-                d={pathD}
-                stroke={theme.accent.primary}
-                strokeWidth="8"
-                vectorEffect="non-scaling-stroke"
-                strokeOpacity={0.18}
-                fill="none"
-                strokeLinecap="round"
-                style={{ pointerEvents: "none", filter: "blur(3px)" }}
-            /> : null}
             <path
                 data-connection-id={connection.id}
                 d={pathD}
@@ -100,59 +73,52 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             />
             {showVisual ? <path
                 d={pathD}
-                stroke={theme.node.muted}
-                strokeWidth={emphasized ? 5 : 3.5}
+                stroke={theme.connection.stroke}
+                strokeWidth={CANVAS_CONNECTION_STROKE_WIDTH}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity={emphasized ? 0.18 : 0.16}
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ pointerEvents: "none" }}
-            /> : null}
-            {showVisual ? <path
-                d={pathD}
-                stroke={emphasized ? theme.accent.primary : theme.node.muted}
-                strokeWidth={emphasized ? 2.8 : 2}
-                vectorEffect="non-scaling-stroke"
-                strokeOpacity={emphasized ? 0.95 : 0.8}
+                strokeOpacity={0.8}
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 style={{ pointerEvents: "none" }}
             /> : null}
             {showVisual ? <>
-                <circle cx={startX} cy={startY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? 0.9 : 0.72} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
-                <circle cx={endX} cy={endY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? 0.9 : 0.72} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+                <circle cx={startX} cy={startY} r={2.5} fill={emphasized ? theme.connection.beam : theme.connection.stroke} fillOpacity={0.8} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+                <circle cx={endX} cy={endY} r={2.5} fill={emphasized ? theme.connection.beam : theme.connection.stroke} fillOpacity={0.8} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
             </> : null}
-            {showVisual && emphasized ? <path
-                className="canvas-connection-flow"
-                d={pathD}
-                stroke={`url(#${gradientId})`}
-                strokeWidth="2.2"
-                vectorEffect="non-scaling-stroke"
-                strokeOpacity="0.84"
-                strokeDasharray="18 26"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ pointerEvents: "none" }}
-            /> : null}
-            {/* 流光：一小段高亮沿路径跑。周期与虚线流动刻意不同（2.1s vs 1.25s），
-                两者错拍才像有光在走；同频会锁成一条整体平移的虚线。 */}
-            {showEmphasis ? <path
-                className="canvas-connection-comet"
-                d={pathD}
-                stroke={`url(#${gradientId}-comet)`}
-                strokeWidth="2.6"
-                vectorEffect="non-scaling-stroke"
-                strokeDasharray="16 118"
-                fill="none"
-                strokeLinecap="round"
-                style={{ pointerEvents: "none" }}
-            /> : null}
+            {showEmphasis ? <CanvasConnectionBeam pathD={pathD} color={theme.connection.beam} /> : null}
         </g>
     );
 }, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.visualMode === next.visualMode && previous.hideVisual === next.hideVisual && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop && previous.fromBatchScroll?.top === next.fromBatchScroll?.top && previous.fromBatchScroll?.left === next.fromBatchScroll?.left && previous.toBatchScroll?.top === next.toBatchScroll?.top && previous.toBatchScroll?.left === next.toBatchScroll?.left);
+
+const BEAM_LAYERS = [0.35, 0.6, 0.9, 1.2, CANVAS_CONNECTION_STROKE_WIDTH, 1.65, 1.9, 2.1].map((width, index) => ({
+    length: 36 - index * 4,
+    offset: -index * 4,
+    width,
+    opacity: 0.14 + index * 0.07,
+}));
+
+export function CanvasConnectionBeam({ pathD, color }: { pathD: string; color: string }) {
+    // 前缘对齐，靠近头部的短层逐渐加宽、加深，形成圆头细尾的水滴轮廓。
+    // 各层都沿原曲线行进，转弯时尾部自然贴线，底线宽度不受影响。
+    // 统一周期为路径的三分之一，循环无跳帧；动画由 CSS 驱动，不逐帧更新 React。
+    return <g data-connection-beam aria-hidden="true" style={{ pointerEvents: "none" }}>
+        {BEAM_LAYERS.map(({ length, offset, width, opacity }) => <path
+            key={length}
+            className="canvas-connection-comet"
+            d={pathD}
+            pathLength={300}
+            stroke={color}
+            strokeWidth={width}
+            strokeOpacity={opacity}
+            strokeDasharray={`${length} ${100 - length}`}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            fill="none"
+            style={{ "--canvas-beam-offset": `${offset}px`, strokeWidth: `calc(${width}px / var(--canvas-committed-scale, 1))` } as CSSProperties}
+        />)}
+    </g>;
+}
 
 export function canvasConnectionPath(connection: CanvasConnection, from: CanvasNodeData, to: CanvasNodeData, fromScrollTop = 0, toScrollTop = 0, fromBatchScroll?: BatchScroll, toBatchScroll?: BatchScroll) {
     const fromCell = batchCellAnchor(from, connection.fromHandleId, fromBatchScroll);
@@ -167,21 +133,17 @@ export function canvasConnectionPath(connection: CanvasConnection, from: CanvasN
     return { pathD: `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`, startX, startY, endX, endY };
 }
 
-export function activeConnectionPath(node: CanvasNodeData | undefined, handle: ConnectionHandle, mouseWorld: Position, target?: CanvasNodeData, nodeScrollTop = 0, targetHandleId?: string, nodeBatchScroll?: BatchScroll, targetBatchScroll?: BatchScroll, targetScrollTop = 0) {
+export function activeConnectionPath(node: CanvasNodeData | undefined, handle: ConnectionHandle, mouseWorld: Position, nodeScrollTop = 0, nodeBatchScroll?: BatchScroll) {
     if (!node) return "";
     const nodeCell = batchCellAnchor(node, handle.handleId, nodeBatchScroll);
-    const targetCell = target ? batchCellAnchor(target, targetHandleId, targetBatchScroll) : undefined;
-    if ((parseBatchCellHandle(handle.handleId) && !nodeCell) || (target && parseBatchCellHandle(targetHandleId) && !targetCell)) return "";
+    if (parseBatchCellHandle(handle.handleId) && !nodeCell) return "";
     const startX = handle.handleType === "source" ? node.position.x + node.width : mouseWorld.x;
     const startY = handle.handleType === "source" ? connectionHandleY(node, handle.handleId, nodeScrollTop) : mouseWorld.y;
     const endX = handle.handleType === "source" ? mouseWorld.x : nodeCell?.x ?? node.position.x;
     const endY = handle.handleType === "source" ? mouseWorld.y : nodeCell?.y ?? connectionHandleY(node, handle.handleId, nodeScrollTop);
-    const snappedStartX = handle.handleType === "target" && target ? target.position.x + target.width : startX;
-    const snappedStartY = handle.handleType === "target" && target ? connectionHandleY(target) : startY;
-    const snappedEndX = handle.handleType === "source" && target ? targetCell?.x ?? target.position.x : endX;
-    const snappedEndY = handle.handleType === "source" && target ? targetCell?.y ?? connectionHandleY(target, targetHandleId, targetScrollTop) : endY;
-    const distance = Math.abs(snappedEndX - snappedStartX);
-    return `M ${snappedStartX} ${snappedStartY} C ${snappedStartX + distance * 0.5} ${snappedStartY}, ${snappedEndX - distance * 0.5} ${snappedEndY}, ${snappedEndX} ${snappedEndY}`;
+    // 悬停目标由卡片反馈；松手前的自由端始终跟随指针。
+    const distance = Math.abs(endX - startX);
+    return `M ${startX} ${startY} C ${startX + distance * 0.5} ${startY}, ${endX - distance * 0.5} ${endY}, ${endX} ${endY}`;
 }
 
 /**

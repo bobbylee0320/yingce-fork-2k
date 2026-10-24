@@ -306,8 +306,17 @@ func TestCloudAgentStoryboardEditPreservesRowsAndRenumbers(t *testing.T) {
 
 	apply := func(call cloudAgentCall) []map[string]any {
 		t.Helper()
-		if _, err := applyCloudAgentStoryboardMutation(s.repo, "user", canvas.ID, call, policy); err != nil {
+		recorder, recordedPreview := cloudAgentCaptureMutationPreview()
+		result, err := applyCloudAgentStoryboardMutation(s.repo, "user", canvas.ID, call, policy, recorder)
+		if err != nil {
 			t.Fatal(err)
+		}
+		resultMap := result.(map[string]any)
+		preview := resultMap["preview"].(cloudAgentApprovalPreview)
+		assertCloudAgentAppliedPreview(t, preview, preview.Items[0].Summary)
+		captured, ok := recordedPreview()
+		if !ok || captured.Description != preview.Description || captured.Status != preview.Status {
+			t.Fatalf("storyboard mutation event preview diverged from tool result: result=%+v recorded=%+v", preview, captured)
 		}
 		stored, err := s.repo.CanvasProjectForUser("user", canvas.ID)
 		if err != nil {

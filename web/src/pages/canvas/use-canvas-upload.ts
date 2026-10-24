@@ -117,10 +117,10 @@ export function useCanvasUpload({
             const result = await ensureCanvasNodeAsset({ canvasId, domainProjectId, node, source: "canvas-upload" });
             setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item));
             if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
-            return true;
+            return { persisted: true, syncPending: result.syncPending };
         } catch (error) {
             message.warning(error instanceof Error ? `媒体已添加到画布，但素材同步失败：${error.message}` : "媒体已添加到画布，但素材同步失败");
-            return false;
+            return { persisted: false, syncPending: false };
         }
     }, [canvasId, domainProjectId, message, queryClient, setNodes]);
 
@@ -212,7 +212,8 @@ export function useCanvasUpload({
             if (domainProjectId) progress.update("写入项目资产", 4);
             const persisted = await persistMediaNode(node);
             const localOnly = metadata.storageKey && !resourceIdFromStorageKey(metadata.storageKey);
-            progress.done(localOnly ? "已保存在本机，尚未上传到服务器" : persisted ? "文件已添加到画布" : "文件已添加，项目资产待重试");
+            const pendingLabel = domainProjectId ? "项目资产正在自动同步" : "云端素材正在自动同步";
+            progress.done(localOnly ? "已保存在本机，尚未上传到服务器" : persisted.syncPending ? `文件已添加到画布，${pendingLabel}` : persisted.persisted ? "文件已添加到画布" : "文件已添加，项目资产待重试");
             if (localOnly) message.warning("文件已保存在本机，尚未上传到服务器");
             return id;
         } catch (error) {
@@ -435,7 +436,15 @@ export function useCanvasUpload({
             selectInsertedNode(id, "preserve");
             if (domainProjectId) progress.update("写入项目资产", 4);
             const persisted = await persistMediaNode(node);
-            progress.done(persisted ? "已生成新视频片段并加入项目资产" : "已生成新视频片段，项目资产待重试");
+            progress.done(
+                persisted.syncPending
+                    ? domainProjectId
+                        ? "已生成新视频片段，本地素材已保存，项目资产正在自动同步"
+                        : "已生成新视频片段，本地素材已保存，云端素材正在自动同步"
+                    : persisted.persisted
+                      ? "已生成新视频片段并加入项目资产"
+                      : "已生成新视频片段，项目资产待重试",
+            );
             return node;
         } catch (error) {
             const details = error instanceof Error ? error.message : "合成视频片段失败";

@@ -41,6 +41,7 @@ let autoSyncQueued = false;
 let syncRetryAttempt = 0;
 let remoteOperationTail: Promise<void> = Promise.resolve();
 let subscriptionsInstalled = false;
+const remoteUserDataReadyListeners = new Set<() => void | Promise<void>>();
 let acknowledgedAssets = new Map<string, Asset>();
 let acknowledgedProjects = new Map<string, CanvasProject>();
 type PendingCanvasMutation = CanvasMutationBatchState & {
@@ -218,6 +219,7 @@ export async function initializeRemoteUserDataSession(userId: string) {
         }
         acknowledgedAssets = new Map(useAssetStore.getState().assets.map((asset) => [asset.id, asset]));
         remoteUserDataPhase = "ready";
+        notifyRemoteUserDataReady();
         if (pendingCanvasMutations.size) scheduleRemoteUserDataSync();
     });
 }
@@ -676,6 +678,7 @@ export async function syncRemoteUserData(userId?: string | null) {
             acknowledgedAssets = new Map(remoteAssets.map((asset) => [asset.id, asset]));
             remoteUserDataPhase = "ready";
             syncRetryAttempt = 0;
+            notifyRemoteUserDataReady();
             if (pendingCanvasMutations.size || unbasedProjects.size) scheduleRemoteUserDataSync();
         } catch (error) {
             ensureSession();
@@ -747,6 +750,25 @@ export function resetRemoteUserDataSync() {
 
 export function hasRemoteUserDataSyncSession() {
     return Boolean(activeRemoteUserId) && remoteUserDataPhase === "ready";
+}
+
+export function subscribeRemoteUserDataReady(listener: () => void | Promise<void>) {
+    remoteUserDataReadyListeners.add(listener);
+    if (hasRemoteUserDataSyncSession())
+        void Promise.resolve()
+            .then(listener)
+            .catch((error) => console.warn("云端同步就绪回调失败", error));
+    return () => {
+        remoteUserDataReadyListeners.delete(listener);
+    };
+}
+
+function notifyRemoteUserDataReady() {
+    for (const listener of remoteUserDataReadyListeners) {
+        void Promise.resolve()
+            .then(listener)
+            .catch((error) => console.warn("云端同步就绪回调失败", error));
+    }
 }
 
 /**

@@ -91,7 +91,7 @@ export function MentionMenu({
         <div
             ref={menuRef}
             data-canvas-resource-mention-menu="true"
-            className="canvas-resource-mention-menu fixed z-[var(--z-tooltip)]"
+            className="canvas-resource-mention-menu pointer-events-auto fixed z-[var(--z-tooltip)]"
             data-placement={position.showAbove ? "top" : "bottom"}
             style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight, transform: position.showAbove ? "translateY(-100%)" : undefined }}
             onPointerDown={stopCanvasInteraction}
@@ -172,7 +172,8 @@ export function MentionMenu({
                 )}
             </div>
         </div>,
-        document.body,
+        // Keep the popup inside the dialog's focus and pointer-event boundary.
+        anchor.closest(".ant-modal") || document.body,
     );
 }
 

@@ -2078,14 +2078,14 @@ func applyCloudAgentPrevisMutation(repo *repository.Repository, userID, canvasID
 	if err = saveCloudAgentDocument(repo, plan.Canvas, plan.Document, policy); err != nil {
 		return nil, err
 	}
+	appliedPreview := cloudAgentCanvasAppliedPreview(plan.Preview)
 	afterCanvasHash := cloudAgentCanvasHash(plan.Document)
 	afterSceneHash := plan.ResultSnapshotHash
 	if scene, ok := findPrevisScene(creationMaps(plan.Document["previsScenes"]), plan.SceneID); ok {
 		afterSceneHash = creationHash(scene)
 	}
 	if len(recorder) > 0 && recorder[0] != nil {
-		preview := plan.Preview
-		if err := recorder[0](repo, cloudAgentMutationInput{UserID: userID, CanvasID: canvasID, StepID: call.ID, Operation: plan.Operation, BeforeSnapshotHash: plan.BeforeSnapshotHash, AfterSnapshotHash: afterCanvasHash, BeforeJSON: plan.BeforeJSON, Preview: &preview}); err != nil {
+		if err := recorder[0](repo, cloudAgentMutationInput{UserID: userID, CanvasID: canvasID, StepID: call.ID, Operation: plan.Operation, BeforeSnapshotHash: plan.BeforeSnapshotHash, AfterSnapshotHash: afterCanvasHash, BeforeJSON: plan.BeforeJSON, Preview: &appliedPreview}); err != nil {
 			return nil, err
 		}
 	}
@@ -2093,7 +2093,7 @@ func applyCloudAgentPrevisMutation(repo *repository.Repository, userID, canvasID
 	if resultSnapshotHash == "" {
 		resultSnapshotHash = afterCanvasHash
 	}
-	return map[string]any{"canvasId": canvasID, "sceneId": plan.SceneID, "nodeId": plan.NodeID, "shotId": plan.ShotID, "snapshotHash": resultSnapshotHash, "canvasSnapshotHash": afterCanvasHash, "committed": true, "summary": plan.Preview.Description}, nil
+	return map[string]any{"canvasId": canvasID, "sceneId": plan.SceneID, "nodeId": plan.NodeID, "shotId": plan.ShotID, "snapshotHash": resultSnapshotHash, "canvasSnapshotHash": afterCanvasHash, "committed": true, "summary": appliedPreview.Description, "preview": appliedPreview}, nil
 }
 
 // cloudAgentPrevisMotionIDs 与前端 PREVIS_MOTIONS（previs-motion.ts）一一对应。

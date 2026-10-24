@@ -440,10 +440,31 @@ func cloudAgentCanvasAppliedPreview(preview cloudAgentApprovalPreview) cloudAgen
 	if counts["connect_nodes"] > 0 {
 		parts = append(parts, fmt.Sprintf("建立 %d 条引用连线", counts["connect_nodes"]))
 	}
+	if len(parts) == 0 {
+		for _, item := range preview.Items {
+			if summary := strings.TrimSpace(item.Summary); summary != "" {
+				parts = append(parts, summary)
+			}
+		}
+	}
+	if len(parts) == 0 {
+		parts = append(parts, "已完成请求的画布操作")
+	}
 	applied.Status = "applied"
 	applied.Title = "画布修改已写入"
 	applied.Description = fmt.Sprintf("画布修改已写入：%s。", strings.Join(parts, "，"))
 	return applied
+}
+
+func cloudAgentMediaSubmittedPreview(preview cloudAgentApprovalPreview) cloudAgentApprovalPreview {
+	preview.Status = "submitted"
+	preview.Title = "生成任务已提交"
+	summary := "媒体生成任务"
+	if len(preview.Items) > 0 && strings.TrimSpace(preview.Items[0].Summary) != "" {
+		summary = preview.Items[0].Summary
+	}
+	preview.Description = fmt.Sprintf("生成任务已提交：%s。生成结果尚未完成，完成后会自动回写画布。", summary)
+	return preview
 }
 
 func cloudAgentCanvasApprovalPreview(items []cloudAgentApprovalPreviewItem) cloudAgentApprovalPreview {

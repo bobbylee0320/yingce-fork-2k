@@ -143,7 +143,7 @@ describe("audio canvas interaction", () => {
         expect(canvasNodeContentSource.match(/function AudioNodeContent[\s\S]*?\n}\n/)?.[0] || "").not.toContain("useNodeResourceUrl");
         expect(canvasAudioPlayerSource).not.toContain("播放结束，点击重新播放");
         expect(canvasAudioPlayerSource).not.toContain("pr-24");
-        expect(canvasAudioPlayerSource).toContain("formatAudioTime(snapshot.currentTimeMs)}/{durationMs ? formatAudioTime(durationMs) : \"--:--\"");
+        expect(canvasAudioPlayerSource).toContain('formatAudioTime(snapshot.currentTimeMs)} / ${durationMs ? formatAudioTime(durationMs) : "00:00"');
     });
 
     test("isolates player controls from canvas gestures", () => {

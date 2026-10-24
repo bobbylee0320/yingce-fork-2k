@@ -121,11 +121,28 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
         const video = box?.querySelector("video");
         if (!video) return;
         const handleLoadedMetadata = () => {
-            if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
-            setVideoSize({ width: video.videoWidth, height: video.videoHeight });
-            if (node.metadata?.naturalWidth !== video.videoWidth || node.metadata?.naturalHeight !== video.videoHeight) {
-                updateMediaNode?.(node.id, (current) => ({ ...current, metadata: { ...current.metadata, naturalWidth: video.videoWidth, naturalHeight: video.videoHeight } }));
+            const width = video.videoWidth;
+            const height = video.videoHeight;
+            const durationMs = Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : 0;
+            if (width > 0 && height > 0) {
+                setVideoSize({ width, height });
             }
+            if (width <= 0 && height <= 0 && durationMs <= 0) return;
+            updateMediaNode?.(node.id, (current) => {
+                const metadata = current.metadata;
+                const nextMetadata = { ...metadata };
+                let changed = false;
+                if (width > 0 && height > 0 && (metadata?.naturalWidth !== width || metadata?.naturalHeight !== height)) {
+                    nextMetadata.naturalWidth = width;
+                    nextMetadata.naturalHeight = height;
+                    changed = true;
+                }
+                if (durationMs > 0 && (!metadata?.durationMs || metadata.durationMs <= 0)) {
+                    nextMetadata.durationMs = durationMs;
+                    changed = true;
+                }
+                return changed ? { ...current, metadata: nextMetadata } : current;
+            });
         };
         video.addEventListener("loadedmetadata", handleLoadedMetadata);
         handleLoadedMetadata();

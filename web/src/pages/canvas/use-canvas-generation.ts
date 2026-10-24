@@ -7,7 +7,7 @@ import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-res
 import { reconcileImageBatchRoot } from "@/lib/canvas/canvas-image-batch-retry";
 import { canvasTaskBindingStatus, markCanvasTaskRecoveryUnconfirmed } from "@/lib/canvas/canvas-task-state";
 import { applyCanvasGenerationTaskNodeEffect, CanvasGenerationDurableAckError, isCanvasGenerationDurableAckError } from "@/services/canvas-generation-consumer";
-import { consumeGenerationTaskNode, ensureCanvasNodeAsset, retryCanvasAssetSyncAfterRateLimit } from "@/services/project-asset-sync";
+import { consumeGenerationTaskNode, ensureCanvasNodeAsset, retryCanvasAssetSyncAfterRateLimit, subscribeCanvasProjectAssetLinkFailures } from "@/services/project-asset-sync";
 import { listGenerationTasks, listTaskLogs, queryGenerationTask, subscribeGenerationTasks, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -186,7 +186,8 @@ export async function recoverCanvasGenerationTaskNode(input: {
                               status: input.continuationOnly ? item.metadata?.status : NODE_STATUS_ERROR,
                               ...(input.continuationOnly ? {} : failure),
                               ...(item.metadata?.layerExtraction && item.metadata.taskId === input.completed.id && input.completed.status === "succeeded"
-                                  ? { layerExtraction: { ...item.metadata.layerExtraction, rejectedTaskId: input.completed.id } } : {}),
+                                  ? { layerExtraction: { ...item.metadata.layerExtraction, rejectedTaskId: input.completed.id } }
+                                  : {}),
                               ...(item.metadata?.agentGenerationContinuation?.status === "pending"
                                   ? {
                                         agentGenerationContinuation: { ...item.metadata.agentGenerationContinuation, status: "failed" as const },
@@ -291,8 +292,28 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 ),
             );
             if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
+            if (result.syncPending) {
+                message.info({
+                    key: `canvas-asset-sync:${projectId}`,
+                    content: domainProjectId ? "生成结果已保存到本地，云端项目资产正在自动同步" : "生成结果已保存到本地，云端素材正在自动同步",
+                    duration: 4,
+                });
+            }
         },
-        [domainProjectId, projectId, queryClient, setNodes],
+        [domainProjectId, message, projectId, queryClient, setNodes],
+    );
+
+    useEffect(
+        () =>
+            subscribeCanvasProjectAssetLinkFailures((failure) => {
+                if (!domainProjectId || failure.domainProjectId !== domainProjectId) return;
+                message.warning({
+                    key: `canvas-asset-sync:${projectId}`,
+                    content: `本地素材已保存，但云端项目资产同步失败：${failure.message}`,
+                    duration: 6,
+                });
+            }),
+        [domainProjectId, message, projectId],
     );
 
     const applyGenerationTaskResult = useCallback(
@@ -350,11 +371,16 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 // 物化/确认失败与图片内容校验失败分开，保存失败不能触发付费重生成。
                 const failure = !applyingResult && !isCanvasGenerationDurableAckError(error) ? new CanvasGenerationDurableAckError(error) : error;
                 if (generationTaskCanReloadResource(task)) {
-                    setNodes((current) => current.map((node) => {
-                        if (node.id !== nodeId || node.metadata?.taskId !== task.id) return node;
-                        const applied = generationTaskOutputsApplied(node, task, current);
-                        return { ...node, metadata: { ...node.metadata, status: applied ? node.metadata.status : NODE_STATUS_ERROR, resourceReloadAvailable: true, errorDetails: `结果已生成，应用结果失败：${error instanceof Error ? error.message : "未知错误"}` } };
-                    }));
+                    setNodes((current) =>
+                        current.map((node) => {
+                            if (node.id !== nodeId || node.metadata?.taskId !== task.id) return node;
+                            const applied = generationTaskOutputsApplied(node, task, current);
+                            return {
+                                ...node,
+                                metadata: { ...node.metadata, status: applied ? node.metadata.status : NODE_STATUS_ERROR, resourceReloadAvailable: true, errorDetails: `结果已生成，应用结果失败：${error instanceof Error ? error.message : "未知错误"}` },
+                            };
+                        }),
+                    );
                 }
                 throw failure;
             }
@@ -401,14 +427,19 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 const pendingAgentContinuation = node.metadata?.agentGenerationContinuation?.status === "pending";
                 const aggregateBatchRoot = node.metadata?.isBatchRoot && node.metadata.batchChildIds?.length;
                 if (aggregateBatchRoot && !pendingAgentContinuation) return false;
-                return shouldRecoverCanvasImageOutputs(node) || pendingAgentContinuation || node.metadata?.status === NODE_STATUS_LOADING || node.metadata?.errorDetails === "页面刷新后生成已中断，请重新生成。" || Boolean(node.metadata?.taskId && node.metadata.status !== NODE_STATUS_SUCCESS);
+                return (
+                    shouldRecoverCanvasImageOutputs(node) ||
+                    pendingAgentContinuation ||
+                    node.metadata?.status === NODE_STATUS_LOADING ||
+                    node.metadata?.errorDetails === "页面刷新后生成已中断，请重新生成。" ||
+                    Boolean(node.metadata?.taskId && node.metadata.status !== NODE_STATUS_SUCCESS)
+                );
             });
             const needsDiscovery = recoveryNodes.some((node) => !node.metadata?.taskId && !node.metadata?.agentGenerationContinuation?.taskId);
             let projectTasks: GenerationTask[] = [];
             if (needsDiscovery) {
                 try {
-                    projectTasks = (await listGenerationTasks(100, { projectId: startedProjectId }, undefined, signal))
-                        .filter((task) => task.projectId === startedProjectId && task.type.startsWith("canvas_"));
+                    projectTasks = (await listGenerationTasks(100, { projectId: startedProjectId }, undefined, signal)).filter((task) => task.projectId === startedProjectId && task.type.startsWith("canvas_"));
                 } catch (error) {
                     if (!isCurrentProject() || (error instanceof Error && error.name === "AbortError")) return;
                     // 发现接口失败不影响已有 taskId 的精确恢复，也不是“查无任务”的证据。
@@ -535,9 +566,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 autoSavedTaskIdsRef.current.delete(saveKey);
                 if (error instanceof Error && error.name === "AbortError") return;
                 const detail = error instanceof Error ? error.message : "未知错误";
-                const content = hasRemoteUserDataSyncSession()
-                    ? `生成结果已保留，本地素材已保存，云端项目资产稍后重试：${detail}`
-                    : "生成结果已保留在本地素材库，登录后会继续同步到云端";
+                const content = hasRemoteUserDataSyncSession() ? `生成结果已保留，本地素材已保存，${domainProjectId ? "云端项目资产" : "云端素材"}同步失败：${detail}` : "生成结果已保留在本地素材库，登录后会继续同步到云端";
                 message.warning({
                     key: `canvas-asset-sync:${projectId}`,
                     content,

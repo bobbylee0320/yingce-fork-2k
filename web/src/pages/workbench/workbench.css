@@ -1375,7 +1375,8 @@
 .workbench-settings-content {
     display: grid;
     gap: 12px;
-    width: min(416px, calc(100vw - 48px));
+    width: 100%;
+    max-width: 100%;
 }
 .workbench-settings-content .image-size-ratios {
     grid-template-columns: repeat(4, minmax(0, 1fr));

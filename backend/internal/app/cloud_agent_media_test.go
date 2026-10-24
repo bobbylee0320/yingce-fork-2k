@@ -422,6 +422,63 @@ func TestCloudAgentMediaRejectAndInvalidModelDoNotCreateTasks(t *testing.T) {
 	}
 }
 
+func TestCloudAgentApprovalRejectionMessageMatchesOperation(t *testing.T) {
+	for _, scenario := range []struct {
+		name      string
+		media     bool
+		wantText  string
+		forbidden string
+	}{
+		{name: "ordinary write", wantText: "已拒绝本次操作，本次操作未执行。", forbidden: "草稿节点仍保留"},
+		{name: "media generation", media: true, wantText: "已拒绝本次生成，草稿节点仍保留在画布中；未提交任务、未产生扣费。", forbidden: "本次操作未执行"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			s, _, args := agentMediaFixture(t)
+			run, state := agentMediaRun(t, s, args, "request_approval")
+			call := cloudAgentCall{ID: "approval-call"}
+			call.Function.Name = "canvas_apply_ops"
+			arguments, err := json.Marshal(map[string]any{
+				"snapshotHash": args.SnapshotHash,
+				"ops":          []map[string]any{{"type": "update_node", "id": "cat", "patch": map[string]any{"title": "拒绝后不应写入"}}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			call.Function.Arguments = string(arguments)
+			if scenario.media {
+				call = agentMediaCall(args)
+				call.ID = "approval-call"
+			}
+			state.Calls = []cloudAgentCall{call}
+			state.Approval = &cloudAgentApproval{ID: "approval-id", Call: call}
+			if err := s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+				current.Status = "waiting_approval"
+				return cloudAgentSave(current, &state)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.DecideCloudAgentApproval("user", run.ID, "approval-id", "reject", "暂不执行"); err != nil {
+				t.Fatal(err)
+			}
+			stored, err := s.repo.CloudAgent("user", run.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err = cloudAgentDecode(stored)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stored.Status != "rejected" || len(state.Events) == 0 {
+				t.Fatalf("approval rejection was not persisted: status=%s events=%+v", stored.Status, state.Events)
+			}
+			event := state.Events[len(state.Events)-1]
+			if event.Type != "approval_decided" || !strings.Contains(stringValue(event.Payload["text"]), scenario.wantText) || strings.Contains(stringValue(event.Payload["text"]), scenario.forbidden) {
+				t.Fatalf("rejection message does not match operation type: %+v", event)
+			}
+		})
+	}
+}
+
 func TestCloudAgentMediaChangedCanvasRollsBackAdmission(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
 	run, state := agentMediaRun(t, s, a, "auto")

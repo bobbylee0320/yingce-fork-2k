@@ -693,44 +693,6 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
         display: none;
     }
 }
-.canvas-model-picker-secondary-head {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: 8px;
-    padding: 0 2px 8px;
-}
-.canvas-model-picker-back {
-    display: grid;
-    width: 28px;
-    height: 28px;
-    flex: 0 0 28px;
-    place-items: center;
-    border: 1px solid var(--workspace-border);
-    border-radius: 8px;
-    background: var(--workspace-surface-hover);
-    color: inherit;
-    cursor: pointer;
-}
-.canvas-model-picker-back svg {
-    width: 15px;
-    height: 15px;
-}
-.canvas-model-picker-secondary-head > span {
-    display: grid;
-    min-width: 0;
-    gap: 2px;
-}
-.canvas-model-picker-secondary-head strong {
-    overflow: hidden;
-    font-size: 13px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.canvas-model-picker-secondary-head small {
-    color: color-mix(in srgb, currentColor 52%, transparent);
-    font-size: 10px;
-}
 .canvas-model-picker-option-heading {
     display: flex;
     flex-wrap: wrap;
@@ -981,13 +943,6 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy strong { font-size: 13px; font-weight: 650; white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.35; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy small { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--user-ink-muted); font-size: 10px; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-arrow { width: 15px; height: 15px; color: var(--user-ink-soft); transform: rotate(-90deg); }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-secondary-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 9px; }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-back { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--user-border); border-radius: 9px; background: var(--user-surface-muted); color: var(--user-ink-muted); }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-back:hover { background: var(--user-surface-hover); color: var(--user-ink); }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-back svg { width: 15px; height: 15px; }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-secondary-head > span { display: grid; gap: 2px; }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-secondary-head strong { color: var(--user-ink); font-size: 13px; }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-secondary-head small { color: var(--user-ink-soft); font-size: 10px; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-option { min-height: 55px; border-radius: 12px; padding: 8px 9px; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-option > span:first-child > span:first-child { width: 32px; height: 32px; border-radius: 10px; background: var(--user-surface-muted) !important; color: var(--user-ink-muted); }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-option:nth-child(3n) > span:first-child > span:first-child,
@@ -1013,12 +968,6 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .creation-model-picker-surface .canvas-model-picker-brand-copy strong { font-size: 13px; font-weight: 650; white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.35; }
 .creation-model-picker-surface .canvas-model-picker-brand-copy small { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: color-mix(in srgb, var(--foreground) 55%, transparent); font-size: 10px; }
 .creation-model-picker-surface .canvas-model-picker-brand-arrow { width: 15px; height: 15px; color: color-mix(in srgb, var(--foreground) 48%, transparent); transform: rotate(-90deg); }
-.creation-model-picker-surface .canvas-model-picker-secondary-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 9px; }
-.creation-model-picker-surface .canvas-model-picker-back { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--workspace-border); border-radius: 9px; background: var(--workspace-surface-hover); color: var(--foreground); }
-.creation-model-picker-surface .canvas-model-picker-back svg { width: 15px; height: 15px; }
-.creation-model-picker-surface .canvas-model-picker-secondary-head > span { display: grid; gap: 2px; }
-.creation-model-picker-surface .canvas-model-picker-secondary-head strong { color: var(--foreground); font-size: 13px; }
-.creation-model-picker-surface .canvas-model-picker-secondary-head small { color: color-mix(in srgb, var(--foreground) 52%, transparent); font-size: 10px; }
 .creation-model-picker-surface .canvas-model-picker-option { min-height: 55px; border-radius: 12px; padding: 8px 9px; }
 .creation-model-picker-surface .canvas-model-picker-option > span:first-child > span:first-child { width: 32px; height: 32px; border-radius: 10px; background: color-mix(in srgb, var(--workspace-accent) 10%, var(--workspace-surface-strong)) !important; color: var(--workspace-accent); }
 .creation-model-picker-surface .canvas-model-picker-option > span:first-child > span:first-child svg { color: currentColor !important; opacity: 1 !important; }

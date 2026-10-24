@@ -391,7 +391,15 @@ export function useCanvasMediaTools({
             try {
                 const result = await ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node: audioNode, source: "canvas-manual" });
                 setNodes((current) => current.map((item) => (item.id === audioNodeId ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item)));
-                progress.done(result.linkedToProject ? "声音已提取并加入素材库与项目资产" : "声音已提取并加入素材库");
+                progress.done(
+                    result.syncPending
+                        ? domainProjectId
+                            ? "声音已保存到本地，云端项目资产正在自动同步"
+                            : "声音已保存到本地，云端素材正在自动同步"
+                        : result.linkedToProject
+                          ? "声音已提取并加入素材库与项目资产"
+                          : "声音已提取并加入素材库",
+                );
             } catch (assetError) {
                 progress.done(`声音已提取并生成音频节点，素材库写入失败：${assetError instanceof Error ? assetError.message : "未知错误"}`);
             }

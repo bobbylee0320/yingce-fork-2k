@@ -75,6 +75,126 @@ func cloudAgentVisionInput(t *testing.T, s *Service, nodes ...string) canvasGene
 	return canvasGenerationInput{Mode: "text", Prompt: "描述图片", ReferenceImages: refs, AgentRequests: &agentToolRequests{Canonical: &canonical}, Config: providerConfig{Model: "text-test", InterfaceType: string(model.ChannelInterfaceChatCompletion), APIKey: "test-only", CapabilityConfig: &ModelCapabilityConfig{Text: &TextCapabilityConfig{References: limits}}}}
 }
 
+func TestCloudAgentVisionBatchIncludesPurposeAndCountsEveryImage(t *testing.T) {
+	s, _, _ := cloudAgentVisionFixture(t)
+	state := cloudAgentRuntime{Request: agentTestRequest()}
+	state.Request.VisionEnabled = true
+	call := cloudAgentStoryboardCall(t, "canvas_inspect_image", "inspect-batch", map[string]any{
+		"nodeIds": []string{"cat", "hero"}, "purpose": "Compare the collar and lighting details",
+	})
+	result, err := s.prepareCloudAgentImageInspection("user", "agent-canvas", &state, call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch, ok := result.(cloudAgentImageInspectionBatch)
+	if !ok || len(batch.Inspections) != 2 {
+		t.Fatalf("expected a two-image batch, got %#v", result)
+	}
+	if batch.Receipt["purpose"] != "Compare the collar and lighting details" {
+		t.Fatalf("batch receipt lost purpose: %+v", batch.Receipt)
+	}
+	parts := cloudAgentImageContentParts(batch.Inspections...)
+	message := map[string]any{"role": "user", "content": parts}
+	if got := cloudAgentMessageImagePartCount(message); got != 2 {
+		t.Fatalf("expected both images in one message, got %d", got)
+	}
+	if nodes := cloudAgentImageMessageNodeIDs(message); len(nodes) != 2 || nodes[0] != "cat" || nodes[1] != "hero" {
+		t.Fatalf("image message lost node order: %v", nodes)
+	}
+	for _, value := range parts {
+		part, _ := value.(map[string]any)
+		if stringField(part, "type") == "text" && !strings.Contains(stringField(part, "text"), "Compare the collar and lighting details") {
+			t.Fatalf("image-purpose pairing is missing: %+v", part)
+		}
+	}
+	for _, inspection := range batch.Inspections {
+		state.markCanvasImageInspection(stringValue(inspection.Receipt["nodeId"]), true)
+	}
+	if state.ImageInspectCalls != 2 {
+		t.Fatalf("batch must charge the per-run budget by image count, got %d", state.ImageInspectCalls)
+	}
+
+	state.ImageInspectCalls = cloudAgentMaxImageInspectionCallsPerRun - 1
+	if _, err := s.prepareCloudAgentImageInspection("user", "agent-canvas", &state, call); !errors.Is(err, errCloudAgentImageInspectionBudget) {
+		t.Fatalf("batch exceeding the remaining image budget was accepted: %v", err)
+	}
+}
+
+func TestCloudAgentImageConsumptionRequiresVisibleAssistantText(t *testing.T) {
+	for _, scenario := range []struct {
+		name            string
+		result          string
+		wantImage       bool
+		wantVisibleText string
+	}{
+		{name: "visible text", result: `{"text":"已观察到 image-a 的项圈是红色。"}`, wantVisibleText: "已观察到 image-a 的项圈是红色。"},
+		{name: "tool only", result: `{"toolCalls":[{"id":"read-1","type":"function","function":{"name":"canvas_get_state","arguments":"{}"}}]}`, wantImage: true},
+		{name: "reasoning only", result: `{"reasoning":"分析了图像，但没有可见正文。"}`, wantImage: true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			s, db, _ := cloudAgentVisionFixture(t)
+			req := agentTestRequest()
+			req.VisionEnabled = true
+			req.IdempotencyKey = "vision-consumption-" + strings.ReplaceAll(scenario.name, " ", "-")
+			root, err := s.CreateCloudAgentRun("user", req, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			run, err := s.repo.CloudAgent("user", root.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err := cloudAgentDecode(run)
+			if err != nil {
+				t.Fatal(err)
+			}
+			inspection := cloudAgentPairingInspection("image-a", "resource:ref-one")
+			inspection.Purpose = "检查项圈颜色"
+			inspection.Receipt["purpose"] = inspection.Purpose
+			state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "user", "content": cloudAgentImageContentParts(inspection)})
+			if err := s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+				return cloudAgentSave(current, &state)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			var task model.Task
+			if err := db.First(&task, "id = ?", root.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Model(&model.Task{}).Where("id = ?", root.ID).Updates(map[string]any{
+				"status": model.TaskStatusSucceeded, "result_json": scenario.result,
+				"input_json": publicTaskInputJSON(task.InputJSON),
+			}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := s.advanceCloudAgentByID("user", root.ID); err != nil {
+				t.Fatal(err)
+			}
+			stored, err := s.repo.CloudAgent("user", root.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err = cloudAgentDecode(stored)
+			if err != nil {
+				t.Fatal(err)
+			}
+			imageCount := 0
+			for _, message := range state.Canonical.Messages {
+				imageCount += cloudAgentMessageImagePartCount(message)
+				if scenario.wantVisibleText != "" && stringField(message, "content") == scenario.wantVisibleText {
+					scenario.wantVisibleText = ""
+				}
+			}
+			if (imageCount > 0) != scenario.wantImage {
+				t.Fatalf("unexpected image count after %s: %d", scenario.name, imageCount)
+			}
+			if scenario.wantVisibleText != "" {
+				t.Fatal("assistant visible conclusion was not retained")
+			}
+		})
+	}
+}
+
 func TestCloudAgentVisionWorkerSendsPixelsWithoutPublicURL(t *testing.T) {
 	for _, publicURL := range []string{"", "https://bucket.example.invalid"} {
 		t.Run("public-url-"+publicURL, func(t *testing.T) {
@@ -326,7 +446,7 @@ func TestCloudAgentVisionLimitsAndUnconfirmedState(t *testing.T) {
 	}
 }
 
-func TestCloudAgentVisionRefreshCannotBypassPerImageLimit(t *testing.T) {
+func TestCloudAgentVisionAllowsRepeatedInspectionUntilRunBudget(t *testing.T) {
 	s, _, _ := cloudAgentVisionFixture(t)
 	state := cloudAgentRuntime{Request: agentTestRequest()}
 	state.Request.VisionEnabled = true
@@ -351,19 +471,19 @@ func TestCloudAgentVisionRefreshCannotBypassPerImageLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	inspection := refreshed.(cloudAgentImageInspection)
-	if inspection.ImageURL != "" {
-		t.Fatal("refresh=true bypassed the per-image inspection limit")
+	if inspection.ImageURL == "" {
+		t.Fatal("a requested re-inspection must attach the image again")
 	}
-	if inspection.Receipt["refreshIgnored"] != true || inspection.Receipt["repeat"] != true {
-		t.Fatalf("refresh protection receipt is incomplete: %+v", inspection.Receipt)
+	if inspection.Receipt["refreshRequested"] != true || inspection.Receipt["repeat"] != true {
+		t.Fatalf("re-inspection receipt is incomplete: %+v", inspection.Receipt)
 	}
-	state.markCanvasImageInspection("cat", false)
+	state.markCanvasImageInspection("cat", true)
 	if got := state.cloudAgentImageInspectionCount("cat"); got != 3 {
 		t.Fatalf("expected all successful inspection calls to count, got %d", got)
 	}
 }
 
-func TestCloudAgentVisionBlocksSameResourceInSameCanvasRevision(t *testing.T) {
+func TestCloudAgentVisionReinspectsSameResourceInSameCanvasRevision(t *testing.T) {
 	s, _, _ := cloudAgentVisionFixture(t)
 	state := cloudAgentRuntime{Request: agentTestRequest()}
 	state.Request.VisionEnabled = true
@@ -382,15 +502,15 @@ func TestCloudAgentVisionBlocksSameResourceInSameCanvasRevision(t *testing.T) {
 	refreshCall := cloudAgentStoryboardCall(t, "canvas_inspect_image", "inspect-refresh", map[string]any{"nodeId": "cat", "refresh": true})
 	second, err := s.prepareCloudAgentImageInspection("user", "agent-canvas", &state, refreshCall)
 	if err != nil {
-		t.Fatalf("repeated visual read should converge to a receipt, got: %v", err)
+		t.Fatalf("repeated visual read should remain available, got: %v", err)
 	}
 	receipt := second.(cloudAgentImageInspection)
-	if receipt.ImageURL != "" || receipt.Receipt["repeat"] != true || receipt.CacheKey != inspection.CacheKey {
-		t.Fatalf("repeated visual read did not return a stable text receipt: %+v", receipt)
+	if receipt.ImageURL == "" || receipt.Receipt["repeat"] != true || receipt.CacheKey != inspection.CacheKey {
+		t.Fatalf("repeated visual read did not attach the image with a repeat receipt: %+v", receipt)
 	}
 }
 
-func TestCloudAgentVisionRepeatReadSoftNudgesRuntime(t *testing.T) {
+func TestCloudAgentVisionRepeatReadDoesNotHideReadTools(t *testing.T) {
 	s, _, _ := cloudAgentVisionFixture(t)
 	req := agentTestRequest()
 	req.VisionEnabled = true
@@ -444,8 +564,19 @@ func TestCloudAgentVisionRepeatReadSoftNudgesRuntime(t *testing.T) {
 		hasGuard = hasGuard || event.Type == "read_loop_guard"
 		hasFailure = hasFailure || event.Type == "run_failed"
 	}
-	if !hasGuard || hasFailure {
-		t.Fatalf("repeat visual read did not preserve a soft guard: %+v", output.Events)
+	if hasGuard || hasFailure {
+		t.Fatalf("repeat visual read unexpectedly triggered a read guard: %+v", output.Events)
+	}
+	stored, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = cloudAgentDecode(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.ReadLoopNudge || len(cloudAgentImageMessageIndexes(state.Canonical.Messages)) != 1 {
+		t.Fatalf("repeat inspection must preserve tools and attach the requested image: %+v", state)
 	}
 }
 

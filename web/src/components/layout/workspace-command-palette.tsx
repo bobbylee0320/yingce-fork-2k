@@ -31,7 +31,7 @@ export function WorkspaceCommandPalette({ open, onClose }: { open: boolean; onCl
         };
         return [
             { id: "home", title: "首页", icon: Home, to: "/" },
-            toolEntry("projects", "/projects"),
+            ...(features.shortDramaEnabled ? [toolEntry("projects", "/projects")] : []),
             toolEntry("canvas", "/canvas"),
             ...(features.taskCenterEnabled ? [toolEntry("tasks", "/tasks")] : []),
             toolEntry("assets", "/assets"),

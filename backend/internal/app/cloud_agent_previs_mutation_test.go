@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 func previsMutationFixture(t *testing.T) (*Service, *model.CanvasProject) {
@@ -74,9 +75,22 @@ func TestCloudAgentPrevisSceneCreateAndPatchKeepSemanticAndCanvasHashesSeparate(
 		"title":              "客厅对白",
 		"templateId":         "dialogue",
 	})
-	createResult, err := applyCloudAgentPrevisMutation(s.repo, "user", canvas.ID, createCall, policy, cloudAgentMutationRecorderForRun(run.ID))
+	captureRecorder, recordedPreview := cloudAgentCaptureMutationPreview()
+	createRecorder := cloudAgentMutationRecorder(func(repo *repository.Repository, input cloudAgentMutationInput) error {
+		if err := cloudAgentMutationRecorderForRun(run.ID)(repo, input); err != nil {
+			return err
+		}
+		return captureRecorder(repo, input)
+	})
+	createResult, err := applyCloudAgentPrevisMutation(s.repo, "user", canvas.ID, createCall, policy, createRecorder)
 	if err != nil {
 		t.Fatal(err)
+	}
+	createResultMap := createResult.(map[string]any)
+	createPreview := createResultMap["preview"].(cloudAgentApprovalPreview)
+	assertCloudAgentAppliedPreview(t, createPreview, createPreview.Items[0].Summary)
+	if recorded, ok := recordedPreview(); !ok || recorded.Description != createPreview.Description || recorded.Status != createPreview.Status {
+		t.Fatalf("previs mutation event preview diverged from tool result: result=%+v recorded=%+v", createPreview, recorded)
 	}
 	createdSceneHash := previsResultString(t, createResult, "snapshotHash")
 	createdCanvasHash := previsResultString(t, createResult, "canvasSnapshotHash")
@@ -117,6 +131,9 @@ func TestCloudAgentPrevisSceneCreateAndPatchKeepSemanticAndCanvasHashesSeparate(
 	if err != nil {
 		t.Fatal(err)
 	}
+	patchResultMap := patchResult.(map[string]any)
+	patchPreview := patchResultMap["preview"].(cloudAgentApprovalPreview)
+	assertCloudAgentAppliedPreview(t, patchPreview, patchPreview.Items[0].Summary)
 	patchedSceneHash := previsResultString(t, patchResult, "snapshotHash")
 	patchedCanvasHash := previsResultString(t, patchResult, "canvasSnapshotHash")
 	if patchedSceneHash == createdSceneHash || patchedCanvasHash == createdCanvasHash {

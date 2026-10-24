@@ -45,11 +45,17 @@ func TestCloudAgentCreatesCharacterCardFromCanvasMedia(t *testing.T) {
 		t.Fatal("preparing the approval created a character asset")
 	}
 
-	result, err := applyCloudAgentCharacterCreate(s.repo, "user", "agent-canvas", cloudAgentStoryboardCall(t, "canvas_create_character", "apply", args), policy)
+	recorder, recordedPreview := cloudAgentCaptureMutationPreview()
+	result, err := applyCloudAgentCharacterCreate(s.repo, "user", "agent-canvas", cloudAgentStoryboardCall(t, "canvas_create_character", "apply", args), policy, recorder)
 	if err != nil {
 		t.Fatal(err)
 	}
 	summary := result.(map[string]any)
+	preview := summary["preview"].(cloudAgentApprovalPreview)
+	assertCloudAgentAppliedPreview(t, preview, preview.Items[0].Summary)
+	if recorded, ok := recordedPreview(); !ok || recorded.Description != preview.Description || recorded.Status != preview.Status {
+		t.Fatalf("character mutation event preview diverged from tool result: result=%+v recorded=%+v", preview, recorded)
+	}
 	if summary["visualStatus"] != "ready" || summary["voiceStatus"] != "ready" {
 		t.Fatalf("card media not bound: %#v", summary)
 	}

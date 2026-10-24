@@ -233,7 +233,8 @@ export function useCanvasNodeEditor({
             const result = await ensureCanvasNodeAsset({ canvasId, domainProjectId, node, source: "canvas-manual" });
             setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item));
             if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
-            message.success(result.linkedToProject ? "已加入项目资产" : "已加入我的素材");
+            if (result.syncPending) message.info(domainProjectId ? "已保存到本地素材，云端项目资产正在自动同步" : "已保存到本地素材，云端素材正在自动同步");
+            else message.success(result.linkedToProject ? "已加入项目资产" : "已加入我的素材");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "素材保存失败");
         }

@@ -12,7 +12,7 @@ func seedTransferChannel(t *testing.T, svc *Service, admin *model.User) string {
 	t.Helper()
 	channel, err := svc.CreateSystemChannel(admin, ChannelRequest{
 		Name: "迁移渠道", BaseURL: "https://8.8.8.8/v1", APIKey: "secret-api-key", SecretKey: "secret-sk",
-		Headers: []OutboundHeader{{Name: "X-Token", Value: "secret-header"}}, ProxyURL: "http://user:secret-proxy@8.8.4.4:8080",
+		Headers: []OutboundHeader{{Name: "X-Token", Value: "secret-header"}}, ProxyURL: stringPtr("http://user:secret-proxy@8.8.4.4:8080"),
 	})
 	if err != nil {
 		t.Fatal(err)

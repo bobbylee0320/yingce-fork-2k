@@ -28,7 +28,7 @@ const targetHandle = batchCellHandle("row-1", "individual");
 const connection = { id: "cell", fromNodeId: source.id, toNodeId: table.id, toHandleId: targetHandle };
 
 describe("batch cell connection geometry", () => {
-    test("saved, snapping and draft paths end at the same cell across two-axis scrolling", () => {
+    test("saved paths end at the cell while drafts follow the pointer across two-axis scrolling", () => {
         for (const scroll of [
             { top: 0, left: 0 },
             { top: 100, left: 30 },
@@ -37,10 +37,11 @@ describe("batch cell connection geometry", () => {
             const cell = batchCellAnchor(table, targetHandle, scroll)!;
             const path = canvasConnectionPath(connection, source, table, 0, 0, undefined, scroll);
             const snap = getConnectionTargetAnchor(table, { nodeId: source.id, handleType: "source" }, targetHandle, 0, scroll);
-            const draft = activeConnectionPath(source, { nodeId: source.id, handleType: "source" }, { x: 0, y: 0 }, table, 0, targetHandle, undefined, scroll);
+            const pointer = { x: cell.x + 30, y: cell.y + 10 };
+            const draft = activeConnectionPath(source, { nodeId: source.id, handleType: "source" }, pointer);
             expect({ x: path.endX, y: path.endY }).toEqual(snap);
             expect(snap).toEqual({ x: cell.x, y: cell.y });
-            expect(draft.endsWith(`${cell.x} ${cell.y}`)).toBe(true);
+            expect(draft.endsWith(`${pointer.x} ${pointer.y}`)).toBe(true);
         }
     });
 
@@ -65,13 +66,32 @@ describe("batch cell connection geometry", () => {
         expect(canvasConnectionPath({ ...connection, toHandleId: batchCellHandle("deleted", "individual") }, source, table).pathD).toBe("");
     });
 
-    test("reverse drag from a cell starts from its actual port; ordinary node ports stay centered", () => {
-        const cell = batchCellAnchor(table, targetHandle)!;
-        const reverse = activeConnectionPath(table, { nodeId: table.id, handleType: "target", handleId: targetHandle }, { x: 0, y: 0 }, source);
-        expect(reverse.startsWith("M 300 100 ")).toBe(true);
-        expect(reverse.endsWith(`${cell.x} ${cell.y}`)).toBe(true);
+    test("reverse drag follows the pointer and retains its fixed cell port across scrolling", () => {
+        for (const scroll of [
+            { top: 0, left: 0 },
+            { top: 100, left: 30 },
+        ]) {
+            const cell = batchCellAnchor(table, targetHandle, scroll)!;
+            const reverse = activeConnectionPath(table, { nodeId: table.id, handleType: "target", handleId: targetHandle }, { x: 150, y: 70 }, 0, scroll);
+            expect(reverse.startsWith("M 150 70 ")).toBe(true);
+            expect(reverse.endsWith(`${cell.x} ${cell.y}`)).toBe(true);
+        }
         const normal = canvasConnectionPath({ ...connection, toHandleId: undefined }, source, { ...source, id: "other", position: { x: 500, y: 50 } });
         expect({ x: normal.endX, y: normal.endY }).toEqual({ x: 500, y: 150 });
+    });
+
+    test("ordinary drafts follow pointer movement inside a node in both directions", () => {
+        for (const pointer of [
+            { x: 600, y: 210 },
+            { x: 700, y: 350 },
+        ]) {
+            const forward = activeConnectionPath(source, { nodeId: source.id, handleType: "source" }, pointer);
+            expect(forward.startsWith("M 300 100 ")).toBe(true);
+            expect(forward.endsWith(`${pointer.x} ${pointer.y}`)).toBe(true);
+            const reverse = activeConnectionPath(source, { nodeId: source.id, handleType: "target" }, pointer);
+            expect(reverse.startsWith(`M ${pointer.x} ${pointer.y} `)).toBe(true);
+            expect(reverse.endsWith("0 100")).toBe(true);
+        }
     });
 });
 
