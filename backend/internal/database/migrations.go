@@ -666,6 +666,62 @@ func normalizeLegacyWorkbenchMigration(tx *gorm.DB) error {
 	return nil
 }
 
+// normalizeLegacyForkMigrationLayout handles the schema ledger written by the
+// deployed fork before it picked up the upstream migration sequence. That
+// layout used versions 58-61 for task receipts, agent memory, protocol length,
+// and feedback; upstream reused those version numbers for the same structures
+// in a different order and then started drama migrations at 61. The tables and
+// data already exist, so only the ledger entries need to be normalized before
+// the new migrations can continue.
+func normalizeLegacyForkMigrationLayout(tx *gorm.DB) error {
+	legacy := []struct {
+		version  int64
+		name     string
+		checksum string
+	}{
+		{58, "task_submission_receipts", "sha256:task-submission-receipts-v58"},
+		{59, "agent_memory_proposals", "sha256:agent-memory-proposals-v59-20261022"},
+		{60, "channel_model_protocol_length", "sha256:channel-model-protocol-length-v60-20261022"},
+		{61, "user_feedbacks", "sha256:user-feedbacks-v61-20261025"},
+	}
+	var rows []schemaMigration
+	if err := tx.Where("version BETWEEN ? AND ?", 58, 61).Order("version asc").Find(&rows).Error; err != nil {
+		return fmt.Errorf("读取旧 fork 迁移记录：%w", err)
+	}
+	if len(rows) != len(legacy) {
+		return nil
+	}
+	for index, row := range rows {
+		want := legacy[index]
+		if row.Version != want.version || row.Name != want.name || row.Checksum != want.checksum {
+			return nil
+		}
+	}
+	// Keep the historical schemas represented once under the upstream semantic
+	// slots. The old task receipt table is retained; its ledger row is metadata
+	// only and does not need a second migration.
+	canonical := make([]migration, 0, 3)
+	for _, version := range []int64{58, 59, 60} {
+		for _, item := range schemaMigrations {
+			if item.version == version {
+				canonical = append(canonical, item)
+				break
+			}
+		}
+	}
+	for index, item := range canonical {
+		if err := tx.Model(&schemaMigration{}).Where("version = ?", 58+index).Updates(map[string]any{
+			"name": item.name, "checksum": item.checksum,
+		}).Error; err != nil {
+			return fmt.Errorf("归一化旧 fork 迁移 %d：%w", 58+index, err)
+		}
+	}
+	if err := tx.Where("version = ?", 61).Delete(&schemaMigration{}).Error; err != nil {
+		return fmt.Errorf("清理旧 fork 迁移 61 记录：%w", err)
+	}
+	return nil
+}
+
 const workbenchToolsMigrationVersion int64 = 54
 
 func migrateSchemaV56(tx *gorm.DB) error {
@@ -694,6 +750,9 @@ func MigrateSchema(db *gorm.DB) error {
 			return fmt.Errorf("初始化数据库迁移记录：%w", err)
 		}
 		if err := normalizeLegacyWorkbenchMigration(tx); err != nil {
+			return err
+		}
+		if err := normalizeLegacyForkMigrationLayout(tx); err != nil {
 			return err
 		}
 		plan, err := migrationsForDatabase(tx)

@@ -144,6 +144,47 @@ func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 	}
 }
 
+func TestMigrateSchemaNormalizesLegacyForkMigrationLayout(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-legacy-fork-layout?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	legacy := []struct {
+		version  int64
+		name     string
+		checksum string
+	}{
+		{58, "task_submission_receipts", "sha256:task-submission-receipts-v58"},
+		{59, "agent_memory_proposals", "sha256:agent-memory-proposals-v59-20261022"},
+		{60, "channel_model_protocol_length", "sha256:channel-model-protocol-length-v60-20261022"},
+		{61, "user_feedbacks", "sha256:user-feedbacks-v61-20261025"},
+	}
+	for _, item := range legacy {
+		if err := db.Model(&schemaMigration{}).Where("version = ?", item.version).Updates(map[string]any{
+			"name": item.name, "checksum": item.checksum,
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatalf("legacy fork migration layout should be normalized: %v", err)
+	}
+	status, err := ReadSchemaStatus(db)
+	if err != nil || !status.Ready || status.Current != CurrentSchemaVersion {
+		t.Fatalf("unexpected normalized schema status: %#v %v", status, err)
+	}
+	var applied schemaMigration
+	if err := db.First(&applied, "version = ?", 61).Error; err != nil {
+		t.Fatal(err)
+	}
+	if applied.Name != "drama_production" {
+		t.Fatalf("migration 61 = %q, want drama_production", applied.Name)
+	}
+}
+
 func TestMigrateSchemaV56UpgradesProviderCatalogV55(t *testing.T) {
 	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-sql-perf-v56?mode=memory&cache=shared"})
 	if err != nil {
