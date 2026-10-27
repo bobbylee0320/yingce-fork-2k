@@ -32,7 +32,10 @@ func (s *Service) requireStoredFileCapacityWhileLocked(userID string, taskType s
 	if !taskTypeProducesStoredFile(taskType) {
 		return nil
 	}
-	storedLimit := gigabytes(policy.Resource.StoredFileGB)
+	storedLimit, err := s.storedFileLimit(userID, policy)
+	if err != nil {
+		return err
+	}
 	if storedLimit <= 0 {
 		return nil
 	}
@@ -45,7 +48,7 @@ func (s *Service) requireStoredFileCapacityWhileLocked(userID string, taskType s
 
 func validateStoredFileCapacity(storedBytes int64, pendingBytes int64, storedLimit int64) error {
 	if storedLimit > 0 && storedBytes+pendingBytes >= storedLimit {
-		return QuotaExceeded(fmt.Sprintf("账号文件容量已达到 %s 上限，请先清理素材后再生成", formatStorageLimit(storedLimit)))
+		return StorageCapacityExceeded(fmt.Sprintf("账号文件容量已达到 %s 上限，请清理素材或购买存储空间后再生成", formatStorageLimit(storedLimit)))
 	}
 	return nil
 }

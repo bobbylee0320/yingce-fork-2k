@@ -11,9 +11,9 @@ import { listRemoteCanvasProjectsPage, type CanvasLibrarySummary } from "@/servi
 import { createCanvasProjectWithRemoteSync } from "@/services/user-data-sync";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { RelativeTime } from "@/components/ui/product/relative-time";
 
 const RECENT_COUNT = 4;
-const updatedFormatter = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 export function CreationRecentCanvases({ onRequireLogin }: { onRequireLogin: () => void }) {
     const { message } = App.useApp();
@@ -112,7 +112,7 @@ export function CreationRecentCanvases({ onRequireLogin }: { onRequireLogin: () 
                                 <span className="creation-canvas-copy">
                                     <strong>{project.title || "未命名画布"}</strong>
                                     <small>
-                                        {project.nodeCount} 个节点 · <time dateTime={project.updatedAt}>{Number.isFinite(Date.parse(project.updatedAt)) ? updatedFormatter.format(new Date(project.updatedAt)) : "时间未知"}</time>
+                                        {project.nodeCount} 个节点 · <RelativeTime value={project.updatedAt} />
                                     </small>
                                 </span>
                             </Link>

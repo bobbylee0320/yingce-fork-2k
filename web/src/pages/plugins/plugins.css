@@ -45,8 +45,8 @@
 .plugins-sidebar-kicker {
     color: var(--workspace-accent);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    font-size: 10px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 600;
     letter-spacing: 0.08em;
 }
 
@@ -54,7 +54,7 @@
     margin-top: var(--space-2);
     color: var(--foreground);
     font-size: var(--fs-title);
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.3;
 }
 
@@ -110,7 +110,6 @@
     border-radius: var(--user-radius-control);
     background: var(--user-surface-muted);
     color: var(--user-ink);
-    font-weight: 600;
     box-shadow: none;
 }
 
@@ -118,7 +117,7 @@
     min-width: 22px;
     border-radius: var(--r-sm);
     background: transparent;
-    padding: 2px 5px;
+    padding: 2px 4px;
     color: color-mix(in srgb, var(--foreground) 36%, transparent);
     font-size: var(--fs-label);
     font-variant-numeric: tabular-nums;
@@ -221,7 +220,7 @@
 .plugin-section-heading h2 {
     color: var(--foreground);
     font-size: var(--fs-body-lg);
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.35;
 }
 
@@ -273,13 +272,15 @@
     flex-direction: column;
     padding: var(--space-3);
     border-radius: var(--plugins-card-radius);
-    border: 1px solid var(--user-border);
+    border: 0;
     background: var(--user-surface);
     transition: background-color var(--motion-state) ease-out;
 }
 
+/* 与其他内容卡同一状态合同：hover 只把表面压深一级，不位移不描边。 */
 .plugin-card:hover,
 .plugin-card:focus-within {
+    background: var(--user-card-hover);
     transform: none;
 }
 
@@ -358,7 +359,7 @@
     overflow: hidden;
     color: var(--foreground);
     font-size: var(--fs-body-lg);
-    font-weight: 650;
+    font-weight: 600;
     line-height: 1.35;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -504,7 +505,7 @@
 .plugin-upload-tabs-nav {
     display: inline-flex;
     align-items: center;
-    padding: 3px;
+    padding: 4px;
     border-radius: var(--r-md);
     background: color-mix(in srgb, var(--foreground) 6%, transparent);
     gap: 2px;
@@ -513,16 +514,16 @@
 .plugin-upload-tab-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 12px;
+    gap: 8px;
+    padding: 4px 12px;
     border: none;
     border-radius: var(--r-sm);
     background: transparent;
     color: color-mix(in srgb, var(--foreground) 60%, transparent);
     font-size: var(--fs-label);
-    font-weight: 550;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.18s ease;
+    transition: color 180ms var(--motion-ease-out), background-color 180ms var(--motion-ease-out), box-shadow 180ms var(--motion-ease-out);
 }
 
 .plugin-upload-tab-btn:hover {
@@ -538,7 +539,7 @@
 .plugin-upload-badge {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     font-size: var(--fs-caption);
     color: color-mix(in srgb, var(--foreground) 50%, transparent);
 }
@@ -547,14 +548,14 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 4px 10px;
+    padding: 4px 8px;
     border: 1px solid var(--workspace-border);
     border-radius: var(--r-sm);
     background: transparent;
     color: color-mix(in srgb, var(--foreground) 75%, transparent);
     font-size: var(--fs-caption);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: color 150ms var(--motion-ease-out), border-color 150ms var(--motion-ease-out);
 }
 
 .plugin-upload-copy-btn:hover {
@@ -577,7 +578,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 8px;
     font-size: var(--fs-label);
     color: color-mix(in srgb, var(--foreground) 45%, transparent);
     margin-top: var(--space-1);
@@ -660,7 +661,7 @@
 .plugin-upload-panel-heading h2 {
     color: var(--foreground);
     font-size: var(--fs-body-lg);
-    font-weight: 700;
+    font-weight: 600;
 }
 
 .plugin-upload-panel-heading p {
@@ -708,7 +709,7 @@
 .plugin-upload-dropzone .ant-upload-text {
     color: var(--foreground);
     font-size: var(--fs-body);
-    font-weight: 650;
+    font-weight: 600;
 }
 
 .plugin-upload-dropzone .ant-upload-hint {
@@ -754,7 +755,7 @@
 .plugin-markdown h2,
 .plugin-markdown h3 {
     color: var(--foreground);
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.35;
 }
 
@@ -801,13 +802,13 @@
 
 .plugin-markdown strong {
     color: var(--foreground);
-    font-weight: 650;
+    font-weight: 600;
 }
 
 .plugin-markdown code {
     border-radius: var(--r-sm);
     background: color-mix(in srgb, var(--foreground) 7%, transparent);
-    padding: 2px 5px;
+    padding: 2px 4px;
     color: color-mix(in srgb, var(--workspace-accent) 78%, var(--foreground));
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     font-size: 0.92em;
@@ -856,7 +857,7 @@
 .plugin-markdown th {
     background: color-mix(in srgb, var(--foreground) 5%, transparent);
     color: var(--foreground);
-    font-weight: 650;
+    font-weight: 600;
     white-space: nowrap;
 }
 
@@ -866,7 +867,7 @@
 
 .plugin-markdown blockquote {
     margin: var(--space-3) 0;
-    border-left: 3px solid var(--workspace-accent);
+    border-radius: var(--r-md);
     background: color-mix(in srgb, var(--workspace-accent) 7%, transparent);
     padding: var(--space-2) var(--space-3);
     color: color-mix(in srgb, var(--foreground) 64%, transparent);
@@ -901,7 +902,7 @@
 .plugin-settings-heading h4 {
     color: var(--foreground);
     font-size: var(--fs-body);
-    font-weight: 650;
+    font-weight: 600;
 }
 
 .plugin-settings-heading p,

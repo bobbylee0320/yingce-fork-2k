@@ -1,32 +1,31 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const css = readFileSync(new URL("../src/styles/workspace-product.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const ICON_BUTTON = "button:has(> svg):not(:has(> span))";
+const MOTION = /(^|[\s;])(transform|translate|scale)\s*:/;
 
-function declarations(selectorSuffix: string) {
-    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((match) => match[1].includes(`.app-product-workspace ${ICON_BUTTON}${selectorSuffix}`));
-    expect(rules.length).toBe(1);
-    return rules[0][2];
+function rules(selectorSuffix: string) {
+    return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((match) => match[1].includes(`.app-product-workspace ${ICON_BUTTON}${selectorSuffix}`));
 }
 
-// 通用图标按钮的悬浮/按压反馈不能写 transform：会覆盖按钮自身用 translateY(-50%) 等实现的居中定位，
-// 例如快速创作历史列表的「更多」按钮、参考素材横向滚动按钮，悬浮时整体下坠半个按钮高度。
-test("图标按钮悬浮上移不覆盖按钮自身的 transform", () => {
-    const hover = declarations(":not(:disabled):hover");
-    expect(hover).not.toMatch(/(^|[\s;])transform\s*:/);
-    expect(hover).toMatch(/translate:\s*0 -1px/);
+// 工作台按钮只做颜色反馈：悬浮上移、按压缩放会让每次点击和下拉触发器“回弹”，
+// 还会覆盖靠 translateY(-50%) 居中的图标按钮定位。
+test("图标按钮悬浮只改颜色，不做位移", () => {
+    const hover = rules(":not(:disabled):hover");
+    expect(hover.length).toBe(1);
+    expect(hover[0][2]).not.toMatch(MOTION);
 });
 
-test("图标按钮按压缩放不覆盖按钮自身的 transform", () => {
-    const active = declarations(":not(:disabled):active");
-    expect(active).not.toMatch(/(^|[\s;])transform\s*:/);
-    expect(active).toMatch(/scale:\s*\.92/);
+test("图标按钮按压不缩放", () => {
+    expect(rules(":not(:disabled):active").length).toBe(0);
+    expect(rules(":not(.ant-btn-icon-only)")[0]?.[2] ?? "").not.toMatch(/\b(translate|scale|transform) var/);
 });
 
-test("图标按钮的 translate/scale 仍有过渡，项目页头仍取消上移", () => {
-    expect(declarations(":not(.ant-btn-icon-only)")).toMatch(/translate var\(--product-fast\)[\s\S]*scale var\(--product-fast\)/);
-    const header = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((match) => match[1].includes(".project-workspace-header button:has(> svg):not(:disabled):hover"));
-    expect(header?.[2] ?? "").toMatch(/translate:\s*none\s*!important/);
-    expect(header?.[2] ?? "").toMatch(/scale:\s*none\s*!important/);
+test("工作台不再挂载全局点击回弹动画", () => {
+    const layout = readFileSync(resolve(import.meta.dir, "../src/layouts/user-layout.tsx"), "utf8");
+    expect(layout).not.toContain("useWorkspaceButtonFeedback");
+    const productActive = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((match) => /\.ant-btn[^{]*:active/.test(match[1]));
+    for (const [, , body] of productActive) expect(body).not.toMatch(MOTION);
 });

@@ -22,7 +22,7 @@ import { previsHorizontalFov } from "@/lib/canvas/previs/previs-optics";
 import { Button, ColorPicker, Dropdown, Input, InputNumber, type MenuProps, Slider } from "antd";
 import { Select } from "@/components/ui/base/select";
 import { Switch } from "@/components/ui/base/switch";
-import { Camera, Check, Copy, Focus, Pause, Play, Plus, Route, Trash2, Video } from "lucide-react";
+import { Camera, Check, Copy, Focus, Pause, Play, Plus, Route, Trash2, TriangleAlert, Video } from "lucide-react";
 import { type ReactElement, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Euler, Quaternion } from "three";
 import { releasePrevisFocusAfterPointer } from "@/lib/canvas/previs/previs-shortcuts";
@@ -76,7 +76,7 @@ function ActorMotionSection({ object, playhead, onUpdate }: { object: PrevisObje
                             <li key={item.id} className={`previs-motion-row ${conflict ? "is-conflict" : ""}`}>
                                 <span className="previs-motion-row__name" title={conflict ? "与同层动作时间重叠，后添加的会覆盖前者" : undefined}>
                                     {previsMotionLabel(item.motion)}
-                                    {conflict ? " ⚠" : ""}
+                                    {conflict ? <TriangleAlert role="img" aria-label="动作时间重叠" className="ml-1 inline-block size-3.5 align-[-0.125em] text-[var(--status-warning)]" /> : null}
                                 </span>
                                 <InputNumber size="small" aria-label="开始秒" min={0} max={60} step={0.1} value={item.start} addonAfter="s" onChange={(start) => patch(item.id, { start: Math.max(0, Number(start) || 0) })} />
                                 <InputNumber size="small" aria-label="时长秒" min={0.2} max={60} step={0.1} value={item.duration} addonAfter="长" onChange={(duration) => patch(item.id, { duration: Math.max(0.2, Number(duration) || 0.2) })} />
@@ -711,7 +711,7 @@ export function BoneRotationFields({ rotation, onChange, onChangeComplete }: { r
     };
     return (
         <Field label="骨骼旋转（局部角度 °）">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
                 {degrees.map((value, index) => (
                     <div key={index} className="grid grid-cols-[18px_minmax(0,1fr)_48px] items-center gap-2">
                         <span className="text-[var(--fs-tiny)] font-medium opacity-65">{["X", "Y", "Z"][index]}</span>
@@ -854,7 +854,7 @@ export function QuickAdd({ label, icon, onClick }: { label: string; icon: ReactE
     return (
         <button
             type="button"
-            className="flex h-8 items-center gap-1.5 border px-2 text-[var(--fs-tiny)] transition hover:bg-black/5 dark:hover:bg-white/5"
+            className="flex h-8 items-center gap-2 border px-2 text-[var(--fs-tiny)] transition hover:bg-black/5 dark:hover:bg-white/5"
             onClick={(event) => {
                 onClick();
                 releasePrevisFocusAfterPointer(event);

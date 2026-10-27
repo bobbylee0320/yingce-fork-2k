@@ -42,7 +42,7 @@
     display: flex;
     width: 100%;
     min-height: calc(var(--canvas-video-control-size) + 8px);
-    padding: 2px 8px 6px;
+    padding: 2px 8px 8px;
     margin: 0;
 }
 
@@ -123,7 +123,7 @@
     box-sizing: border-box;
     width: var(--video-volume-panel-width);
     min-width: var(--video-volume-panel-width);
-    padding: 5px 6px;
+    padding: 4px 8px;
 }
 
 /* The popup is intentionally above the button in the canvas player. Preserve
@@ -396,12 +396,12 @@
 
 .canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-time {
     min-width: max-content;
-    font-size: 18px;
+    font-size: 16px;
     line-height: 1.25;
 }
 
 .canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-chapter-title {
-    font-size: 17px;
+    font-size: 16px;
     line-height: 1.3;
 }
 
@@ -494,7 +494,7 @@
     box-sizing: border-box;
     width: var(--video-volume-panel-width, 42px);
     min-width: var(--video-volume-panel-width, 42px);
-    padding: 5px 6px;
+    padding: 4px 8px;
 }
 
 /* The center group contains only the play button in the compact layout. */

@@ -173,7 +173,7 @@ export function EditorTimelinePanel() {
                         aria-pressed={activeTool === "select"}
                         title="选择工具"
                         onClick={() => setActiveTool("select")}
-                        className={`grid size-6 place-items-center rounded-[6px] transition-colors ${
+                        className={`grid size-6 place-items-center rounded-[8px] transition-colors ${
                             activeTool === "select" ? TOOL_FG_ACTIVE : TOOL_FG_IDLE
                         }`}
                     >
@@ -185,7 +185,7 @@ export function EditorTimelinePanel() {
                         aria-pressed={activeTool === "razor"}
                         title="剃刀工具：点击片段在光标处分割"
                         onClick={() => setActiveTool((tool) => (tool === "razor" ? "select" : "razor"))}
-                        className={`grid size-6 place-items-center rounded-[6px] transition-colors ${
+                        className={`grid size-6 place-items-center rounded-[8px] transition-colors ${
                             activeTool === "razor" ? TOOL_FG_ACTIVE : TOOL_FG_IDLE
                         }`}
                     >
@@ -243,12 +243,12 @@ export function EditorTimelinePanel() {
                     </button>
                     {addMenuOpen && (
                         <>
-                            <div className="fixed inset-0 z-40" onClick={() => setAddMenuOpen(false)} />
-                            <div className="absolute left-0 top-8 z-50 min-w-32 overflow-hidden rounded-lg border border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] py-1 shadow-xl">
+                            <div className="fixed inset-0 z-[var(--z-dropdown)]" onClick={() => setAddMenuOpen(false)} />
+                            <div className="absolute left-0 top-8 z-[calc(var(--z-dropdown)+1)] min-w-32 overflow-hidden rounded-lg border border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] py-1 shadow-xl">
                                 <button
                                     type="button"
                                     onClick={() => handleAddTrack("video")}
-                                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${TOOL_FG_IDLE}`}
+                                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs ${TOOL_FG_IDLE}`}
                                 >
                                     <Film className="size-3.5" />
                                     视频轨道
@@ -256,7 +256,7 @@ export function EditorTimelinePanel() {
                                 <button
                                     type="button"
                                     onClick={() => handleAddTrack("audio")}
-                                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${TOOL_FG_IDLE}`}
+                                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs ${TOOL_FG_IDLE}`}
                                 >
                                     <Music2 className="size-3.5" />
                                     音频轨道
@@ -264,7 +264,7 @@ export function EditorTimelinePanel() {
                                 <button
                                     type="button"
                                     onClick={() => handleAddTrack("subtitle")}
-                                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${TOOL_FG_IDLE}`}
+                                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs ${TOOL_FG_IDLE}`}
                                 >
                                     <Subtitles className="size-3.5" />
                                     字幕轨道
@@ -370,7 +370,7 @@ export function EditorTimelinePanel() {
                             className="pointer-events-none absolute inset-y-0 z-[14] w-px bg-[var(--previs-danger)]"
                             style={{ left: LABEL_COLUMN_PX + playheadMs * pxPerMs }}
                         >
-                            <div className="absolute -left-[5px] top-0 size-2.5 rotate-45 rounded-[2px] bg-[var(--previs-danger)]" />
+                            <div className="absolute -left-[5px] top-0 size-2.5 rotate-45 rounded-[4px] bg-[var(--previs-danger)]" />
                         </div>
                     </div>
                 )}
@@ -381,7 +381,7 @@ export function EditorTimelinePanel() {
                     key={removeBlockedHint.id}
                     role="status"
                     aria-live="polite"
-                    className="pointer-events-none absolute left-1/2 top-12 z-50 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] px-3 py-1.5 text-xs text-[var(--previs-dock-fg-strong)] shadow-lg"
+                    className="pointer-events-none absolute left-1/2 top-12 z-50 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] px-3 py-2 text-xs text-[var(--previs-dock-fg-strong)] shadow-lg"
                 >
                     {removeBlockedHint.text}
                 </div>
@@ -420,7 +420,7 @@ function TimelineRuler({
             {/* 左侧空白列与轨道标签列同宽，保证 0ms 刻度和片段绘制区域使用同一坐标原点。 */}
             <div className="sticky left-0 z-10 w-48 shrink-0 self-stretch border-r border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)]">
                 {/* 当前播放头时码，跟随拖动实时刷新 */}
-                <span className="absolute bottom-1 right-2 text-[10px] tabular-nums text-[var(--previs-danger)]">{formatTimelineTime(playheadMs)}</span>
+                <span className="absolute bottom-1 right-2 text-[var(--fs-label)] tabular-nums text-[var(--previs-danger)]">{formatTimelineTime(playheadMs)}</span>
             </div>
             <div
                 ref={areaRef}
@@ -450,7 +450,7 @@ function TimelineRuler({
                 {ticks.map((t) => (
                     <div key={t} className="absolute bottom-0" style={{ left: t * pxPerMs - 1 }}>
                         <div className="h-2 w-px bg-[var(--previs-sequencer-muted)]" />
-                        <span className="absolute bottom-2.5 left-1 whitespace-nowrap text-[10px] tabular-nums text-[var(--previs-dock-fg)]">{formatTimelineTime(t)}</span>
+                        <span className="absolute bottom-2.5 left-1 whitespace-nowrap text-[var(--fs-label)] tabular-nums text-[var(--previs-dock-fg)]">{formatTimelineTime(t)}</span>
                     </div>
                 ))}
             </div>
@@ -514,7 +514,7 @@ function TrackRow({
                     >
                         {track.label}
                     </div>
-                    <div className="text-[10px] text-[var(--previs-dock-fg)]">{clips.length} 个片段</div>
+                    <div className="text-[var(--fs-label)] text-[var(--previs-dock-fg)]">{clips.length} 个片段</div>
                 </div>
                 <button
                     type="button"

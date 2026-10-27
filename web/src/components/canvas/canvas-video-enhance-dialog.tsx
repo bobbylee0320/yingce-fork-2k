@@ -196,5 +196,5 @@ function OptionRow({ label, children }: { label: string; children: ReactNode }) 
 }
 
 function InfoChip({ children }: { children: ReactNode }) {
-    return <span className="rounded-full bg-surface-tertiary px-2.5 py-1 text-foreground/70">{children}</span>;
+    return <span className="rounded-full bg-surface-tertiary px-2 py-1 text-foreground/70">{children}</span>;
 }

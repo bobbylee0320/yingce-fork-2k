@@ -5,7 +5,7 @@
 }
 .model-editor-modal .ant-modal-header,
 .model-editor-modal .ant-modal-footer {
-    padding: 18px 24px;
+    padding: 16px 24px;
     flex-shrink: 0;
 }
 .model-editor-modal .ant-modal-footer {

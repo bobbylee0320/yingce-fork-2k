@@ -86,7 +86,7 @@ export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(
                                     animate={{ opacity: 1, height: "auto" }}
                                     exit={{ opacity: 0, height: 0 }}
                                     transition={motionTransition}
-                                    className="thin-scrollbar max-h-[min(70vh,520px)] space-y-2 overflow-y-auto px-2.5 pb-2.5"
+                                    className="thin-scrollbar max-h-[min(70vh,520px)] space-y-2 overflow-y-auto px-2 pb-2"
                                 >
                                     {tasks.map((task) => (
                                         <ActiveTaskCard
@@ -151,7 +151,7 @@ function ActiveTaskCard({
                             <span className="truncate text-xs font-semibold" title={formatTaskKind(task)}>
                                 {formatTaskKind(task)}
                             </span>
-                            <span className="shrink-0 rounded-full border px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium" style={{ borderColor: `${statusTone}44`, color: statusTone }}>
+                            <span className="shrink-0 rounded-full border px-2 py-0.5 text-[var(--fs-tiny)] font-medium" style={{ borderColor: `${statusTone}44`, color: statusTone }}>
                                 {generationTaskStatusLabel(task)}
                             </span>
                         </span>

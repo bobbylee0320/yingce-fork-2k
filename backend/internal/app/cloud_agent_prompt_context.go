@@ -18,6 +18,7 @@ const (
 	cloudAgentContextInvalidOutput      cloudAgentRuntimeContextKind = "invalid_output"
 	cloudAgentContextTruncatedArguments cloudAgentRuntimeContextKind = "truncated_tool_arguments"
 	cloudAgentContextReadLoop           cloudAgentRuntimeContextKind = "read_loop"
+	cloudAgentContextOrphanToolResults  cloudAgentRuntimeContextKind = "orphan_tool_results"
 )
 
 // Only serializable fact fields belong here. Behavioral instructions live in

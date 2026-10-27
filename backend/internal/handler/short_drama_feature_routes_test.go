@@ -35,7 +35,7 @@ func TestShortDramaFeatureGateKeepsSharedLibraries(t *testing.T) {
 			}
 			sqlDB.SetMaxOpenConns(1)
 			t.Cleanup(func() { _ = sqlDB.Close() })
-			if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.SystemSetting{},
+			if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.SystemSetting{}, &model.UserStorageGrant{}, &model.UserStorageState{},
 				&model.Asset{}, &model.AssetVersion{}, &model.AssetRepresentation{}, &model.CharacterVoiceBinding{},
 				&model.VoiceProfile{}, &model.StyleProfile{}, &model.Project{}, &model.ProjectAssetLink{},
 				&model.ProjectAssetFolder{}, &model.Resource{}, &model.Shot{}, &model.ShotAssetReference{},

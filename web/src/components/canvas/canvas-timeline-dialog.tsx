@@ -623,7 +623,7 @@ export function CanvasTimelineDialog({
     };
 
     const title = (
-        <div className="flex min-w-0 items-center gap-2.5 pr-10">
+        <div className="flex min-w-0 items-center gap-2 pr-10">
             <span className="grid size-8 shrink-0 place-items-center rounded-lg" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
                 <Clapperboard className="size-4" />
             </span>
@@ -831,8 +831,8 @@ export function CanvasTimelineDialog({
                 ) : null}
 
                 {selectedSubtitleClip ? (
-                    <div className="border-t px-4 py-2.5" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel }}>
-                        <div className="mb-1.5 flex items-center gap-2 text-xs">
+                    <div className="border-t px-4 py-2" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel }}>
+                        <div className="mb-2 flex items-center gap-2 text-xs">
                             <span className="font-semibold" style={{ color: theme.accent.primary }}>
                                 字幕编辑
                             </span>
@@ -845,7 +845,7 @@ export function CanvasTimelineDialog({
                         </div>
                         <div className="flex items-start gap-3">
                             <Input.TextArea autoSize={{ minRows: 1, maxRows: 3 }} value={selectedSubtitleClip.text || ""} placeholder="字幕文本" className="flex-1" onChange={(event) => updateClip(selectedSubtitleClip.id, { text: event.target.value })} />
-                            <div className="flex shrink-0 items-center gap-1.5 text-xs">
+                            <div className="flex shrink-0 items-center gap-2 text-xs">
                                 <InputNumber size="small" min={0} step={100} value={selectedSubtitleClip.startMs} onChange={(startMs) => updateClip(selectedSubtitleClip.id, { startMs: startMs ?? 0 })} className="w-28" />
                                 <span className="opacity-40">→</span>
                                 <InputNumber
@@ -863,8 +863,8 @@ export function CanvasTimelineDialog({
                 ) : null}
 
                 {selectedMediaClip ? (
-                    <div className="border-t px-4 py-2.5" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel }}>
-                        <div className="mb-1.5 flex items-center gap-2 text-xs">
+                    <div className="border-t px-4 py-2" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel }}>
+                        <div className="mb-2 flex items-center gap-2 text-xs">
                             <span className="font-semibold" style={{ color: theme.accent.primary }}>
                                 片段编辑
                             </span>
@@ -913,7 +913,7 @@ export function CanvasTimelineDialog({
                     </div>
                 ) : null}
 
-                <div className="flex items-center gap-3 border-t px-4 py-2.5" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel }}>
+                <div className="flex items-center gap-3 border-t px-4 py-2" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel }}>
                     <span className="text-xs opacity-60">
                         总时长 {formatTimelineTime(durationMs)} · {draft.clips.length} 个片段 · {draft.tracks.length} 条轨道
                     </span>

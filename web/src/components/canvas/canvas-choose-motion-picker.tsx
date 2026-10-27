@@ -86,7 +86,7 @@ export function CanvasChooseMotionPicker({
                     onKeyDown={(event) => event.stopPropagation()}
                 >
                     <div className="canvas-node-toolbar-menu-stack">
-                        <div className="asset-filters border-b border-border/70 px-2 py-1.5">
+                        <div className="asset-filters border-b border-border/70 px-2 py-2">
                             <div className="asset-filter-row">
                                 <div className="col-feed-tabs shrink-0">
                                     {FEED_TABS.map((tab) => (
@@ -102,7 +102,7 @@ export function CanvasChooseMotionPicker({
                                     </button>
                                 ) : null}
                             </div>
-                            <div className="col-tag-filter mt-1.5">
+                            <div className="col-tag-filter mt-2">
                                 {[{ id: "", label: "全部" }, ...SUB_TAB_TAGS.motion].map((chip) => (
                                     <button key={chip.id || "all"} type="button" className={`col-tag-chip${tagFilter === chip.id ? " on" : ""}`} aria-pressed={tagFilter === chip.id} onClick={() => setTagFilter(chip.id)}>
                                         {chip.label}
@@ -110,7 +110,7 @@ export function CanvasChooseMotionPicker({
                                 ))}
                             </div>
                         </div>
-                        <div className="thin-scrollbar grid max-h-80 grid-cols-5 gap-1.5 overflow-y-auto p-2" role="listbox" aria-label="运镜工具">
+                        <div className="thin-scrollbar grid max-h-80 grid-cols-5 gap-2 overflow-y-auto p-2" role="listbox" aria-label="运镜工具">
                             {toolsQuery.isPending ? (
                                 <div className="col-span-5 grid h-24 place-items-center text-foreground/40">
                                     <LoaderCircle className="size-4 animate-spin" />
@@ -190,7 +190,7 @@ function MotionToolCard({ tool, selected, onSelect }: { tool: ToolSummary; selec
             role="option"
             aria-selected={selected}
             title={tool.desc}
-            className={`group flex flex-col gap-1 rounded-[var(--r-md)] border p-1.5 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:outline-none ${selected ? "border-primary/60 ring-1 ring-primary/40" : "border-transparent"}`}
+            className={`group flex flex-col gap-1 rounded-[var(--r-md)] border p-2 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:outline-none ${selected ? "border-primary/60 ring-1 ring-primary/40" : "border-transparent"}`}
             onClick={() => onSelect(tool)}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
@@ -206,7 +206,7 @@ function MotionToolCard({ tool, selected, onSelect }: { tool: ToolSummary; selec
                     </div>
                 )}
             </div>
-            <span className="truncate text-center text-[11px] font-medium leading-4 text-foreground">{tool.label}</span>
+            <span className="truncate text-center text-[var(--fs-label)] font-medium leading-4 text-foreground">{tool.label}</span>
         </button>
     );
 }

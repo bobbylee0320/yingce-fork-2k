@@ -27,10 +27,13 @@ export function unobscuredCanvasArea(size: CanvasViewportSize, overlay?: CanvasB
     return candidates.sort((a, b) => (b.right - b.left) * (b.bottom - b.top) - (a.right - a.left) * (a.bottom - a.top))[0] ?? full;
 }
 
+// 镜头跟随不主动放大用户的视图；只有缩得太小、节点几乎看不清时才推近到可读尺寸。
+const AGENT_FOCUS_READABLE_SCALE = 0.5;
+
 export function viewportForAgentNodes(nodes: CanvasNodeData[], current: ViewportTransform, area: CanvasBounds): ViewportTransform | null {
     const bounds = getCanvasNodesBounds(nodes);
     if (!bounds) return null;
-    const next = viewportForBounds(bounds, { width: area.right - area.left, height: area.bottom - area.top }, { padding: 56, maxScale: current.k });
+    const next = viewportForBounds(bounds, { width: area.right - area.left, height: area.bottom - area.top }, { padding: 56, maxScale: Math.max(current.k, AGENT_FOCUS_READABLE_SCALE) });
     return { ...next, x: next.x + area.left, y: next.y + area.top };
 }
 

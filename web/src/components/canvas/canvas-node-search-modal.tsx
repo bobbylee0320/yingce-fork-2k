@@ -62,11 +62,11 @@ export function CanvasNodeSearchModal({ open, nodes, onClose, onFocus }: { open:
                 aria-controls={RESULT_LIST_ID}
                 aria-activedescendant={results[activeIndex] ? `canvas-node-search-result-${results[activeIndex].id}` : undefined}
             />
-            <div className="mt-2 flex min-h-7 items-center justify-between gap-3 border-b pb-2 text-[11px] tracking-[0.015em] text-foreground/45">
+            <div className="mt-2 flex min-h-7 items-center justify-between gap-3 border-b pb-2 text-[var(--fs-label)] tracking-[0.015em] text-foreground/45">
                 <span className="tabular-nums">{query.trim() ? `找到 ${results.length} 个节点` : `最近编辑 · ${results.length} 个节点`}</span>
                 <span className="hidden sm:inline">↑↓ 选择 · Enter 定位 · Esc 关闭</span>
             </div>
-            <div id={RESULT_LIST_ID} role="listbox" aria-label="画布节点搜索结果" className="thin-scrollbar max-h-[54vh] overflow-y-auto overscroll-contain py-1.5">
+            <div id={RESULT_LIST_ID} role="listbox" aria-label="画布节点搜索结果" className="thin-scrollbar max-h-[54vh] overflow-y-auto overscroll-contain py-2">
                 {results.length ? results.map((node, index) => (
                     <CanvasNodeSearchResult
                         key={node.id}
@@ -92,7 +92,7 @@ const CanvasNodeSearchResult = memo(function CanvasNodeSearchResult({ node, conf
             type="button"
             role="option"
             aria-selected={active}
-            className="grid min-h-14 w-full grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-[var(--r-md)] px-2 py-1.5 text-left transition-[background-color,box-shadow] hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 max-sm:grid-cols-[56px_minmax(0,1fr)]"
+            className="grid min-h-14 w-full grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--r-md)] px-2 py-2 text-left transition-[background-color,box-shadow] hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 max-sm:grid-cols-[56px_minmax(0,1fr)]"
             style={{
                 background: active ? "var(--surface-active)" : undefined,
                 boxShadow: active ? "inset 0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent)" : undefined,
@@ -106,21 +106,21 @@ const CanvasNodeSearchResult = memo(function CanvasNodeSearchResult({ node, conf
             <CanvasNodeSearchThumbnail node={node} />
             <span className="min-w-0 self-center">
                 <span className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 truncate text-[13px] font-medium leading-5 text-foreground" title={node.title}>{node.title || getNodeListLabel(node.type)}</span>
-                    <span className="max-w-[210px] shrink truncate rounded-full bg-foreground/[0.055] px-2 py-0.5 text-[10px] font-medium tracking-[0.02em] text-foreground/50" title={materialSummary}>{materialSummary}</span>
+                    <span className="min-w-0 truncate text-[var(--fs-ui)] font-medium leading-5 text-foreground" title={node.title}>{node.title || getNodeListLabel(node.type)}</span>
+                    <span className="max-w-[210px] shrink truncate rounded-full bg-foreground/[0.055] px-2 py-0.5 text-[var(--fs-label)] font-medium tracking-[0.02em] text-foreground/50" title={materialSummary}>{materialSummary}</span>
                 </span>
-                <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-foreground/45">
+                <span className="mt-0.5 flex min-w-0 items-center gap-2 text-[var(--fs-label)] leading-4 text-foreground/45">
                     {node.metadata?.chapterTitle ? <BookOpenText className="size-3 shrink-0" /> : null}
                     <span className="truncate" title={context}>{context}</span>
                 </span>
-                <span className="mt-1 hidden items-center gap-3 text-[10px] tabular-nums tracking-[0.015em] text-foreground/40 max-sm:flex">
+                <span className="mt-1 hidden items-center gap-3 text-[var(--fs-label)] tabular-nums tracking-[0.015em] text-foreground/40 max-sm:flex">
                     <time dateTime={times.createdAt} title={fullTime(times.createdAt)}>创建 {times.createdLabel}</time>
                     <time dateTime={times.updatedAt} title={fullTime(times.updatedAt)}>编辑 {times.updatedLabel}</time>
                 </span>
             </span>
-            <span className="grid min-w-[112px] gap-0.5 border-l pl-3 text-[10px] tabular-nums tracking-[0.015em] text-foreground/40 max-sm:hidden" style={{ borderColor: "color-mix(in srgb, var(--foreground) 8%, transparent)" }}>
-                <span className="flex items-center gap-1.5"><Clock3 className="size-3" /><span>创建</span><time className="ml-auto" dateTime={times.createdAt} title={fullTime(times.createdAt)}>{times.createdLabel}</time></span>
-                <span className="flex items-center gap-1.5"><Pencil className="size-3" /><span>编辑</span><time className="ml-auto" dateTime={times.updatedAt} title={fullTime(times.updatedAt)}>{times.updatedLabel}</time></span>
+            <span className="grid min-w-[112px] gap-0.5 border-l pl-3 text-[var(--fs-label)] tabular-nums tracking-[0.015em] text-foreground/40 max-sm:hidden" style={{ borderColor: "color-mix(in srgb, var(--foreground) 8%, transparent)" }}>
+                <span className="flex items-center gap-2"><Clock3 className="size-3" /><span>创建</span><time className="ml-auto" dateTime={times.createdAt} title={fullTime(times.createdAt)}>{times.createdLabel}</time></span>
+                <span className="flex items-center gap-2"><Pencil className="size-3" /><span>编辑</span><time className="ml-auto" dateTime={times.updatedAt} title={fullTime(times.updatedAt)}>{times.updatedLabel}</time></span>
             </span>
         </button>
     );
@@ -146,7 +146,7 @@ function CanvasNodeSearchThumbnail({ node }: { node: CanvasNodeData }) {
 
     const textPreview = node.metadata?.previewContent || node.metadata?.composerContent || node.metadata?.prompt || node.metadata?.content;
     if (textPreview && (node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Markdown || node.type === CanvasNodeType.Script)) {
-        return <span aria-hidden="true" className="line-clamp-3 h-11 w-16 overflow-hidden rounded-[var(--r-sm)] border px-1.5 py-1 text-[8px] leading-[11px] text-foreground/55" style={commonStyle}>{textPreview}</span>;
+        return <span aria-hidden="true" className="line-clamp-3 h-11 w-16 overflow-hidden rounded-[var(--r-sm)] border px-2 py-1 text-[var(--fs-label)] leading-[11px] text-foreground/55" style={commonStyle}>{textPreview}</span>;
     }
 
     return (

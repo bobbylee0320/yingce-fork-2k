@@ -261,3 +261,77 @@ func TestCloudAgentPixelImageUsesEffectiveResolution(t *testing.T) {
 		}
 	}
 }
+
+// 审批卡沿用画布尺寸选择器：未声明质量参数的比例模型用 quality=档位选择像素预设。
+// 用户改尺寸后批准不能再被“未声明质量参数”拒绝，提交的像素必须对应所选档位。
+func TestCloudAgentImageApprovalAcceptsTierSelectorForRatioPresets(t *testing.T) {
+	for _, tc := range []struct{ name, size, quality, want string }{
+		{name: "change ratio with tier", size: "9:16", quality: "1k", want: "800x1424"},
+		{name: "same ratio with tier", size: "16:9", quality: "1k", want: "1424x800"},
+		{name: "ratio only", size: "1:1", want: "1024x1024"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, db, a := agentPixelImageFixture(t)
+			profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceOpenAIImage), "ratio-image")
+			// 与线上 qwen 图片线路一致：比例参数、仅 1K 像素预设、不声明质量和分辨率。
+			presets := []ImageSizePreset{}
+			for _, preset := range kemeiSeedreamImagePresets() {
+				if preset.Tier == "1k" {
+					presets = append(presets, preset)
+				}
+			}
+			profile.Image.Size = ImageSizeConfig{Parameter: "aspect_ratio", Values: []string{"1:1", "16:9", "9:16"}, Default: "16:9", Presets: presets}
+			profile.Image.Quality = ImageQualityConfig{Supported: false, Default: "auto"}
+			profile.Image.Resolution = ImageResolutionConfig{Supported: false, Default: "auto"}
+			profile.Image.Parameters = nil
+			if err := db.Model(&model.ChannelModel{}).Where("id = ?", "pixel-cm").Updates(map[string]any{"protocol": model.ChannelInterfaceOpenAIImage, "capability_config_json": mustEncodeModelCapabilityConfig(t, profile)}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Where("channel_model_id = ?", "pixel-cm").Delete(&model.ChannelModelPriceTier{}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Create(&model.ChannelModelPriceTier{ID: "ratio-any", ChannelModelID: "pixel-cm", SelectorKey: "{}", SelectorJSON: "{}", BillingMode: "fixed_request", UnitPriceMicrocredits: 100, PriceConfigured: true, Enabled: true}).Error; err != nil {
+				t.Fatal(err)
+			}
+			a.Size = "16:9"
+			run, _ := agentMediaRun(t, s, a, "request_approval")
+			if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+				t.Fatal(err)
+			}
+			run, state := agentInterjectionState(t, s, run.ID)
+			if state.Approval == nil {
+				t.Fatalf("agent proposal did not reach approval: %s %s", run.Status, run.FailureMessage)
+			}
+			settings := CloudAgentMediaSettings{ChannelID: "channel", ChannelModelKey: "pixel-image", Size: tc.size, Quality: tc.quality}
+			if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, "approve", "", &settings); err != nil {
+				t.Fatalf("edited size rejected: %v", err)
+			}
+			if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+				t.Fatal(err)
+			}
+			run, state = agentInterjectionState(t, s, run.ID)
+			if state.MediaTaskID == "" {
+				t.Fatalf("edited approval did not submit: status=%s failure=%s", run.Status, run.FailureMessage)
+			}
+			task, err := s.repo.TaskForUser("user", state.MediaTaskID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var input canvasGenerationInput
+			if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+				t.Fatal(err)
+			}
+			if input.Config.Size != tc.want || input.Config.Quality != "" {
+				t.Fatalf("submitted wrong spec: size=%q quality=%q", input.Config.Size, input.Config.Quality)
+			}
+		})
+	}
+	// 模型真实声明的质量参数仍然严格核对，不能被档位约定绕过。
+	input := map[string]any{"mode": "image", "config": map[string]any{"quality": "high"}, "capabilityOptions": map[string]any{"quality": "high"}}
+	if cloudAgentImageTierSelectorConsumed(map[string]any{"quality": "2k"}, input) {
+		t.Fatal("declared quality treated as tier selector")
+	}
+	if cloudAgentImageTierSelectorConsumed(map[string]any{"quality": "ultra"}, map[string]any{"mode": "image", "config": map[string]any{}}) {
+		t.Fatal("non-tier quality treated as tier selector")
+	}
+}

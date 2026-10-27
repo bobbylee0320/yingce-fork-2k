@@ -33,7 +33,7 @@ export const statusBadgeTone = cva("shrink-0 rounded-full", {
     },
 });
 
-export const statusBadgeVariants = cva("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full", {
+export const statusBadgeVariants = cva("inline-flex items-center gap-2 whitespace-nowrap rounded-full", {
     variants: {
         variant: {
             outline: "bg-secondary/60",
@@ -41,7 +41,7 @@ export const statusBadgeVariants = cva("inline-flex items-center gap-1.5 whitesp
         },
         size: {
             default: "px-2 py-0.5 text-caption",
-            sm: "gap-1 px-1.5 py-px text-tiny",
+            sm: "gap-1 px-2 py-px text-tiny",
         },
     },
     defaultVariants: {

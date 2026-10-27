@@ -71,7 +71,7 @@ func TestRepairRuntimeUnansweredCallsLeavesCompleteTranscriptUntouched(t *testin
 		{"role": "toolResult", "toolCallId": "call-state", "content": "{}"},
 		{"role": "assistant", "content": []interface{}{map[string]interface{}{"type": "text", "text": "读完了"}}},
 	}
-	repaired := repairRuntimeUnansweredCalls(messages)
+	repaired := repairRuntimeUnansweredCalls(messages, nil)
 	if len(repaired) != len(messages) || &repaired[0] != &messages[0] {
 		t.Fatalf("complete transcript was rewritten: %#v", repaired)
 	}
@@ -87,7 +87,7 @@ func TestRepairRuntimeUnansweredCallsHandlesSeveralTurns(t *testing.T) {
 		{"role": "toolResult", "toolCallId": "b1", "content": "{}"},
 		{"role": "assistant", "content": []interface{}{runtimeToolCallPart("c1", "ask_user")}},
 	}
-	repaired := repairRuntimeUnansweredCalls(messages)
+	repaired := repairRuntimeUnansweredCalls(messages, nil)
 	if err := validateRuntimeMessagesForModel(repaired); err != nil {
 		t.Fatalf("repaired transcript invalid: %v", err)
 	}
@@ -127,5 +127,52 @@ func TestCloudAgentPiCanonicalRepairsServerHistoryWhenItIsAuthoritative(t *testi
 	}
 	if len(canonical.Messages) != 6 || stringField(canonical.Messages[4], "tool_call_id") != "call-b" {
 		t.Fatalf("missing result not inserted after existing results: %#v", canonical.Messages)
+	}
+}
+
+func TestCloudAgentPiCanonicalRestoresCommittedReceiptBeforeResume(t *testing.T) {
+	for _, receipt := range []string{
+		`{"taskSubmitted":true,"taskId":"paid-task","nodeId":"video-node"}`,
+		`{"error":"时长不支持","field":"durationSeconds","taskSubmitted":false}`,
+	} {
+		t.Run(receipt, func(t *testing.T) {
+			messages := []map[string]any{
+				{"role": "user", "content": "生成视频"},
+				{"role": "assistant", "content": []any{runtimeToolCallPart("media", "generate_media")}},
+				{"role": "toolResult", "toolCallId": "media", "content": receipt},
+			}
+			existing, err := canonicalFromRuntimeMessages(messages, nil, "Agent system prompt")
+			if err != nil {
+				t.Fatal(err)
+			}
+			// 工具事务已保存，运行时未收到回执就断线；恢复提示使两份历史长度相等。
+			resumed := append([]map[string]any{}, messages[:2]...)
+			resumed = append(resumed, map[string]any{"role": "user", "content": "继续处理刚才的结果"})
+			canonical, err := cloudAgentPiCanonicalForModelRequest(resumed, existing)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateCanonicalAgentHistory(&canonical, false); err != nil {
+				t.Fatal(err)
+			}
+			if len(canonical.Messages) != 5 || stringField(canonical.Messages[3], "content") != receipt || stringField(canonical.Messages[4], "content") != "继续处理刚才的结果" {
+				t.Fatalf("lost committed receipt or resume prompt: %#v", canonical.Messages)
+			}
+			if len(resumed) != 3 || stringField(existing.Messages[3], "content") != receipt {
+				t.Fatal("reconciliation mutated input history")
+			}
+		})
+	}
+}
+
+func TestRepairRuntimeUnansweredCallsPreservesDeliveredResult(t *testing.T) {
+	messages := []map[string]any{
+		{"role": "assistant", "content": []any{runtimeToolCallPart("call", "generate_media")}},
+		{"role": "toolResult", "toolCallId": "call", "content": `{"taskSubmitted":true}`},
+	}
+	server := []map[string]any{{"role": "tool", "tool_call_id": "call", "content": cloudAgentPiUnansweredCallText}}
+	repaired := repairRuntimeUnansweredCalls(messages, server)
+	if &repaired[0] != &messages[0] || stringField(repaired[1], "content") != `{"taskSubmitted":true}` {
+		t.Fatal("older server placeholder replaced a delivered result")
 	}
 }

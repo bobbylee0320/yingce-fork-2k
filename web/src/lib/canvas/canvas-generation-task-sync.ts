@@ -213,7 +213,7 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
                   : await uploadImage(resultDataUrl);
         const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
         if (extraction) extraction = { ...extraction, sourceResultStorageKey: uploaded.storageKey !== sourceResultStorageKey ? sourceResultStorageKey : undefined };
-        const directEdit = ["mask", "annotation", "text"].includes(generationTaskInput(task)?.metadata?.edit || "");
+        const directEdit = ["mask", "region", "annotation", "text"].includes(generationTaskInput(task)?.metadata?.edit || "");
         const requestedImageSize = directEdit ? null : imageNodeSizeFromRatio(node.metadata?.size || "auto");
         // 未报告文件像素时只用请求比例安排预览；不能把预览宽高冒充原图像素。
         const displaySize = uploaded.width > 0 && uploaded.height > 0 ? fitImageNodeSize(uploaded.width, uploaded.height) : requestedImageSize || fitImageNodeSize(node.width || imageConfig.width, node.height || imageConfig.height);
@@ -443,6 +443,8 @@ async function buildGenerationTaskNodeResults(node: CanvasNodeData, task: Genera
                 versionOfNodeId: undefined,
                 versionLabel: undefined,
                 versionPrimary: undefined,
+                mediaVersions: undefined,
+                currentMediaVersionId: undefined,
                 agentGenerationContinuation: undefined,
             },
         });

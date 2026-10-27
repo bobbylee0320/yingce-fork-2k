@@ -46,6 +46,15 @@ func (r *Repository) CloudAgentConversationRuns(userID, conversationID string, a
 	return rows, err
 }
 
+// CloudAgentConversationLatest 只读控制列，供客户端按 revision 判断对话是否变化，不载入事件。
+func (r *Repository) CloudAgentConversationLatest(userID, conversationID string) (model.CloudAgentExecution, error) {
+	var row model.CloudAgentExecution
+	err := r.db.Model(&model.CloudAgentExecution{}).Select(cloudAgentHistoryColumns).
+		Where("user_id = ? AND "+cloudAgentConversationIdentity+" = ?", userID, conversationID).
+		Order("created_at DESC, id DESC").First(&row).Error
+	return row, err
+}
+
 func (r *Repository) CloudAgentConversationExists(userID, conversationID string) (bool, error) {
 	var row model.CloudAgentExecution
 	err := r.db.Select("id").Where("user_id = ? AND "+cloudAgentConversationIdentity+" = ?", userID, conversationID).First(&row).Error

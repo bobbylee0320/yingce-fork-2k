@@ -21,6 +21,10 @@ func QuotaExceeded(message string) *AppError {
 	return kernel.QuotaExceeded(message)
 }
 
+func StorageCapacityExceeded(message string) *AppError {
+	return kernel.StorageCapacityExceeded(message)
+}
+
 // AuthError 保留为兼容别名。
 type AuthError = AppError
 

@@ -24,6 +24,8 @@ export type CanvasNodeActionContextValue = {
     /** 全景节点导出截图：上传 dataUrl 并在源节点右侧创建派生图片节点。 */
     addPanoramaCaptureNode?: (node: CanvasNodeData, dataUrl: string, title: string) => Promise<void> | void;
     extractLayerMaterials?: (node: CanvasNodeData) => Promise<void> | void;
+    /** 打开媒体版本面板；只读页面不提供，节点角标随之隐藏。 */
+    openMediaVersions?: (node: CanvasNodeData) => void;
 };
 
 export const CanvasNodeActionContext = createContext<CanvasNodeActionContextValue>({});

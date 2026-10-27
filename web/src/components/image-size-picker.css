@@ -2,7 +2,7 @@
 .image-size-presets-editor {
     display: grid;
     min-width: 0;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
 }
 .image-size-label {
@@ -13,7 +13,7 @@
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: minmax(0, 1fr);
-    gap: 6px;
+    gap: 8px;
 }
 .image-size-tiers button,
 .image-size-ratios button,
@@ -43,14 +43,14 @@
 .image-size-ratios {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
-    gap: 6px;
+    gap: 8px;
 }
 .image-size-ratios button {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 8px;
     min-height: 62px;
     font-size: var(--fs-label);
     overflow-wrap: anywhere;
@@ -59,11 +59,11 @@
     display: block;
     width: 26px;
     border: 1px solid currentColor;
-    border-radius: 2px;
+    border-radius: 4px;
     opacity: 0.6;
 }
 .image-size-output {
-    padding: 9px 10px;
+    padding: 8px 8px;
     border-radius: var(--r-md);
     background: var(--library-surface);
     font-size: var(--fs-label);
@@ -86,12 +86,12 @@
 .image-size-custom summary {
     cursor: pointer;
     font-size: var(--fs-label);
-    padding: 6px 0;
+    padding: 8px 0;
 }
 .image-size-custom-input {
     display: flex;
     min-width: 0;
-    gap: 6px;
+    gap: 8px;
     margin-top: 8px;
 }
 .image-size-custom-input input {
@@ -157,7 +157,7 @@
 }
 .image-size-preset-body {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
 }
 .image-size-preset-options {
@@ -174,7 +174,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     color: var(--muted-foreground);
     font-size: var(--fs-label);
     font-variant-numeric: tabular-nums;
@@ -193,7 +193,7 @@
     padding-inline: 0;
 }
 .image-size-preset-dimensions .ant-input-number-input {
-    padding-inline: 6px;
+    padding-inline: 8px;
     color: var(--foreground);
     font-size: var(--fs-body);
     font-weight: 500;
@@ -212,8 +212,8 @@
 }
 .image-size-preset-option {
     display: grid;
-    gap: 5px;
-    padding: 10px 8px;
+    gap: 4px;
+    padding: 8px 8px;
     text-align: left;
     overflow-wrap: anywhere;
 }
@@ -260,8 +260,8 @@
 }
 .image-size-defaults {
     display: grid;
-    gap: 10px;
-    padding-block: 6px;
+    gap: 8px;
+    padding-block: 8px;
     min-width: 0;
 }
 .image-size-defaults-heading {
@@ -274,10 +274,10 @@
 .image-size-default-options {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
 }
 .image-size-default-options button {
-    padding: 7px 10px;
+    padding: 8px 8px;
     background: var(--library-surface);
     overflow-wrap: anywhere;
 }
@@ -302,7 +302,7 @@
 @container image-presets (max-width: 560px) {
     .image-size-preset-group {
         grid-template-columns: minmax(0, 1fr);
-        gap: 10px;
+        gap: 8px;
         padding: 12px;
     }
     .image-size-preset-heading {

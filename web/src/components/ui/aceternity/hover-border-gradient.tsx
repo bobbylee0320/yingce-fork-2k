@@ -47,7 +47,7 @@ export function HoverBorderGradient<T extends ElementType = "button">({ children
     return (
         <Tag
             {...(props as any)}
-            className={cn("relative flex h-min w-full content-center items-center overflow-hidden bg-[var(--user-surface)] p-px transition-colors duration-500", containerClassName)}
+            className={cn("relative flex h-min w-full content-center items-center overflow-hidden bg-[var(--user-surface)] p-px transition-colors duration-[250ms]", containerClassName)}
             onMouseEnter={(event: MouseEvent<HTMLElement>) => {
                 setHovered(true);
                 (onMouseEnter as any)?.(event);

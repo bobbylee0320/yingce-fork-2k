@@ -10,7 +10,7 @@ function LiveReasoningCount() {
         const timer = window.setInterval(() => setElapsedSeconds((Date.now() - startedAt) / 1000), 250);
         return () => window.clearInterval(timer);
     }, []);
-    return <span className="ml-0.5 font-mono text-[11px] tabular-nums opacity-80">{elapsedSeconds.toFixed(1)}s</span>;
+    return <span className="ml-0.5 font-mono text-[var(--fs-label)] tabular-nums opacity-80">{elapsedSeconds.toFixed(1)}s</span>;
 }
 export function MessageReasoning({ reasoning, isStreaming }: { reasoning: string; isStreaming: boolean }) {
     const [open, setOpen] = useState(isStreaming);
@@ -40,7 +40,7 @@ export function MessageReasoning({ reasoning, isStreaming }: { reasoning: string
     }, [durationSeconds, isStreaming, open]);
 
     return <div className="mb-2 text-xs text-foreground/55">
-        <button type="button" className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 transition-colors hover:bg-surface-hover hover:text-foreground" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <button type="button" className="inline-flex min-h-8 items-center gap-2 rounded-md px-2 transition-colors hover:bg-surface-hover hover:text-foreground" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
             <Sparkles className="size-3.5" />
             <span>{isStreaming ? <>正在思考<LiveReasoningCount /></> : durationSeconds ? <>已思考 <span className="font-mono tabular-nums">{durationSeconds}</span> 秒</> : "思考过程"}</span>
             <ChevronDown className={`size-3.5 transition-transform${open ? " rotate-180" : ""}`} />

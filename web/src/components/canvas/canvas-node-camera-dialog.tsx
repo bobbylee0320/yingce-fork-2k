@@ -194,7 +194,7 @@ const HoverTip = memo(({ title, description, useCase, children }: HoverTipProps)
                 createPortal(
                     <div
                         ref={tipRef}
-                        className="pointer-events-none fixed z-[20000] w-[260px] rounded-lg border p-3 shadow-2xl"
+                        className="pointer-events-none fixed z-[var(--z-max)] w-[260px] rounded-lg border p-3 shadow-2xl"
                         style={{
                             left: `${coords.left}px`,
                             top: coords.placement === "bottom" ? `${coords.top}px` : undefined,
@@ -204,9 +204,9 @@ const HoverTip = memo(({ title, description, useCase, children }: HoverTipProps)
                             color: theme.node.text,
                         }}
                     >
-                        <div className="text-[12px] font-semibold">{title}</div>
-                        {description && <div className="mt-1 text-[11px] leading-5" style={{ color: theme.node.muted }}>{description}</div>}
-                        {useCase && <div className="mt-2 rounded px-2 py-1 text-[10px]" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>使用场景：{useCase}</div>}
+                        <div className="text-[var(--fs-caption)] font-semibold">{title}</div>
+                        {description && <div className="mt-1 text-[var(--fs-label)] leading-5" style={{ color: theme.node.muted }}>{description}</div>}
+                        {useCase && <div className="mt-2 rounded px-2 py-1 text-[var(--fs-label)]" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>使用场景：{useCase}</div>}
                     </div>,
                     document.body,
                 )}
@@ -232,7 +232,7 @@ interface CardColumnProps {
 
 const CardColumn = memo(({ label, tooltipTitle, tooltipDesc, tooltipUseCase, visual, cornerBadge, captionBelow, onPrev, onNext, theme }: CardColumnProps) => {
     return (
-        <div className="flex min-w-0 flex-col items-center gap-1.5">
+        <div className="flex min-w-0 flex-col items-center gap-2">
             <button
                 type="button"
                 onClick={onPrev}
@@ -244,13 +244,13 @@ const CardColumn = memo(({ label, tooltipTitle, tooltipDesc, tooltipUseCase, vis
             </button>
             <HoverTip title={tooltipTitle} description={tooltipDesc} useCase={tooltipUseCase}>
                 <div
-                    className="relative flex h-[clamp(116px,14vw,140px)] w-full min-w-0 cursor-help flex-col items-center justify-between rounded-xl border px-2.5 pt-2 pb-2 transition-colors"
+                    className="relative flex h-[clamp(116px,14vw,140px)] w-full min-w-0 cursor-help flex-col items-center justify-between rounded-xl border px-2 pt-2 pb-2 transition-colors"
                     style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover }}
                 >
-                    <span className="text-[11px] font-medium tracking-wide" style={{ color: theme.node.muted }}>{label}</span>
+                    <span className="text-[var(--fs-label)] font-medium tracking-wide" style={{ color: theme.node.muted }}>{label}</span>
                     <div className="flex w-full flex-1 items-center justify-center">{visual}</div>
                     {cornerBadge && (
-                        <div className="absolute right-1.5 top-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium" style={{ background: "rgba(0,0,0,.5)", color: "rgba(255,255,255,.8)" }}>
+                        <div className="absolute right-1.5 top-1.5 rounded-md px-2 py-0.5 text-[var(--fs-label)] font-medium" style={{ background: "rgba(0,0,0,.5)", color: "rgba(255,255,255,.8)" }}>
                             {cornerBadge}
                         </div>
                     )}
@@ -265,7 +265,7 @@ const CardColumn = memo(({ label, tooltipTitle, tooltipDesc, tooltipUseCase, vis
             >
                 <ChevronDown className="size-3.5" />
             </button>
-            <span className="max-w-full truncate text-center text-[11px] leading-4" style={{ color: theme.node.muted }}>{captionBelow}</span>
+            <span className="max-w-full truncate text-center text-[var(--fs-label)] leading-4" style={{ color: theme.node.muted }}>{captionBelow}</span>
         </div>
     );
 });
@@ -341,7 +341,7 @@ export function CanvasNodeCameraPanel({
         setAperture(defaultCameraControl.aperture);
     };
 
-    const secondaryButtonClass = "flex h-8 items-center gap-1.5 rounded-[var(--dock-item-radius)] px-3 text-[var(--fs-label)] font-medium transition hover:bg-black/5 dark:hover:bg-white/10";
+    const secondaryButtonClass = "flex h-8 items-center gap-2 rounded-[var(--dock-item-radius)] px-3 text-[var(--fs-label)] font-medium transition hover:bg-black/5 dark:hover:bg-white/10";
 
     return (
         <SpotlightSurface
@@ -358,7 +358,7 @@ export function CanvasNodeCameraPanel({
             <div className="flex items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: theme.toolbar.border }}>
                 <div className="min-w-0">
                     <div className="text-sm font-semibold tracking-tight">摄像机控制</div>
-                    <div className="mt-0.5 truncate text-[11px]" style={{ color: theme.node.muted }}>为当前图片生成设置镜头、焦距与光圈</div>
+                    <div className="mt-0.5 truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }}>为当前图片生成设置镜头、焦距与光圈</div>
                 </div>
                 <button
                     type="button"
@@ -373,7 +373,7 @@ export function CanvasNodeCameraPanel({
             </div>
 
             {/* 相机、镜头、焦距和光圈均来自已注册枚举，确认时由纯函数再次强校验。 */}
-            <div className="grid grid-cols-2 gap-2.5 px-4 py-4 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 px-4 py-4 sm:grid-cols-4">
                 <CardColumn
                     label="相机"
                     tooltipTitle={`${currentCamera.zhName} · ${currentCamera.label}`}
@@ -403,8 +403,8 @@ export function CanvasNodeCameraPanel({
                     tooltipUseCase={focalMeta?.useCase}
                     visual={
                         <div className="flex flex-col items-center">
-                            <div className="text-[40px] font-light leading-none">{focal}</div>
-                            <div className="mt-1 text-[10px] tracking-wider" style={{ color: theme.node.faint }}>mm</div>
+                            <div className="text-[var(--fs-display)] font-normal leading-none">{focal}</div>
+                            <div className="mt-1 text-[var(--fs-label)] tracking-wider" style={{ color: theme.node.faint }}>mm</div>
                         </div>
                     }
                     cornerBadge={focalMeta?.zhName}
@@ -420,10 +420,10 @@ export function CanvasNodeCameraPanel({
                     tooltipUseCase={apertureMeta?.useCase}
                     visual={
                         <div className="flex flex-col items-center">
-                            <div className="text-[30px] font-light leading-none">
-                                <span className="text-[18px]" style={{ color: theme.node.faint }}>f/</span>{aperture}
+                            <div className="text-[var(--fs-display)] font-normal leading-none">
+                                <span className="text-[var(--fs-heading)]" style={{ color: theme.node.faint }}>f/</span>{aperture}
                             </div>
-                            <div className="mt-1 text-[10px] tracking-wider" style={{ color: theme.node.faint }}>aperture</div>
+                            <div className="mt-1 text-[var(--fs-label)] tracking-wider" style={{ color: theme.node.faint }}>aperture</div>
                         </div>
                     }
                     cornerBadge={apertureMeta?.zhName}
@@ -435,8 +435,8 @@ export function CanvasNodeCameraPanel({
             </div>
 
             {/* 当前有效配置摘要。 */}
-            <div className="mx-4 mb-3 rounded-lg border px-3.5 py-2.5" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover }}>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.node.faint }}>当前配置</div>
+            <div className="mx-4 mb-3 rounded-lg border px-4 py-2" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover }}>
+                <div className="text-[var(--fs-label)] uppercase tracking-wide" style={{ color: theme.node.faint }}>当前配置</div>
                 <div className="mt-0.5 text-xs">{summary}</div>
             </div>
 
@@ -475,7 +475,7 @@ export function CanvasNodeCameraPanel({
                     type="button"
                     whileHover={reducedMotion ? undefined : { y: -1 }}
                     whileTap={reducedMotion ? undefined : { scale: 0.97 }}
-                    className="canvas-node-camera-apply flex h-7 items-center gap-1.5 rounded-[var(--dock-item-radius)] border px-3.5 text-[var(--fs-label)] font-semibold transition-colors"
+                    className="canvas-node-camera-apply flex h-7 items-center gap-2 rounded-[var(--dock-item-radius)] border px-4 text-[var(--fs-label)] font-semibold transition-colors"
                     style={{ borderColor: theme.node.activeStroke, color: theme.node.activeStroke, background: "transparent" }}
                     onClick={handleApply}
                 >

@@ -19,8 +19,8 @@ import { cn } from "@/lib/utils";
 export const emptyStateVariants = cva("flex flex-col items-center justify-center text-center", {
     variants: {
         size: {
-            default: "gap-2.5 py-12",
-            compact: "gap-1.5 py-6",
+            default: "gap-2 py-12",
+            compact: "gap-2 py-6",
         },
     },
     defaultVariants: {

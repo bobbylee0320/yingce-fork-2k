@@ -266,6 +266,9 @@ export function useCanvasSelectionController({
         const currentViewport = viewportRef.current;
         pendingNodeDragRef.current = { x: (event.clientX - dragRef.current.startX) / currentViewport.k, y: (event.clientY - dragRef.current.startY) / currentViewport.k };
         if (Math.abs(event.clientX - dragRef.current.startX) > 3 || Math.abs(event.clientY - dragRef.current.startY) > 3) dragRef.current.hasMoved = true;
+        // 点击时指针常有 1~3px 抖动；未越过拖动阈值前不预览位移，否则对齐吸附会把节点
+        // 临时拉偏最多 7px，松手判定为点击后又弹回原位，表现为“点一下左右抖动”。
+        if (!dragRef.current.hasMoved) return;
         if (dragFrameRef.current) return;
         dragFrameRef.current = requestAnimationFrame(() => {
             const aligned = calculateNodeAlignment(alignmentContextRef.current, pendingNodeDragRef.current, 7 / viewportRef.current.k);

@@ -2,12 +2,12 @@
     display: flex;
     min-height: 0;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
 }
 .admin-workbench-tools-toolbar {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 .admin-workbench-tools-toolbar .ant-select {
     width: 150px;
@@ -18,7 +18,7 @@
 .admin-workbench-tool-main {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     text-align: left;
 }
 .admin-workbench-tool-icon {
@@ -28,7 +28,7 @@
     flex: none;
     place-items: center;
     overflow: hidden;
-    border-radius: 10px;
+    border-radius: 8px;
     background: var(--admin-layer-2);
     color: var(--admin-text-muted);
 }
@@ -52,7 +52,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
 }
 .admin-workbench-tools-empty {
     padding: 48px 16px;
@@ -93,7 +93,7 @@
     flex: none;
     place-items: center;
     overflow: hidden;
-    border-radius: 10px;
+    border-radius: 8px;
     background: var(--admin-layer-2);
     color: var(--admin-text-muted);
 }
@@ -125,7 +125,7 @@
 .admin-workbench-section-title {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     margin: 20px 0 12px;
     padding-top: 16px;
     border-top: 1px solid var(--admin-border-subtle);
@@ -136,8 +136,8 @@
 .admin-workbench-contract-toolbar {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 8px;
 }
 .admin-workbench-contract-toolbar .ant-input-number,
 .admin-workbench-contract-toolbar .ant-input {
@@ -146,12 +146,12 @@
 .admin-workbench-slots {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
 }
 .admin-workbench-slot-row {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     padding: 12px;
     border-radius: 12px;
     background: var(--admin-layer-2);
@@ -178,14 +178,14 @@
 .admin-workbench-example-previews {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
     margin-bottom: 12px;
 }
 .admin-workbench-example-previews > div {
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
 }
 .admin-workbench-example-previews img,
 .admin-workbench-example-previews video {
@@ -196,7 +196,7 @@
     background: var(--admin-layer-2);
 }
 .admin-workbench-presets {
-    margin-top: 22px;
+    margin-top: 24px;
     padding-top: 16px;
     border-top: 1px solid var(--admin-border-subtle);
 }
@@ -211,7 +211,7 @@
     display: block;
 }
 .admin-workbench-presets > header small {
-    margin-top: 3px;
+    margin-top: 4px;
     color: var(--admin-text-muted);
 }
 .admin-workbench-preset-row {
@@ -219,9 +219,9 @@
     grid-template-columns: minmax(120px, 1fr) minmax(140px, 1fr) minmax(240px, 2fr) auto auto;
     align-items: start;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     padding: 12px;
-    border-radius: 10px;
+    border-radius: 8px;
     background: var(--admin-layer-2);
 }
 @media (max-width: 900px) {

@@ -50,7 +50,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
             <div className={className} style={{ color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
                 {showTitle ? <div className="text-sm font-semibold">视频设置</div> : null}
                 {configuredResolutions.length ? <SettingGroup title="分辨率" color={theme.node.muted}>
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-3 gap-2">
                         {configuredResolutions.map((item) => (
 							<OptionPill key={item.value} selected={isVideoResolutionMatch(resolution, item.value)} disabled={!hasPriceTierForVideoSelection(priceTiers, item.value, Number(seconds))} theme={theme} onClick={() => onConfigChange("vquality", item.value)}>
                                 {item.label}
@@ -59,17 +59,17 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </div>
                 </SettingGroup> : null}
                 {sizeSupported ? <SettingGroup title="尺寸" color={theme.node.muted}>
-                    {dimensions ? <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
+                    {dimensions ? <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                         <DimensionValue prefix="W" value={dimensions.width} theme={theme} />
                         <span className="text-xs opacity-45">×</span>
                         <DimensionValue prefix="H" value={dimensions.height} theme={theme} />
                     </div> : null}
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-3 gap-2">
                         {profile.ratios.map((value) => (
                             <button
                                 key={value}
                                 type="button"
-                                className="flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md px-1 text-[var(--fs-label)] font-medium transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
+                                className="flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md px-1 text-[var(--fs-label)] font-medium transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                                 style={{ background: ratio === value ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => onConfigChange("size", value)}
@@ -96,7 +96,7 @@ function JiMengVideoSettingsPanel({ config, profile, priceTiers, onConfigChange,
             <div className={className} style={{ color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
                 {showTitle ? <div className="text-sm font-semibold">视频设置</div> : null}
                 <SettingGroup title="比例" color={theme.node.muted}>
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-3 gap-2">
                 {profile.ratios.map((value) => <OptionPill key={value} selected={config.size === value} theme={theme} onClick={() => onConfigChange("size", value)}>{value}</OptionPill>)}
                     </div>
                 </SettingGroup>
@@ -123,7 +123,7 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
             <div className={className} style={{ color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
                 {showTitle ? <div className="text-sm font-semibold">视频设置</div> : null}
                 <SettingGroup title="分辨率" color={theme.node.muted}>
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-3 gap-2">
                         {profile.resolutions.map((value) => {
                             const item = { value, label: value.toUpperCase() };
 							const disabled = (item.value === "1080p" && isSeedanceFastModel(model)) || !hasPriceTierForVideoSelection(priceTiers, item.value, duration);
@@ -137,7 +137,7 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
                     {isSeedanceFastModel(model) ? <div className="text-[var(--fs-tiny)] leading-4 opacity-55">fast 模型自动使用 720P</div> : null}
                 </SettingGroup>
                 <SettingGroup title="比例" color={theme.node.muted}>
-                    <div className="grid grid-cols-4 gap-1.5">
+                    <div className="grid grid-cols-4 gap-2">
                         {profile.ratios.map((value) => {
                             const item = { value, label: value };
                             return (
@@ -213,7 +213,7 @@ function OptionPill({ selected, disabled = false, theme, onClick, children }: { 
 
 function SettingGroup({ title, color, children }: { title: string; color: string; children: ReactNode }) {
     return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
             <div className="text-[var(--fs-tiny)] font-semibold" style={{ color }}>
                 {title}
             </div>
@@ -257,7 +257,7 @@ function DurationInput({ value, min, max, theme, onChange }: { value: number; mi
                 }}
                 onMouseDown={(event) => event.stopPropagation()}
             />
-            <span className="shrink-0 px-1.5" style={{ color: theme.node.muted }}>秒</span>
+            <span className="shrink-0 px-2" style={{ color: theme.node.muted }}>秒</span>
         </label>
     );
 }
@@ -272,7 +272,7 @@ function VideoDurationControl({ profile, value, theme, disabled, onChange }: { p
     }
 
     const options = videoDurationOptions(profile);
-    return <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(options.length, 4)}, minmax(0, 1fr))` }}>
+    return <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(options.length, 4)}, minmax(0, 1fr))` }}>
 		{options.map((option) => <OptionPill key={option} selected={normalizedNumber(value) === option} disabled={disabled?.(option)} theme={theme} onClick={() => onChange(option)}>{option}s</OptionPill>)}
     </div>;
 }
@@ -299,7 +299,7 @@ function normalizeTierResolution(value: string) {
 }
 
 function DurationRangeControl({ value, min, max, step, theme, onChange }: { value: number; min: number; max: number; step: number; theme: CanvasTheme; onChange: (value: number) => void }) {
-    return <div className="space-y-1.5">
+    return <div className="space-y-2">
         <div className="flex min-w-0 items-center gap-2">
             <input
                 type="range"
@@ -338,7 +338,7 @@ function SizePreview({ width, height, color }: { width: number; height: number; 
     const longSide = Math.max(width, height);
     const previewWidth = Math.max(7, Math.round((width / longSide) * 16));
     const previewHeight = Math.max(7, Math.round((height / longSide) * 16));
-    return <span className="shrink-0 rounded-[2px] border" style={{ width: previewWidth, height: previewHeight, borderColor: color }} />;
+    return <span className="shrink-0 rounded-[4px] border" style={{ width: previewWidth, height: previewHeight, borderColor: color }} />;
 }
 
 function ratioPreview(ratio: string) {

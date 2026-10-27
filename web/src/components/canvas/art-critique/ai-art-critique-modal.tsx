@@ -284,7 +284,7 @@ export function AiArtCritiqueModal({ node, upstreamNodes, open, onClose, onUpdat
             flush
         >
             <div className="flex h-[min(820px,calc(100dvh-32px))] max-h-[calc(100dvh-32px)] min-h-0 flex-col overflow-hidden rounded-[var(--r-lg)]" style={{ background: theme.canvas.background, color: theme.node.text }}>
-                <header className="flex shrink-0 items-center gap-3 border-b px-5 py-3.5" style={{ borderColor: theme.node.edge }}>
+                <header className="flex shrink-0 items-center gap-3 border-b px-5 py-4" style={{ borderColor: theme.node.edge }}>
                     <span className="grid size-9 shrink-0 place-items-center rounded-[var(--r-md)]" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
                         <Sparkles className="size-4" aria-hidden="true" />
                     </span>

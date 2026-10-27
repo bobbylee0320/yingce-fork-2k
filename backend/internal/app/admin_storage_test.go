@@ -25,7 +25,7 @@ func TestAdminStorageListStatsAndPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&model.User{}, &model.Resource{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.SystemSetting{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Resource{}, &model.ResourceOffloadJob{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.SystemSetting{}); err != nil {
 		t.Fatal(err)
 	}
 	users := []model.User{

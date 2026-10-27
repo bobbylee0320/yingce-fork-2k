@@ -82,6 +82,27 @@ export function canvasNodeMentionToken(nodeId: string) {
     return `@[node:${nodeId}]`;
 }
 
+const ASSET_MENTION_PATTERN = /@\[asset:([^\]]+)\]/g;
+const ASSET_ID_MAX_BYTES = 80;
+
+/**
+ * 提示词里 @[asset:ID] 只存在于字符串中，不会出现在 assetId 字段里。
+ * 打开画布和生成前据此按需拉取素材；超出服务端 ID 约束的令牌直接忽略，交给生成校验报错。
+ */
+export function canvasPromptAssetMentionIds(text: string): string[] {
+    if (!text.includes("@[asset:")) return [];
+    const encoder = new TextEncoder();
+    const ids = [...text.matchAll(ASSET_MENTION_PATTERN)]
+        .map((match) => match[1])
+        .filter((id) => id === id.trim() && encoder.encode(id).length <= ASSET_ID_MAX_BYTES);
+    return [...new Set(ids)];
+}
+
+/** 只有角色卡能作为生成引用；场景、道具设定尚无图片或角色合同。旧记录缺分类时与服务端一致按角色处理。 */
+export function isCharacterEntityAsset(asset: Asset) {
+    return asset.kind === "entity" && (asset.category ?? "character") === "character";
+}
+
 /** 这些工具类型的标签在提示词中唯一，再次选择时直接覆盖旧标签而不是追加。 */
 const UNIQUE_TOOL_MENTION_TYPES = new Set(["style", "nine_grid", "effect"]);
 
@@ -337,7 +358,8 @@ function compactRemovedCanvasMentionPrompt(value: string) {
 
 export function buildAssetMentionReferences(assets: Asset[]): CanvasResourceReference[] {
     return assets.flatMap((asset): CanvasResourceReference[] => {
-        if (asset.kind === "model") return [];
+        // @ 菜单只列生成阶段能解析的素材，否则选中后必然报“没有对应的资源”。
+        if (asset.kind === "model" || (asset.kind === "entity" && !isCharacterEntityAsset(asset))) return [];
         const kind: CanvasResourceKind = asset.kind === "entity" ? "character" : asset.kind;
         const previewUrl = asset.kind === "image" ? asset.data.dataUrl : asset.kind === "video" ? canvasVideoAssetPreviewUrl(asset.data.url, asset.coverUrl) : asset.coverUrl;
         const text = asset.kind === "text" ? asset.data.content : undefined;

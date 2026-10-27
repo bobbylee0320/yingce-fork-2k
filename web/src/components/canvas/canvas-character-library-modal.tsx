@@ -112,7 +112,7 @@ export function CanvasCharacterLibraryModal({
                                 </span>
                                 <span className="min-w-0">
                                     <span className="block truncate text-sm font-medium">{item.asset.title}</span>
-                                    <span className="mt-1 flex gap-2 text-[11px] text-foreground/50">
+                                    <span className="mt-1 flex gap-2 text-[var(--fs-label)] text-foreground/50">
                                         <span className="inline-flex items-center gap-1">
                                             <ImageIcon className="size-3" />
                                             {item.character.visualStatus === "ready" ? "形象就绪" : "形象待完善"}

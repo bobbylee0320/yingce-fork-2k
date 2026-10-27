@@ -36,21 +36,24 @@
     font-size: var(--fs-caption);
 }
 
+/* 与 .canvas-node-composer-header-action.is-labeled 同尺寸（28px / 14px 图标 / 11px 文字）。 */
 .canvas-node-tool-controls-inline .canvas-node-fixed-chip {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: var(--space-1);
-    height: var(--space-6);
+    height: calc(var(--space-6) + var(--space-1));
     max-width: 7rem;
-    padding: 0 var(--space-1);
+    padding: 0 var(--space-2);
     border-radius: var(--r-md);
-    font-size: var(--fs-tiny);
+    font-size: var(--fs-label);
     font-weight: 500;
+    line-height: 1;
 }
 .canvas-node-tool-controls-inline .canvas-node-fixed-chip > svg {
-    width: 12px;
-    height: 12px;
+    width: var(--space-4);
+    height: var(--space-4);
+    flex-shrink: 0;
 }
 .canvas-workspace-shell,
 .canvas-workspace-panel {
@@ -73,6 +76,9 @@
     .canvas-main-with-workspace:has(> .canvas-project-sidebar) .canvas-workspace-zoom-controls {
         left: var(--canvas-inset-x);
     }
+    .canvas-main-with-workspace:has(> .canvas-project-sidebar) .canvas-asset-view-layer {
+        left: 0;
+    }
 }
 .canvas-main-with-workspace .canvas-editor-shell {
     z-index: 0;
@@ -85,6 +91,10 @@
 }
 .canvas-main-with-workspace .canvas-workspace-zoom-controls {
     left: calc(var(--canvas-workspace-inset) + var(--canvas-inset-x));
+}
+/* 资产视图与顶栏同样让出左侧工作区轨道，轨道里的节点、素材库和任务仍可使用。 */
+.canvas-main-with-workspace .canvas-asset-view-layer {
+    left: var(--canvas-workspace-inset);
 }
 .canvas-workspace-shell {
     position: absolute;
@@ -99,10 +109,17 @@
     border: 1px solid color-mix(in srgb, currentColor 8%, transparent);
     border-radius: var(--r-2xl);
     background: var(--canvas-workspace-material);
-    box-shadow: 0 10px 28px color-mix(in srgb, black 16%, transparent);
+    box-shadow:
+        0 1px 2px color-mix(in srgb, color-mix(in srgb, black 16%, transparent) 50%, transparent),
+        0 10px 28px color-mix(in srgb, black 16%, transparent);
     contain: layout paint;
     -webkit-backdrop-filter: blur(22px) saturate(140%);
     backdrop-filter: blur(22px) saturate(140%);
+}
+/* 未展开工作区时左侧菜单按内容收缩为浮动竖条，不再占满整列遮挡画布。 */
+.canvas-workspace-shell:not(.is-expanded) {
+    bottom: auto;
+    max-height: calc(100% - var(--space-4));
 }
 .canvas-workspace-panel {
     background: linear-gradient(145deg, var(--canvas-workspace-sheen), transparent 55%), var(--canvas-workspace-material);
@@ -144,7 +161,7 @@
     flex-shrink: 0;
     width: calc(var(--space-16) - var(--space-2));
     min-height: 0;
-    padding: var(--space-2) var(--space-1-half);
+    padding: var(--space-2) var(--space-2);
     gap: var(--space-1);
     overflow-y: auto;
     border: 0;
@@ -164,23 +181,38 @@
     padding: 0;
     position: relative;
     display: grid;
-    grid-template-rows: 20px auto;
+    grid-template-rows: var(--space-5) auto;
     place-items: center;
     justify-items: center;
     align-content: center;
-    gap: 2px;
-    min-height: 46px;
+    gap: var(--space-1);
+    min-height: var(--space-12);
     width: 100%;
     flex-shrink: 0;
     border-radius: var(--r-lg);
-    font-size: var(--fs-nano);
+    /* 7px 标签在常规缩放下难以辨认，提升到 10px，56px 栏宽仍能容纳两字标签。 */
+    font-size: var(--fs-tiny);
     line-height: 1;
     font-weight: 500;
     text-align: center;
-    color: color-mix(in srgb, currentColor 72%, transparent);
+    color: color-mix(in srgb, currentColor 64%, transparent);
     transition:
         background-color var(--motion-instant) ease-out,
         color var(--motion-instant) ease-out;
+}
+.canvas-workspace-rail-divider {
+    display: block;
+    flex-shrink: 0;
+    width: var(--space-6);
+    height: var(--stroke-1);
+    margin: var(--space-1) auto;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.canvas-workspace-rail-divider.is-end {
+    margin-top: auto;
+}
+.canvas-workspace-shell:not(.is-expanded) .canvas-workspace-rail-divider.is-end {
+    margin-top: var(--space-1);
 }
 .canvas-workspace-rail .canvas-workspace-rail-button > span {
     display: block;
@@ -196,15 +228,13 @@
 }
 .canvas-workspace-rail .canvas-workspace-rail-button:hover {
     background: var(--dock-command-hover);
-    color: currentColor;
+    color: inherit;
 }
 .canvas-workspace-rail .canvas-workspace-rail-button[aria-pressed="true"] {
     background: var(--dock-command-active);
     color: var(--dock-command-active-text);
 }
-.canvas-workspace-rail .canvas-workspace-rail-toggle {
-    margin-top: auto;
-}
+
 .canvas-workspace-rail :focus:not([data-input-modality="keyboard"]) {
     outline: none;
 }

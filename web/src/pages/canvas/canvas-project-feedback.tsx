@@ -56,7 +56,7 @@ export function CanvasUploadStatusToast({ status, theme }: { status: CanvasUploa
                     {status.step}/{status.total}
                 </span>
             </div>
-            <div className="mt-4 flex items-center gap-1.5">
+            <div className="mt-4 flex items-center gap-2">
                 {Array.from({ length: status.total }, (_, index) => (
                     <motion.span
                         key={index}
@@ -92,7 +92,7 @@ export function CanvasMergeStatusToast({ progress, theme }: { progress: MergeVid
             className="pointer-events-none absolute right-4 top-[164px] z-[var(--z-panel-floating)] w-[292px] overflow-hidden rounded-2xl border px-3 py-3 shadow-lg backdrop-blur-xl"
             style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
         >
-            <div className="flex items-start gap-2.5">
+            <div className="flex items-start gap-2">
                 <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-xl" style={{ background: theme.toolbar.itemHover, color: theme.node.activeStroke }}>
                     <LoaderCircle className="size-4 animate-spin" />
                 </span>
@@ -121,7 +121,7 @@ export function CanvasOperationChangeToast({ change, theme, onView, onUndo, onCl
             className="absolute bottom-20 right-4 z-[var(--z-panel-floating)] w-[var(--panel-width-compact)] rounded-lg border p-3 shadow-lg backdrop-blur-xl"
             style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
         >
-            <div className="flex items-start gap-2.5">
+            <div className="flex items-start gap-2">
                 <span className="grid size-8 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover, color: theme.node.activeStroke }}>
                     <span className="size-2 rounded-full bg-current" />
                 </span>
@@ -135,14 +135,14 @@ export function CanvasOperationChangeToast({ change, theme, onView, onUndo, onCl
                     <X className="size-3.5" />
                 </button>
             </div>
-            <div className="mt-3 flex items-center justify-end gap-1.5">
+            <div className="mt-3 flex items-center justify-end gap-2">
                 {change.nodeIds.length ? (
-                    <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onView}>
+                    <button type="button" className="inline-flex h-8 items-center gap-2 rounded-md px-2 text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onView}>
                         <Eye className="size-3.5" />
                         查看本次改动
                     </button>
                 ) : null}
-                <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onUndo}>
+                <button type="button" className="inline-flex h-8 items-center gap-2 rounded-md px-2 text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onUndo}>
                     <RotateCcw className="size-3.5" />
                     撤销本次操作
                 </button>

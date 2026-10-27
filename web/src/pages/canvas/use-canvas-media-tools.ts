@@ -3,7 +3,8 @@ import { App } from "antd";
 import { nanoid } from "nanoid";
 
 import type { CanvasImageCropRect } from "@/components/canvas/canvas-node-crop-dialog";
-import type { CanvasImageMaskEditPayload } from "@/components/canvas/canvas-node-mask-edit-dialog";
+import type { CanvasImageRegionEditPayload } from "@/components/canvas/canvas-node-region-edit-dialog";
+import { buildRegionEditPrompt } from "@/lib/canvas/image-region-edit";
 import type { CanvasImageEditPayload } from "@/components/canvas/canvas-node-image-edit-dialog";
 import type { CanvasImageLayerDecompositionPayload } from "@/components/canvas/canvas-node-layer-decomposition-dialog";
 import { buildCanvasTextEditPrompt, type CanvasImageTextEditPayload, type CanvasImageTextLine } from "@/components/canvas/canvas-node-text-edit-dialog";
@@ -62,7 +63,7 @@ import { resolveImageRequestSize } from "@/services/api/image-validation";
 import { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-task-state";
 import type { GenerationTask } from "@/services/api/task-center";
 
-function normalizeMaskEditQuality(quality: string | undefined, size: string | undefined) {
+function normalizeRegionEditQuality(quality: string | undefined, size: string | undefined) {
     const value = String(quality || "").trim().toLowerCase();
     if (value && value !== "auto" && value !== "any") return value;
     const match = String(size || "").trim().toLowerCase().match(/^(\d+)x(\d+)$/);
@@ -132,7 +133,7 @@ export function useCanvasMediaTools({
     const [cropNodeId, setCropNodeId] = useState<string | null>(null);
     const [annotationNodeId, setAnnotationNodeId] = useState<string | null>(null);
     const [annotationEditNodeId, setAnnotationEditNodeId] = useState<string | null>(null);
-    const [maskEditNodeId, setMaskEditNodeId] = useState<string | null>(null);
+    const [regionEditNodeId, setRegionEditNodeId] = useState<string | null>(null);
     const [imageEditNodeId, setImageEditNodeId] = useState<string | null>(null);
     const [imageEditPreset, setImageEditPreset] = useState<"remove-background" | null>(null);
     const [layerDecompositionNodeId, setLayerDecompositionNodeId] = useState<string | null>(null);
@@ -695,22 +696,30 @@ export function useCanvasMediaTools({
         }
     }, [message, persistMediaNodes, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds]);
 
-    const maskEditImageNode = useCallback(async (node: CanvasNodeData, payload: CanvasImageMaskEditPayload) => {
+    const regionEditImageNode = useCallback(async (node: CanvasNodeData, payload: CanvasImageRegionEditPayload) => {
         if (!node.metadata?.content) return;
         const baseGenerationConfig = buildGenerationConfig(effectiveConfig, node, "image");
         const selectedModel = payload.generationConfig?.imageModel || payload.generationConfig?.model || baseGenerationConfig.model;
         const modelDefaults = defaultImageParamsForModel(baseGenerationConfig, selectedModel);
         const selectedImageProfile = modelCapabilityConfigFor(baseGenerationConfig, selectedModel).image;
-        if (!selectedImageProfile?.references.maskSupported) {
-            message.error("当前图片模型不支持局部重绘蒙版，请选择支持蒙版编辑的模型");
+        const maxReferenceImages = selectedImageProfile?.references.maxImages ?? 0;
+        if (!payload.regions.length) {
+            message.warning("请先框选需要修改的区域");
             return;
         }
+        if (maxReferenceImages < 1) {
+            message.error("当前图片模型不支持参考图编辑，请选择支持图片编辑的模型");
+            return;
+        }
+        // 能收两张参考图时附带编号标注图；支持蒙版时再用蒙版锁住框外像素。坐标始终写进提示词，单图模型也能定位。
+        const useAnnotatedReference = maxReferenceImages >= 2;
+        const useMask = Boolean(selectedImageProfile?.references.maskSupported);
         const generationConfig = {
             ...baseGenerationConfig,
             ...payload.generationConfig,
             model: selectedModel,
             imageModel: selectedModel,
-            quality: normalizeMaskEditQuality(payload.generationConfig?.quality || node.metadata?.quality || baseGenerationConfig.quality || modelDefaults.quality, payload.generationConfig?.size || node.metadata?.size || baseGenerationConfig.size || modelDefaults.size),
+            quality: normalizeRegionEditQuality(payload.generationConfig?.quality || node.metadata?.quality || baseGenerationConfig.quality || modelDefaults.quality, payload.generationConfig?.size || node.metadata?.size || baseGenerationConfig.size || modelDefaults.size),
             count: String(payload.generationConfig?.count || 1),
             // 原图像素尺寸不是模型的输出尺寸合同；非高级设置时使用模型默认尺寸，避免把节点尺寸误发给上游。
             size: payload.generationConfig?.size || node.metadata?.size || modelDefaults.size,
@@ -720,15 +729,18 @@ export function useCanvasMediaTools({
             return;
         }
         const userPrompt = payload.prompt.trim();
-        const prompt = `只修改蒙版透明区域，其他区域保持不变。${userPrompt}`;
+        const prompt = buildRegionEditPrompt({ prompt: userPrompt, regions: payload.regions, size: payload.size, annotatedReference: useAnnotatedReference, mask: useMask });
         const source = nodeReferenceImage(node);
         if (!source) return;
+        const annotatedReference = { id: `${node.id}-regions`, name: "regions.jpg", type: "image/jpeg", dataUrl: payload.annotatedDataUrl };
+        const referenceImages = useAnnotatedReference ? [source, annotatedReference] : [source];
+        const mask = useMask ? { id: `${node.id}-mask`, name: "mask.png", type: "image/png", dataUrl: payload.maskDataUrl } : undefined;
         const styleExecution = resolveImageEditStyle(node, prompt, generationConfig);
         if (!styleExecution) return;
         const { prompt: effectivePrompt, metadata: styleMetadata } = styleExecution;
         const requestedCount = Math.max(1, Number(generationConfig.count) || 1);
-        const generationMetadata = buildImageGenerationMetadata("edit", generationConfig, requestedCount, [source]);
-        setMaskEditNodeId(null);
+        const generationMetadata = buildImageGenerationMetadata("edit", generationConfig, requestedCount, referenceImages);
+        setRegionEditNodeId(null);
         const rootId = nanoid();
         const childIds = requestedCount > 1 ? Array.from({ length: requestedCount }, () => nanoid()) : [];
         const targetIds = requestedCount > 1 ? childIds : [rootId];
@@ -738,7 +750,7 @@ export function useCanvasMediaTools({
         const rootNode: CanvasNodeData = {
             id: rootId,
             type: CanvasNodeType.Image,
-            title: userPrompt.slice(0, 32) || "局部编辑结果",
+            title: userPrompt.slice(0, 32) || "区域编辑结果",
             position: rootPosition,
             width: node.width,
             height: node.height,
@@ -756,7 +768,7 @@ export function useCanvasMediaTools({
         const childNodes: CanvasNodeData[] = childIds.map((id, index) => ({
             id,
             type: CanvasNodeType.Image,
-            title: `${userPrompt.slice(0, 28) || "局部编辑结果"} · ${index + 1}`,
+            title: `${userPrompt.slice(0, 28) || "区域编辑结果"} · ${index + 1}`,
             position: imageGenerationChildPosition(rootNode.position, rootNode.width, imageSize, index),
             width: node.width,
             height: node.height,
@@ -787,10 +799,10 @@ export function useCanvasMediaTools({
                         mode: "image",
                         prompt: effectivePrompt,
                         config: { ...generationConfig, count: "1" },
-                        referenceImages: [source],
-                        mask: { id: `${node.id}-mask`, name: "mask.png", type: "image/png", dataUrl: payload.maskDataUrl },
+                        referenceImages,
+                        mask,
                         signal: controller.signal,
-                        metadata: { sourceNodeId: node.id, edit: "mask", ...styleMetadata },
+                        metadata: { sourceNodeId: node.id, edit: "region", regionCount: payload.regions.length, annotationReference: useAnnotatedReference || undefined, ...styleMetadata },
                     }, {
                         bindTask: (task) => {
                             taskIds.set(targetId, task.id);
@@ -828,7 +840,7 @@ export function useCanvasMediaTools({
             const hasSuccess = targets.some((item) => item.metadata?.status === NODE_STATUS_SUCCESS && item.metadata.assetId);
             const failureCount = targets.filter((item) => item.metadata?.status === NODE_STATUS_ERROR).length;
             if (failureCount > 0) {
-                message.error(hasSuccess ? "部分局部编辑失败" : representativeError || "局部编辑失败");
+                message.error(hasSuccess ? "部分区域编辑失败" : representativeError || "区域编辑失败");
             } else if (representativeError && targets.length) {
                 message.warning(representativeError);
             }
@@ -1760,8 +1772,8 @@ export function useCanvasMediaTools({
         addPanoramaCaptureNode,
         panoramaConfigNodeId,
         setPanoramaConfigNodeId,
-        maskEditImageNode,
-        maskEditNodeId,
+        regionEditImageNode,
+        regionEditNodeId,
         imageEditNodeId,
         imageEditPreset,
         layerDecompositionNodeId,
@@ -1782,7 +1794,7 @@ export function useCanvasMediaTools({
         setAnnotationNodeId,
         setAnnotationEditNodeId,
         setCropNodeId,
-        setMaskEditNodeId,
+        setRegionEditNodeId,
         setImageEditNodeId,
         setImageEditPreset,
         openBackgroundRemoval,

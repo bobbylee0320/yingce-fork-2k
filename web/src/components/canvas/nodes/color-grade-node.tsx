@@ -52,13 +52,13 @@ export function ColorGradeNodeContent({ node, theme }: ColorGradeNodeContentProp
             <div className="relative min-h-0 flex-1">
                 <img src={url} alt={node.title || "调色"} className="h-full w-full object-contain" draggable={false} style={{ filter: colorGradeCssFilter(grade) }} />
                 {isNeutralColorGrade(grade) ? (
-                    <span className="pointer-events-none absolute left-2 top-2 rounded bg-black/55 px-1.5 py-0.5 text-white" style={{ fontSize: "var(--fs-tiny)" }}>未调色</span>
+                    <span className="pointer-events-none absolute left-2 top-2 rounded bg-black/55 px-2 py-0.5 text-white" style={{ fontSize: "var(--fs-tiny)" }}>未调色</span>
                 ) : null}
             </div>
 
             {editable ? (
                 <div
-                    className="shrink-0 border-t px-2 py-1.5"
+                    className="shrink-0 border-t px-2 py-2"
                     data-canvas-no-zoom
                     style={{ borderColor: theme.node.stroke }}
                     onWheel={(event) => event.stopPropagation()}

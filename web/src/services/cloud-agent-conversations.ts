@@ -21,7 +21,7 @@ export type CloudAgentConversationMessage = {
     meta?: string;
     detail?: unknown;
     attachments?: Array<{ id: string; name: string; url: string }>;
-    interjection?: "sent" | "undelivered";
+    interjection?: "sent" | "delivered" | "undelivered" | "withdrawn";
 };
 
 export type CloudAgentConversation = {

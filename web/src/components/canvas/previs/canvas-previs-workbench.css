@@ -140,7 +140,7 @@
 .previs-desk-header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     height: var(--pd-topbar);
     min-width: 0;
     /* 窄屏下横向滚动（overflow-x-auto），避免右侧保存/回写按钮被裁掉。 */
@@ -168,8 +168,8 @@
     border-radius: var(--pd-r-sm);
     background: linear-gradient(135deg, oklch(0.92 0.04 240), oklch(0.98 0.01 240));
     color: var(--pd-s0);
-    font-weight: 900;
-    font-size: 15px;
+    font-weight: 600;
+    font-size: 14px;
     letter-spacing: -0.02em;
     flex: 0 0 40px;
     box-shadow: 0 1px 3px oklch(0 0 0 / 0.3);
@@ -177,7 +177,7 @@
 
 .previs-desk-brand-title {
     font-size: var(--pd-ts-lg);
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: -0.01em;
     color: var(--pd-t0);
 }
@@ -244,8 +244,8 @@
     background: transparent;
     color: var(--pd-t2);
     transition:
-        background 120ms var(--pd-ease-snap),
-        color 120ms var(--pd-ease-snap);
+        background 150ms var(--pd-ease-snap),
+        color 150ms var(--pd-ease-snap);
 }
 .previs-desk-history button:hover:not(:disabled),
 .previs-desk-icon-button:hover:not(:disabled) {
@@ -277,9 +277,9 @@
     letter-spacing: 0.01em;
     white-space: nowrap;
     transition:
-        background 140ms var(--pd-ease-snap),
-        border-color 140ms var(--pd-ease-snap),
-        color 140ms var(--pd-ease-snap);
+        background 150ms var(--pd-ease-snap),
+        border-color 150ms var(--pd-ease-snap),
+        color 150ms var(--pd-ease-snap);
 }
 .previs-mode-switch-button:hover {
     background: var(--pd-s3);
@@ -290,7 +290,6 @@
     background: var(--pd-s4);
     border-color: var(--pd-b2);
     color: var(--pd-t0);
-    font-weight: 600;
 }
 .previs-mode-switch-button:focus-visible {
     outline: 2px solid var(--pd-a0);
@@ -306,7 +305,7 @@
 }
 .previs-desk-tab {
     height: 28px;
-    padding: 0 11px;
+    padding: 0 12px;
     border: 1px solid transparent;
     border-radius: var(--pd-r-sm);
     background: transparent;
@@ -314,9 +313,9 @@
     font-size: var(--pd-ts-sm);
     font-weight: 500;
     transition:
-        background 120ms var(--pd-ease-snap),
-        color 120ms var(--pd-ease-snap),
-        border-color 120ms var(--pd-ease-snap);
+        background 150ms var(--pd-ease-snap),
+        color 150ms var(--pd-ease-snap),
+        border-color 150ms var(--pd-ease-snap);
 }
 .previs-desk-tab:hover {
     color: var(--pd-t0);
@@ -347,13 +346,13 @@
 .previs-view-toolbar-inline .previs-view-toolbar-button {
     height: 24px;
     min-width: 40px;
-    padding: 0 9px;
-    border-radius: calc(var(--pd-r-sm) - 1px);
+    padding: 0 8px;
+    border-radius: calc(var(--pd-r-sm) - 4px);
     color: var(--pd-t2);
     font-size: var(--pd-ts-xs);
     transition:
-        background 120ms var(--pd-ease-snap),
-        color 120ms var(--pd-ease-snap);
+        background 150ms var(--pd-ease-snap),
+        color 150ms var(--pd-ease-snap);
 }
 .previs-view-toolbar-inline .previs-view-toolbar-button:hover {
     background: var(--pd-s3);
@@ -397,7 +396,7 @@
 .previs-desk-header-action {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     height: 28px;
     padding: 0 12px;
     border: 1px solid var(--pd-b1);
@@ -408,14 +407,13 @@
     font-weight: 500;
     white-space: nowrap;
     transition:
-        background 140ms var(--pd-ease-snap),
-        border-color 140ms var(--pd-ease-snap),
-        transform 120ms var(--pd-ease);
+        background 150ms var(--pd-ease-snap),
+        border-color 150ms var(--pd-ease-snap),
+        transform 150ms var(--pd-ease);
 }
 .previs-desk-header-action:hover {
     background: var(--pd-s3);
     border-color: var(--pd-b2);
-    transform: translateY(-1px);
 }
 .previs-desk-header-action:active {
     transform: translateY(0);
@@ -449,7 +447,7 @@
 /* 顶栏按钮多时，中等宽度先压缩内边距，避免挤出可视区域。 */
 @media (max-width: 1440px) {
     .previs-desk-header-action {
-        padding: 0 9px;
+        padding: 0 8px;
         gap: 4px;
     }
 }
@@ -497,12 +495,12 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 14px 12px 10px;
+    padding: 16px 12px 8px;
 }
 .previs-desk-sidebar-title,
 .previs-desk-inspector-title {
     font-size: var(--pd-ts-lg);
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: -0.01em;
 }
 .previs-desk-sidebar-sub {
@@ -514,10 +512,10 @@
 .previs-desk-search {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     height: 30px;
-    margin: 2px 10px 10px;
-    padding: 0 9px;
+    margin: 2px 8px 8px;
+    padding: 0 8px;
     border: 1px solid var(--pd-b0);
     border-radius: var(--pd-r-sm);
     background: var(--pd-s0);
@@ -550,12 +548,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 12px 6px;
+    padding: 8px 12px 8px;
     color: var(--pd-t2);
     font-size: var(--pd-ts-2xs);
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    font-weight: 700;
+    font-weight: 600;
 }
 .previs-desk-section-head button {
     width: 20px;
@@ -565,8 +563,8 @@
     background: transparent;
     color: var(--pd-t2);
     transition:
-        background 120ms,
-        color 120ms;
+        background 150ms,
+        color 150ms;
 }
 .previs-desk-section-head button:hover {
     background: var(--pd-s3);
@@ -575,23 +573,23 @@
 
 /* Entity list rows */
 .previs-desk-list {
-    padding: 0 6px 8px;
+    padding: 0 8px 8px;
 }
 .previs-desk-row {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     min-height: 34px;
     width: 100%;
-    padding: 5px 7px;
+    padding: 4px 8px;
     border: 1px solid transparent;
     border-radius: var(--pd-r-md);
     background: transparent;
     text-align: left;
     color: var(--pd-t0);
     transition:
-        background 120ms var(--pd-ease-snap),
-        border-color 120ms var(--pd-ease-snap);
+        background 150ms var(--pd-ease-snap),
+        border-color 150ms var(--pd-ease-snap);
 }
 .previs-desk-row:hover {
     background: var(--pd-s2);
@@ -631,8 +629,8 @@
     background: transparent;
     color: var(--pd-t2);
     transition:
-        opacity 120ms,
-        color 120ms;
+        opacity 150ms,
+        color 150ms;
 }
 .previs-desk-row:hover .previs-desk-row-delete,
 .previs-desk-row.is-active .previs-desk-row-delete {
@@ -652,18 +650,18 @@
 .previs-desk-add-grid button {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     height: 28px;
-    padding: 0 9px;
+    padding: 0 8px;
     border: 1px solid var(--pd-b0);
     border-radius: var(--pd-r-sm);
     background: var(--pd-s0);
     color: var(--pd-t2);
     font-size: var(--pd-ts-xs);
     transition:
-        border-color 120ms,
-        color 120ms,
-        background 120ms;
+        border-color 150ms,
+        color 150ms,
+        background 150ms;
 }
 .previs-desk-add-grid button:hover {
     border-color: var(--pd-b2);
@@ -673,7 +671,7 @@
 
 /* Empty state */
 .previs-desk-empty {
-    margin: 4px 10px 12px;
+    margin: 4px 8px 12px;
     padding: 20px 12px;
     border: 1px dashed var(--pd-b1);
     border-radius: var(--pd-r-md);
@@ -697,7 +695,7 @@
     justify-content: space-between;
     gap: 8px;
     min-height: 40px;
-    padding: 5px 10px;
+    padding: 4px 8px;
     border-bottom: 1px solid var(--pd-b0);
     background: var(--pd-s1);
     box-shadow: inset 0 -1px 0 var(--pd-b0);
@@ -705,23 +703,23 @@
 .previs-desk-tool-group {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
 }
 .previs-desk-tool-button {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     height: 28px;
-    padding: 0 9px;
+    padding: 0 8px;
     border: 1px solid transparent;
     border-radius: var(--pd-r-sm);
     background: transparent;
     color: var(--pd-t2);
     font-size: var(--pd-ts-sm);
     transition:
-        background 120ms var(--pd-ease-snap),
-        color 120ms var(--pd-ease-snap),
-        border-color 120ms var(--pd-ease-snap);
+        background 150ms var(--pd-ease-snap),
+        color 150ms var(--pd-ease-snap),
+        border-color 150ms var(--pd-ease-snap);
 }
 .previs-desk-tool-button:hover {
     background: var(--pd-s3);
@@ -747,15 +745,15 @@
 }
 .previs-desk-view-tabs button {
     height: 24px;
-    padding: 0 10px;
+    padding: 0 8px;
     border: 0;
-    border-radius: calc(var(--pd-r-sm) - 1px);
+    border-radius: calc(var(--pd-r-sm) - 4px);
     background: transparent;
     color: var(--pd-t2);
     font-size: var(--pd-ts-xs);
     transition:
-        background 120ms,
-        color 120ms;
+        background 150ms,
+        color 150ms;
 }
 .previs-desk-view-tabs button.is-active {
     background: var(--pd-s4);
@@ -794,7 +792,7 @@
     right: 0;
     z-index: 5;
     min-height: 28px;
-    padding: 0 10px;
+    padding: 0 8px;
     background: oklch(0.1 0.016 240 / 0.88);
     backdrop-filter: blur(8px);
     color: var(--pd-t1);
@@ -807,7 +805,7 @@
 .previs-desk-panel-bar span {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 .previs-desk-panel-bar-center {
     position: absolute;
@@ -834,9 +832,9 @@
 .previs-desk-monitor-strip {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     min-height: 36px;
-    padding: 4px 10px;
+    padding: 4px 8px;
     border-top: 1px solid var(--pd-b0);
     background: var(--pd-s1);
 }
@@ -847,16 +845,16 @@
 }
 .previs-desk-monitor-strip button {
     height: 26px;
-    padding: 0 9px;
+    padding: 0 8px;
     border: 1px solid var(--pd-b0);
     border-radius: var(--pd-r-sm);
     background: var(--pd-s2);
     color: var(--pd-t2);
     font-size: var(--pd-ts-xs);
     transition:
-        color 120ms,
-        border-color 120ms,
-        background 120ms;
+        color 150ms,
+        border-color 150ms,
+        background 150ms;
 }
 .previs-desk-monitor-strip button:hover {
     color: var(--pd-t0);
@@ -874,7 +872,7 @@
 .previs-desk-inspector-tabs {
     display: flex;
     gap: 2px;
-    padding: 6px 10px;
+    padding: 8px 8px;
     border-bottom: 1px solid var(--pd-b0);
 }
 .previs-desk-inspector-tabs button {
@@ -886,9 +884,9 @@
     color: var(--pd-t2);
     font-size: var(--pd-ts-sm);
     transition:
-        background 120ms,
-        color 120ms,
-        border-color 120ms;
+        background 150ms,
+        color 150ms,
+        border-color 150ms;
 }
 .previs-desk-inspector-tabs button.is-active {
     background: var(--pd-s4);
@@ -897,7 +895,7 @@
 }
 .previs-desk-inspector-content {
     min-height: 0;
-    padding: 10px 10px 18px;
+    padding: 8px 8px 16px;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -934,11 +932,11 @@
     color: var(--pd-t1);
 }
 .previs-desk-inspector-footer {
-    padding: 10px;
+    padding: 8px;
     border-top: 1px solid var(--pd-b0);
 }
 .previs-desk-ai-note {
-    padding: 10px;
+    padding: 8px;
     border: 1px solid var(--pd-b1);
     border-radius: var(--pd-r-md);
     background: var(--pd-s0);
@@ -956,7 +954,7 @@
 .previs-desk-assets-panel,
 .previs-desk-prompt-panel {
     margin-top: 12px;
-    padding: 10px;
+    padding: 8px;
     border: 1px solid var(--pd-b0);
     border-radius: var(--pd-r-md);
     background: var(--pd-s0);
@@ -977,7 +975,7 @@
 }
 .previs-desk-assets-head span {
     display: block;
-    margin-top: 3px;
+    margin-top: 4px;
     color: var(--pd-t1);
     font-size: var(--pd-ts-xs);
 }
@@ -990,7 +988,7 @@
 .previs-desk-asset-row {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     min-width: 0;
 }
 .previs-desk-asset-main {
@@ -998,16 +996,16 @@
     min-width: 0;
     flex: 1;
     align-items: center;
-    gap: 7px;
-    padding: 5px;
+    gap: 8px;
+    padding: 4px;
     border: 1px solid transparent;
     border-radius: var(--pd-r-sm);
     background: transparent;
     color: var(--pd-t0);
     text-align: left;
     transition:
-        background 120ms,
-        border-color 120ms;
+        background 150ms,
+        border-color 150ms;
 }
 .previs-desk-asset-main:hover {
     background: var(--pd-s3);
@@ -1017,7 +1015,7 @@
     width: 28px;
     height: 24px;
     flex: 0 0 28px;
-    border-radius: 3px;
+    border-radius: 4px;
     object-fit: cover;
     background: var(--pd-s2);
 }
@@ -1051,15 +1049,15 @@
     justify-content: center;
     min-width: 26px;
     height: 24px;
-    padding: 0 5px;
+    padding: 0 4px;
     border: 1px solid var(--pd-b0);
     border-radius: var(--pd-r-sm);
     background: transparent;
     color: var(--pd-t1);
     font-size: var(--pd-ts-2xs);
     transition:
-        border-color 120ms,
-        color 120ms;
+        border-color 150ms,
+        color 150ms;
 }
 .previs-desk-asset-actions button:hover,
 .previs-desk-assets-footer button:hover {
@@ -1070,7 +1068,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
+    gap: 8px;
     margin-top: 8px;
     color: var(--pd-t1);
     font-size: var(--pd-ts-2xs);
@@ -1085,7 +1083,7 @@
     border-radius: var(--pd-r-sm);
     background: var(--pd-s0);
     color: var(--pd-t0);
-    padding: 7px;
+    padding: 8px;
     font-size: var(--pd-ts-2xs);
     line-height: 1.45;
     outline: none;
@@ -1095,7 +1093,7 @@
     border-color: var(--pd-a0);
 }
 .previs-desk-prompt-panel p {
-    margin: 7px 0 0;
+    margin: 8px 0 0;
     color: var(--pd-t1);
     font-size: var(--pd-ts-2xs);
     line-height: 1.45;
@@ -1145,8 +1143,8 @@
 .previs-output-step-step-card {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 8px;
     padding: 12px;
     border: 1px solid var(--pd-b0);
     border-radius: var(--pd-r-md);
@@ -1155,7 +1153,7 @@
 .previs-output-step-step-title {
     display: flex;
     align-items: flex-start;
-    gap: 9px;
+    gap: 8px;
 }
 .previs-output-step-step-title strong {
     display: block;
@@ -1163,7 +1161,7 @@
     font-size: var(--pd-ts-sm);
 }
 .previs-output-step-step-title p {
-    margin: 3px 0 0;
+    margin: 4px 0 0;
     color: var(--pd-t1);
     font-size: var(--pd-ts-xs);
     line-height: 1.5;
@@ -1174,11 +1172,11 @@
     height: 22px;
     flex: 0 0 22px;
     place-items: center;
-    border-radius: 7px;
+    border-radius: 8px;
     background: var(--pd-a-bg);
     color: var(--pd-a0);
     font-size: var(--pd-ts-xs);
-    font-weight: 700;
+    font-weight: 600;
 }
 .previs-output-step-field {
     display: flex;
@@ -1195,7 +1193,7 @@
     border-radius: var(--pd-r-sm);
     background: var(--pd-s0);
     color: var(--pd-t0);
-    padding: 0 7px;
+    padding: 0 8px;
     outline: none;
     transition: border-color 150ms;
 }
@@ -1217,7 +1215,7 @@
 .previs-output-step-output-status {
     display: flex;
     align-items: flex-start;
-    gap: 7px;
+    gap: 8px;
     color: var(--pd-t1);
     font-size: var(--pd-ts-xs);
     line-height: 1.45;
@@ -1229,7 +1227,7 @@
     width: 5px;
     height: 5px;
     flex: 0 0 5px;
-    margin-top: 5px;
+    margin-top: 4px;
     border-radius: 999px;
     background: currentColor;
 }
@@ -1237,8 +1235,8 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    margin-top: 3px;
-    padding: 2px 2px 14px;
+    margin-top: 4px;
+    padding: 2px 2px 16px;
     color: var(--pd-t1);
     font-size: var(--pd-ts-xs);
     line-height: 1.55;
@@ -1257,7 +1255,7 @@
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    padding: 3px;
+    padding: 4px;
     border: 1px solid oklch(1 0 0 / 0.12);
     border-radius: var(--pd-r-sm);
     background: oklch(0.1 0.016 240 / 0.8);
@@ -1267,15 +1265,15 @@
 .previs-viewport-navigation button {
     min-width: 28px;
     height: 24px;
-    padding: 0 7px;
+    padding: 0 8px;
     border: 0;
-    border-radius: calc(var(--pd-r-sm) - 1px);
+    border-radius: calc(var(--pd-r-sm) - 4px);
     color: oklch(1 0 0 / 0.7);
     background: transparent;
     font-size: var(--pd-ts-2xs);
     transition:
-        background 120ms var(--pd-ease-snap),
-        color 120ms var(--pd-ease-snap);
+        background 150ms var(--pd-ease-snap),
+        color 150ms var(--pd-ease-snap);
 }
 .previs-viewport-navigation button:hover:not(:disabled),
 .previs-viewport-navigation button:focus-visible:not(:disabled) {
@@ -1307,11 +1305,11 @@
     border-radius: var(--pd-r-sm);
     color: var(--pd-t1);
     font-size: var(--pd-ts-sm);
-    padding: 7px 12px;
+    padding: 8px 12px;
     gap: 8px;
     transition:
-        background 100ms var(--pd-ease-snap),
-        color 100ms var(--pd-ease-snap);
+        background 150ms var(--pd-ease-snap),
+        color 150ms var(--pd-ease-snap);
 }
 .previs-add-menu-overlay .ant-dropdown-menu-item:hover,
 .previs-add-menu-overlay .ant-dropdown-menu-item-active {
@@ -1320,14 +1318,14 @@
 }
 .previs-add-menu-overlay .ant-dropdown-menu-item-divider {
     background: var(--pd-b0);
-    margin: 3px 0;
+    margin: 4px 0;
 }
 .previs-add-menu-overlay .ant-dropdown-menu-submenu-title {
     border-radius: var(--pd-r-sm);
     color: var(--pd-t1);
     font-size: var(--pd-ts-sm);
-    padding: 7px 12px;
-    transition: background 100ms;
+    padding: 8px 12px;
+    transition: background 150ms;
 }
 .previs-add-menu-overlay .ant-dropdown-menu-submenu-title:hover {
     background: var(--pd-s3);
@@ -1418,17 +1416,17 @@
 .previs-output-step-step-card {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     margin-bottom: 12px;
     padding: 12px;
     border: 1px solid var(--pd-line);
-    border-radius: 10px;
+    border-radius: 8px;
     background: rgba(255, 255, 255, 0.025);
 }
 .previs-output-step-step-title {
     display: flex;
     align-items: flex-start;
-    gap: 9px;
+    gap: 8px;
 }
 .previs-output-step-step-title strong {
     display: block;
@@ -1436,9 +1434,9 @@
     font-size: 12px;
 }
 .previs-output-step-step-title p {
-    margin: 3px 0 0;
+    margin: 4px 0 0;
     color: var(--pd-muted);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.5;
 }
 .previs-output-step-step-number {
@@ -1447,28 +1445,28 @@
     height: 22px;
     flex: 0 0 22px;
     place-items: center;
-    border-radius: 7px;
+    border-radius: 8px;
     background: rgba(155, 188, 255, 0.14);
     color: var(--pd-accent-2);
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
 }
 .previs-output-step-field {
     display: flex;
     flex-direction: column;
     gap: 4px;
     color: var(--pd-muted);
-    font-size: 10px;
+    font-size: 11px;
 }
 .previs-output-step-field input,
 .previs-output-step-field select {
     width: 100%;
     height: 29px;
     border: 1px solid var(--pd-line);
-    border-radius: 5px;
+    border-radius: 4px;
     background: #101113;
     color: var(--pd-text);
-    padding: 0 7px;
+    padding: 0 8px;
     outline: none;
 }
 .previs-output-step-field input:focus,
@@ -1479,7 +1477,7 @@
 .previs-output-step-help {
     margin: -2px 0 0;
     color: var(--pd-muted);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.55;
 }
 .previs-output-step-output-card {
@@ -1489,9 +1487,9 @@
 .previs-output-step-output-status {
     display: flex;
     align-items: flex-start;
-    gap: 7px;
+    gap: 8px;
     color: var(--pd-muted);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.45;
 }
 .previs-output-step-output-status.is-ready {
@@ -1509,10 +1507,10 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    margin-top: 3px;
+    margin-top: 4px;
     padding: 2px 2px 16px;
     color: var(--pd-muted);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.55;
 }
 .previs-output-step-output-note strong {
@@ -1563,23 +1561,25 @@
     z-index: 5;
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
     padding: 4px;
     border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 10px;
+    border-radius: 8px;
     background: rgba(20, 25, 31, 0.78);
     backdrop-filter: blur(14px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    box-shadow:
+        0 1px 2px color-mix(in srgb, rgba(0, 0, 0, 0.18) 50%, transparent),
+        0 8px 24px rgba(0, 0, 0, 0.18);
 }
 .previs-viewport-navigation button {
     min-width: 30px;
     height: 26px;
-    padding: 0 7px;
+    padding: 0 8px;
     border: 0;
-    border-radius: 6px;
+    border-radius: 8px;
     color: rgba(255, 255, 255, 0.76);
     background: transparent;
-    font-size: 10px;
+    font-size: 11px;
     transition:
         background 0.15s ease,
         color 0.15s ease;
@@ -1606,21 +1606,21 @@
 .previs-add-menu-overlay .ant-dropdown-menu {
     background: #1a1e26;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 4px;
     box-shadow:
         0 16px 40px rgba(0, 0, 0, 0.52),
         0 2px 8px rgba(0, 0, 0, 0.28);
 }
 .previs-add-menu-overlay .ant-dropdown-menu-item {
-    border-radius: 6px;
+    border-radius: 8px;
     color: rgba(255, 255, 255, 0.82);
     font-size: 12px;
-    padding: 7px 12px;
+    padding: 8px 12px;
     gap: 8px;
     transition:
-        background 0.12s ease,
-        color 0.12s ease;
+        background 150ms ease,
+        color 150ms ease;
 }
 .previs-add-menu-overlay .ant-dropdown-menu-item:hover,
 .previs-add-menu-overlay .ant-dropdown-menu-item-active {
@@ -1629,14 +1629,14 @@
 }
 .previs-add-menu-overlay .ant-dropdown-menu-item-divider {
     background: rgba(255, 255, 255, 0.1);
-    margin: 3px 0;
+    margin: 4px 0;
 }
 .previs-add-menu-overlay .ant-dropdown-menu-submenu-title {
-    border-radius: 6px;
+    border-radius: 8px;
     color: rgba(255, 255, 255, 0.82);
     font-size: 12px;
-    padding: 7px 12px;
-    transition: background 0.12s ease;
+    padding: 8px 12px;
+    transition: background 150ms ease;
 }
 .previs-add-menu-overlay .ant-dropdown-menu-submenu-title:hover {
     background: rgba(255, 255, 255, 0.08);
@@ -1716,7 +1716,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 10px 12px 8px;
+    padding: 8px 12px 8px;
     border-bottom: 1px solid var(--pd-line);
     flex: 0 0 auto;
     position: sticky;
@@ -1727,24 +1727,24 @@
 .pv-panel-header__title {
     display: flex;
     align-items: baseline;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
 }
 .pv-panel-header__label {
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--pd-text);
 }
 .pv-panel-header__count {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--pd-muted);
     background: var(--pd-surface-2);
     border-radius: 8px;
-    padding: 1px 6px;
+    padding: 1px 8px;
 }
 .pv-panel-header__sub {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--pd-muted);
 }
 .pv-panel-header__actions {
@@ -1755,12 +1755,12 @@
 .pv-scene-search {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     height: 30px;
-    margin: 8px 10px 6px;
+    margin: 8px 8px 8px;
     padding: 0 8px;
     border: 1px solid var(--pd-line);
-    border-radius: 7px;
+    border-radius: 8px;
     background: color-mix(in srgb, var(--pd-surface-2) 78%, transparent);
     color: var(--pd-muted);
 }
@@ -1802,14 +1802,14 @@
     width: 28px;
     height: 28px;
     border: 1px solid var(--pd-line);
-    border-radius: 6px;
+    border-radius: 8px;
     background: var(--pd-surface-2);
     color: var(--pd-muted);
     cursor: pointer;
     transition:
-        border-color 0.12s,
-        color 0.12s,
-        background 0.12s;
+        border-color 150ms,
+        color 150ms,
+        background 150ms;
 }
 .pv-icon-btn:hover {
     border-color: var(--pd-accent);
@@ -1824,7 +1824,7 @@
 /* ── Entity sections ────────────────────────────────────────────────────── */
 .pv-entity-section {
     border-top: 1px solid var(--pd-line);
-    padding: 6px 0 2px;
+    padding: 8px 0 2px;
 }
 .pv-entity-section:first-of-type {
     border-top: none;
@@ -1832,37 +1832,37 @@
 .pv-entity-section__label {
     display: flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 12px 5px;
-    font-size: 10px;
+    gap: 4px;
+    padding: 4px 12px 4px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--pd-muted);
 }
 .pv-entity-section__label span {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--pd-faint);
     background: var(--pd-surface-2);
-    border-radius: 6px;
-    padding: 1px 5px;
+    border-radius: 8px;
+    padding: 1px 4px;
 }
 .pv-entity-section__add-btn {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 3px 8px;
-    border-radius: 5px;
+    padding: 4px 8px;
+    border-radius: 4px;
     border: 0;
     background: rgba(155, 188, 255, 0.12);
     color: var(--pd-accent);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition:
-        background 0.12s,
-        color 0.12s;
+        background 150ms,
+        color 150ms;
 }
 .pv-entity-section__add-btn:hover {
     background: rgba(155, 188, 255, 0.22);
@@ -1870,7 +1870,7 @@
 }
 .pv-entity-section__count {
     color: var(--pd-muted);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 400;
 }
 
@@ -1896,12 +1896,12 @@
 .pv-entity-row {
     display: flex;
     flex-direction: column;
-    margin: 0 6px 1px;
+    margin: 0 8px 1px;
     border: 1px solid transparent;
-    border-radius: 7px;
+    border-radius: 8px;
     transition:
-        background 0.1s,
-        border-color 0.1s;
+        background 150ms,
+        border-color 150ms;
 }
 .pv-entity-row:hover {
     background: var(--pd-surface-2);
@@ -1916,7 +1916,7 @@
     gap: 8px;
     width: 100%;
     min-height: 34px;
-    padding: 5px 8px;
+    padding: 4px 8px;
     border: 0;
     background: transparent;
     color: var(--pd-text);
@@ -1960,20 +1960,20 @@
     white-space: nowrap;
 }
 .pv-entity-row__meta {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--pd-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 .pv-entity-row__badge {
-    font-size: 9px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 600;
     letter-spacing: 0.06em;
     color: var(--pd-accent);
     background: rgba(155, 188, 255, 0.14);
     border-radius: 4px;
-    padding: 1px 5px;
+    padding: 1px 4px;
     flex: 0 0 auto;
 }
 .pv-entity-row__del {
@@ -1991,8 +1991,8 @@
     position: absolute;
     right: 8px;
     transition:
-        opacity 0.1s,
-        color 0.1s;
+        opacity 150ms,
+        color 150ms;
 }
 .pv-entity-row {
     position: relative;
@@ -2018,13 +2018,15 @@
     pointer-events: none;
     white-space: nowrap;
     border: 1px solid var(--pd-b1);
-    border-radius: 5px;
-    padding: 4px 7px;
+    border-radius: 4px;
+    padding: 4px 8px;
     background: var(--pd-s5);
     color: var(--pd-t0);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.2;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+    box-shadow:
+        0 1px 2px color-mix(in srgb, rgba(0, 0, 0, 0.28) 50%, transparent),
+        0 8px 20px rgba(0, 0, 0, 0.28);
 }
 
 /* Inline actor controls (shown when selected) */
@@ -2032,31 +2034,31 @@
     padding: 4px 8px 8px;
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 8px;
 }
 .pv-entity-row__footer {
     display: flex;
-    gap: 6px;
+    gap: 8px;
 }
 
 /* ── Pose grid ──────────────────────────────────────────────────────────── */
 .pv-pose-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 3px;
+    gap: 4px;
 }
 .pv-pose-chip {
     padding: 4px 2px;
     border: 1px solid var(--pd-line);
-    border-radius: 5px;
+    border-radius: 4px;
     background: rgba(255, 255, 255, 0.04);
     color: var(--pd-muted);
-    font-size: 10px;
+    font-size: 11px;
     cursor: pointer;
     transition:
-        border-color 0.1s,
-        color 0.1s,
-        background 0.1s;
+        border-color 150ms,
+        color 150ms,
+        background 150ms;
 }
 .pv-pose-chip:hover {
     border-color: var(--pd-line-strong);
@@ -2082,11 +2084,10 @@
     border: 2px solid transparent;
     cursor: pointer;
     transition:
-        transform 0.1s,
-        border-color 0.1s;
+        transform 150ms,
+        border-color 150ms;
 }
 .pv-color-dot:hover {
-    transform: scale(1.15);
 }
 .pv-color-dot--active {
     border-color: #fff;
@@ -2109,15 +2110,15 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
-    border-radius: 5px;
+    border-radius: 4px;
     border: 1px solid transparent;
     cursor: pointer;
     font-size: 11px;
     font-weight: 500;
     transition:
-        background 0.1s,
-        border-color 0.1s,
-        color 0.1s;
+        background 150ms,
+        border-color 150ms,
+        color 150ms;
     white-space: nowrap;
 }
 .pv-btn--xs {
@@ -2126,7 +2127,7 @@
 }
 .pv-btn--sm {
     height: 28px;
-    padding: 0 11px;
+    padding: 0 12px;
 }
 .pv-btn--ghost {
     background: transparent;
@@ -2159,7 +2160,7 @@
     align-items: center;
     gap: 8px;
     margin: 16px 12px;
-    padding: 18px;
+    padding: 16px;
     border: 1px dashed var(--pd-line);
     border-radius: 8px;
     color: var(--pd-muted);
@@ -2169,12 +2170,12 @@
 
 /* ── Prop library ───────────────────────────────────────────────────────── */
 .pv-entity-section--prop-lib {
-    padding-bottom: 6px;
+    padding-bottom: 8px;
 }
 .pv-prop-cats {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     padding: 0 8px 4px;
 }
 .pv-prop-lib__header,
@@ -2189,14 +2190,14 @@
     text-align: left;
 }
 .pv-prop-lib__header {
-    padding: 8px 12px 6px;
+    padding: 8px 12px 8px;
     font-size: 11px;
     font-weight: 600;
     color: var(--pd-muted);
 }
 .pv-prop-cat__label {
     padding: 2px 0;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.04em;
     color: var(--pd-faint);
@@ -2207,7 +2208,7 @@
 }
 .pv-prop-lib__chevron {
     flex: none;
-    transition: transform 0.12s;
+    transition: transform 150ms;
 }
 .pv-prop-lib__chevron.is-open {
     transform: rotate(90deg);
@@ -2229,14 +2230,14 @@
     align-items: center;
     gap: 2px;
     min-width: 0;
-    padding: 6px 4px 5px;
+    padding: 8px 4px 4px;
     border: 1px solid var(--pd-line);
-    border-radius: 6px;
+    border-radius: 8px;
     background: rgba(255, 255, 255, 0.03);
     cursor: pointer;
     transition:
-        border-color 0.1s,
-        background 0.1s;
+        border-color 150ms,
+        background 150ms;
 }
 .pv-prop-card:hover {
     border-color: var(--pd-line-strong);
@@ -2270,7 +2271,7 @@
 .pv-prop-card__size {
     max-width: 100%;
     overflow: hidden;
-    font-size: 9px;
+    font-size: 11px;
     color: var(--pd-faint);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2280,26 +2281,26 @@
 .pv-bg-list {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     padding: 0 8px 4px;
 }
 .pv-bg-row {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
 }
 .pv-bg-row__thumb {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     flex: 1;
     min-width: 0;
-    padding: 4px 6px;
+    padding: 4px 8px;
     border: 1px solid var(--pd-line);
-    border-radius: 5px;
+    border-radius: 4px;
     background: rgba(255, 255, 255, 0.03);
     cursor: pointer;
-    transition: border-color 0.1s;
+    transition: border-color 150ms;
 }
 .pv-bg-row__thumb:hover {
     border-color: var(--pd-line-strong);
@@ -2308,12 +2309,12 @@
     width: 32px;
     height: 24px;
     object-fit: cover;
-    border-radius: 3px;
+    border-radius: 4px;
     flex: 0 0 32px;
     background: #222;
 }
 .pv-bg-row__name {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--pd-muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2321,23 +2322,23 @@
 }
 .pv-bg-row__btns {
     display: flex;
-    gap: 3px;
+    gap: 4px;
     flex: 0 0 auto;
 }
 .pv-bg-btn {
     height: 24px;
-    padding: 0 6px;
+    padding: 0 8px;
     border: 1px solid var(--pd-line);
     border-radius: 4px;
     background: transparent;
     color: var(--pd-muted);
-    font-size: 9px;
+    font-size: 11px;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     transition:
-        border-color 0.1s,
-        color 0.1s;
+        border-color 150ms,
+        color 150ms;
 }
 .pv-bg-btn:hover {
     border-color: var(--pd-accent);
@@ -2356,18 +2357,18 @@
     align-items: center;
     justify-content: space-between;
     margin: 4px 8px;
-    padding: 5px 9px;
-    border-radius: 5px;
+    padding: 4px 8px;
+    border-radius: 4px;
     background: rgba(240, 181, 106, 0.1);
     color: var(--pd-orange);
-    font-size: 10px;
+    font-size: 11px;
 }
 .pv-panorama-badge button {
     border: 0;
     background: transparent;
     color: rgba(255, 255, 255, 0.55);
     cursor: pointer;
-    font-size: 10px;
+    font-size: 11px;
 }
 .pv-panorama-badge button:hover {
     color: #fff;
@@ -2400,25 +2401,25 @@
 
 /* ── Prop grid upload row ────────────────────────────────────────────────── */
 .pv-prop-upload-row {
-    padding: 6px 8px 2px;
+    padding: 8px 8px 2px;
 }
 .pv-prop-upload-full {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 8px;
     width: 100%;
-    padding: 7px 0;
+    padding: 8px 0;
     border: 1px dashed var(--pd-line);
-    border-radius: 6px;
+    border-radius: 8px;
     background: transparent;
     color: var(--pd-muted);
     font-size: 11px;
     cursor: pointer;
     transition:
-        border-color 0.12s,
-        color 0.12s,
-        background 0.12s;
+        border-color 150ms,
+        color 150ms,
+        background 150ms;
 }
 .pv-prop-upload-full:hover {
     border-color: var(--pd-accent);
@@ -2433,13 +2434,13 @@
     z-index: 4;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 3px 9px;
-    border-radius: 5px;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
     background: rgba(13, 15, 17, 0.72);
     backdrop-filter: blur(10px);
     color: rgba(255, 255, 255, 0.7);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.04em;
     pointer-events: none;
@@ -2459,8 +2460,8 @@
     transform: translateX(-50%);
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
+    gap: 8px;
+    padding: 8px 16px;
     border-radius: var(--pd-r-md);
     background: var(--pd-s5);
     border: 1px solid var(--pd-b1);
@@ -2481,7 +2482,7 @@
     align-items: center;
     justify-content: center;
     flex-wrap: wrap;
-    gap: 6px 8px;
+    gap: 8px 8px;
     width: max-content;
     max-width: calc(100% - 24px);
     padding: 8px 12px;
@@ -2512,15 +2513,15 @@
 
 /* ── Right panel controls ───────────────────────────────────────────────── */
 .pv-control-block {
-    padding: 10px 12px 0;
+    padding: 8px 12px 0;
 }
 .pv-control-block__label {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--pd-t1);
-    margin-bottom: 6px;
+    margin-bottom: 8px;
 }
 
 .pv-shot-grid {
@@ -2530,15 +2531,18 @@
     margin-bottom: 4px;
 }
 .pv-shot-chip {
-    padding: 6px 4px;
+    padding: 8px 4px;
     border: 1px solid var(--pd-b1);
     border-radius: var(--pd-r-sm);
     background: var(--pd-s1);
     color: var(--pd-t1);
-    font-size: 10px;
+    font-size: 11px;
     cursor: pointer;
     text-align: center;
-    transition: all 0.15s var(--pd-ease-snap);
+    transition:
+        color 150ms var(--pd-ease-snap),
+        background-color 150ms var(--pd-ease-snap),
+        border-color 150ms var(--pd-ease-snap);
 }
 .pv-shot-chip:hover {
     border-color: var(--pd-b2);
@@ -2549,7 +2553,6 @@
     border-color: var(--pd-a-bd);
     background: var(--pd-a-bg);
     color: var(--pd-a-on);
-    font-weight: 500;
 }
 
 .pv-move-grid {
@@ -2558,15 +2561,18 @@
     gap: 4px;
 }
 .pv-move-chip {
-    padding: 5px 4px;
+    padding: 4px 4px;
     border: 1px solid var(--pd-b1);
     border-radius: var(--pd-r-sm);
     background: var(--pd-s1);
     color: var(--pd-t1);
-    font-size: 10px;
+    font-size: 11px;
     cursor: pointer;
     text-align: center;
-    transition: all 0.15s var(--pd-ease-snap);
+    transition:
+        color 150ms var(--pd-ease-snap),
+        background-color 150ms var(--pd-ease-snap),
+        border-color 150ms var(--pd-ease-snap);
 }
 .pv-move-chip:hover {
     border-color: var(--pd-b2);
@@ -2577,7 +2583,6 @@
     border-color: oklch(0.75 0.14 155 / 0.4);
     background: oklch(0.75 0.14 155 / 0.1);
     color: var(--pd-green);
-    font-weight: 500;
 }
 
 .pv-dur-row {
@@ -2592,14 +2597,14 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--pd-muted);
 }
 .pv-dur-field input,
 .pv-dur-field select {
     height: 28px;
     border: 1px solid var(--pd-line);
-    border-radius: 5px;
+    border-radius: 4px;
     background: var(--pd-surface-2);
     color: var(--pd-text);
     padding: 0 8px;
@@ -2614,10 +2619,10 @@
 .pv-textarea {
     width: 100%;
     border: 1px solid var(--pd-line);
-    border-radius: 6px;
+    border-radius: 8px;
     background: var(--pd-surface-2);
     color: var(--pd-text);
-    padding: 7px 9px;
+    padding: 8px 8px;
     font: inherit;
     font-size: 11px;
     line-height: 1.5;
@@ -2636,14 +2641,14 @@
 .pv-slider-list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
 }
 .pv-slider-row {
     display: grid;
     grid-template-columns: 42px 1fr 36px;
     align-items: center;
-    gap: 6px;
-    font-size: 10px;
+    gap: 8px;
+    font-size: 11px;
     color: var(--pd-muted);
 }
 .pv-slider-row input[type="range"] {
@@ -2660,8 +2665,8 @@
 
 /* ── Output block ───────────────────────────────────────────────────────── */
 .pv-output-block {
-    margin: 10px 12px 0;
-    padding: 10px 10px 10px;
+    margin: 8px 12px 0;
+    padding: 8px 8px 8px;
     border: 1px solid var(--pd-line);
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.02);
@@ -2670,7 +2675,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     font-size: 11px;
     font-weight: 600;
     color: var(--pd-text);
@@ -2680,7 +2685,7 @@
     height: 7px;
     border-radius: 50%;
     background: var(--pd-muted);
-    transition: background 0.3s;
+    transition: background 250ms;
 }
 .pv-output-dot--done {
     background: var(--pd-green);
@@ -2700,7 +2705,7 @@
 }
 
 .pv-output-status {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--pd-muted);
     margin-bottom: 8px;
     line-height: 1.5;
@@ -2708,22 +2713,22 @@
 
 .pv-prompt-preview {
     border-top: 1px solid var(--pd-line);
-    padding-top: 7px;
+    padding-top: 8px;
 }
 .pv-prompt-preview__label {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--pd-muted);
-    margin-bottom: 5px;
+    margin-bottom: 4px;
 }
 .pv-prompt-copy {
     border: 0;
     background: transparent;
     color: var(--pd-accent);
-    font-size: 9px;
+    font-size: 11px;
     cursor: pointer;
 }
 .pv-prompt-copy:hover {
@@ -2734,8 +2739,8 @@
     overflow-y: auto;
     border-radius: 4px;
     background: rgba(0, 0, 0, 0.25);
-    padding: 6px 7px;
-    font-size: 9px;
+    padding: 8px 8px;
+    font-size: 11px;
     line-height: 1.55;
     color: rgba(255, 255, 255, 0.45);
 }
@@ -2744,20 +2749,20 @@
 .pv-animation-link {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     justify-content: center;
-    margin: 10px 12px 14px;
+    margin: 8px 12px 16px;
     height: 34px;
     border: 1px dashed var(--pd-line);
-    border-radius: 7px;
+    border-radius: 8px;
     background: transparent;
     color: var(--pd-muted);
     font-size: 11px;
     cursor: pointer;
     transition:
-        border-color 0.12s,
-        color 0.12s,
-        background 0.12s;
+        border-color 150ms,
+        color 150ms,
+        background 150ms;
 }
 .pv-animation-link:hover {
     border-color: var(--pd-line-strong);
@@ -2799,7 +2804,9 @@
         z-index: 31;
         width: min(88vw, 300px);
         border-right: 1px solid var(--pd-line);
-        box-shadow: 18px 0 40px rgba(0, 0, 0, 0.28);
+        box-shadow:
+            1px 0 2px color-mix(in srgb, rgba(0, 0, 0, 0.28) 50%, transparent),
+            18px 0 40px rgba(0, 0, 0, 0.28);
         transform: translateX(-100%);
         transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -2817,7 +2824,9 @@
         z-index: 30;
         width: min(92vw, 360px);
         border-left: 1px solid var(--pd-line);
-        box-shadow: -18px 0 40px rgba(0, 0, 0, 0.28);
+        box-shadow:
+            -1px 0 2px color-mix(in srgb, rgba(0, 0, 0, 0.28) 50%, transparent),
+            -18px 0 40px rgba(0, 0, 0, 0.28);
         transform: translateX(100%);
         transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -2855,18 +2864,18 @@
     display: grid;
     grid-template-columns: 14px 1fr 14px 1fr 14px 1fr;
     align-items: center;
-    gap: 3px;
-    padding: 4px 6px;
+    gap: 4px;
+    padding: 4px 8px;
 }
 .pv-scale-label {
-    font-size: 9px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 600;
     color: var(--pd-faint);
     text-align: center;
 }
 .pv-scale-input {
     width: 100%;
-    padding: 3px 5px;
+    padding: 4px 4px;
     border-radius: 4px;
     border: 1px solid var(--pd-line);
     background: var(--pd-surface);
@@ -2884,11 +2893,11 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 4px 6px;
+    padding: 4px 8px;
 }
 .pv-rot-label {
-    font-size: 9px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 600;
     color: var(--pd-faint);
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -2903,14 +2912,14 @@
     border: 1px solid var(--pd-line);
     background: transparent;
     color: var(--pd-muted);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     text-align: center;
     transition:
-        border-color 0.1s,
-        color 0.1s,
-        background 0.1s;
+        border-color 150ms,
+        color 150ms,
+        background 150ms;
 }
 .pv-rot-chip:hover {
     border-color: var(--pd-line-strong);
@@ -2938,8 +2947,8 @@
     z-index: 30;
     width: 280px;
     margin-left: -140px;
-    padding: 10px;
-    border-radius: var(--panel-radius, 14px);
+    padding: 8px;
+    border-radius: var(--panel-radius, 12px);
     backdrop-filter: blur(24px);
 }
 .pv-canvas-dock__menu-title {
@@ -2956,7 +2965,7 @@
     font-weight: 400;
 }
 .pv-canvas-dock__menu-title.is-sub {
-    padding-top: 10px;
+    padding-top: 8px;
     font-size: var(--pd-ts-xs);
 }
 .pv-canvas-dock__view-grid {
@@ -2971,8 +2980,8 @@
     background: var(--dock-command-bg, rgba(255, 255, 255, 0.04));
     color: inherit;
     transition:
-        background 120ms var(--pd-ease-snap),
-        color 120ms var(--pd-ease-snap);
+        background 150ms var(--pd-ease-snap),
+        color 150ms var(--pd-ease-snap);
 }
 .pv-canvas-dock__view-grid button {
     height: 28px;
@@ -3031,9 +3040,9 @@
     z-index: 6;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     height: 26px;
-    padding: 0 10px;
+    padding: 0 8px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--pd-s1) 72%, transparent);
     backdrop-filter: blur(16px);
@@ -3065,18 +3074,18 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    margin: 10px 12px 0;
+    margin: 8px 12px 0;
 }
 .pv-shot-list__item {
     display: grid;
     grid-template-columns: 18px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     width: 100%;
     min-height: 34px;
-    padding: 6px 8px;
+    padding: 8px 8px;
     border: 1px solid var(--pd-line);
-    border-radius: 6px;
+    border-radius: 8px;
     background: transparent;
     color: var(--pd-muted);
     text-align: left;
@@ -3092,11 +3101,11 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--pd-text);
-    font-size: 10px;
+    font-size: 11px;
 }
 .pv-shot-list__item small {
     color: var(--pd-faint);
-    font-size: 9px;
+    font-size: 11px;
 }
 .pv-shot-list__item:hover {
     border-color: var(--pd-line-strong);
@@ -3170,12 +3179,11 @@
     height: 20px;
     cursor: pointer;
     transition:
-        transform 120ms ease,
-        box-shadow 120ms ease,
-        outline-color 120ms ease;
+        transform 150ms ease,
+        box-shadow 150ms ease,
+        outline-color 150ms ease;
 }
 .previs-desk .previs-actor-color:hover {
-    transform: scale(1.08);
 }
 .previs-desk .previs-actor-color:focus-visible {
     outline: 2px solid var(--pd-a0);
@@ -3225,10 +3233,10 @@
     z-index: 6;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     max-width: calc(100% - 24px);
     height: 26px;
-    padding: 0 10px;
+    padding: 0 8px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--pd-s1) 72%, transparent);
     backdrop-filter: blur(16px);
@@ -3269,7 +3277,7 @@
     width: min(320px, calc(100% - 24px));
     max-height: calc(100% - 96px);
     overflow-y: auto;
-    padding: 10px 12px 12px;
+    padding: 8px 12px 12px;
     border-radius: 12px;
     border: 1px solid var(--pd-b0);
     background: var(--pd-s1);
@@ -3281,7 +3289,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     font-weight: 600;
 }
 .pv-shortcut-panel__group + .pv-shortcut-panel__group {
@@ -3297,7 +3305,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
     min-height: 24px;
 }
 .pv-shortcut-panel__keys {
@@ -3333,7 +3341,7 @@
 /* ── 动作库片段列表 ─────────────────────────────────────────────────────── */
 .previs-motion-list {
     display: grid;
-    gap: 6px;
+    gap: 8px;
     margin: 8px 0 0;
     padding: 0;
     list-style: none;
@@ -3345,8 +3353,8 @@
         "name start duration"
         "intensity intensity remove";
     align-items: center;
-    gap: 4px 6px;
-    padding: 6px 8px;
+    gap: 4px 8px;
+    padding: 8px 8px;
     border-radius: 8px;
     background: var(--pd-s2);
 }
@@ -3380,7 +3388,7 @@
     width: 24px;
     height: 24px;
     border: 0;
-    border-radius: 6px;
+    border-radius: 8px;
     background: transparent;
     color: var(--pd-t2);
     cursor: pointer;
@@ -3399,7 +3407,7 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding-top: 10px;
+    padding-top: 8px;
     border-top: 1px solid var(--pd-b0);
 }
 .previs-inspector-group:first-of-type {
@@ -3478,7 +3486,7 @@
     display: grid;
     place-items: center;
     font-size: var(--pd-ts-2xs);
-    font-weight: 700;
+    font-weight: 600;
     color: var(--pd-t0);
 }
 /* 轴色与 gizmo 一致：X 红、Y 绿、Z 蓝。 */
@@ -3502,14 +3510,14 @@
 .previs-inspector-toggles {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 6px;
+    gap: 8px;
 }
 .previs-inspector-toggle {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
-    padding: 5px 8px;
+    gap: 8px;
+    padding: 4px 8px;
     border: 1px solid var(--pd-b0);
     border-radius: var(--pd-r-sm);
     font-size: var(--pd-ts-sm);
@@ -3527,17 +3535,17 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
-    padding: 7px 0 6px;
+    gap: 4px;
+    padding: 8px 0 8px;
     border: 1px solid var(--pd-line);
-    border-radius: 6px;
+    border-radius: 8px;
     background: var(--pd-surface-2, rgba(255, 255, 255, 0.03));
     color: var(--pd-text);
     font-size: 11px;
     cursor: pointer;
     transition:
-        border-color 0.12s,
-        background 0.12s;
+        border-color 150ms,
+        background 150ms;
 }
 .pv-add-row__btn:hover {
     border-color: var(--pd-a0);
@@ -3563,7 +3571,7 @@
 }
 /* antd v6 的外壳是 .ant-modal-container；标题栏透明，统一跟随外壳底色。 */
 .previs-add-dialog-root .ant-modal-container {
-    padding: 16px 18px 14px;
+    padding: 16px 16px 16px;
     border: 1px solid var(--ad-line);
     background: var(--ad-bg);
     color: var(--ad-text);
@@ -3589,16 +3597,16 @@
     display: inline-flex;
     align-self: flex-start;
     gap: 2px;
-    padding: 3px;
+    padding: 4px;
     border-radius: 999px;
     background: var(--ad-surface);
 }
 .previs-add-dialog__tab {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     height: 30px;
-    padding: 0 14px;
+    padding: 0 16px;
     border: 0;
     border-radius: 999px;
     background: transparent;
@@ -3612,12 +3620,11 @@
 .previs-add-dialog__tab.is-active {
     background: var(--ad-text);
     color: var(--ad-bg);
-    font-weight: 600;
 }
 .previs-add-dialog__body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 380px;
-    gap: 14px;
+    gap: 16px;
     min-height: 420px;
 }
 .previs-add-dialog__options {
@@ -3632,15 +3639,15 @@
 .previs-add-dialog__grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-    gap: 6px;
+    gap: 8px;
 }
 .previs-add-dialog__card {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 3px;
+    gap: 4px;
     min-height: 52px;
-    padding: 8px 10px;
+    padding: 8px 8px;
     border: 1px solid var(--ad-line);
     border-radius: 8px;
     background: var(--ad-surface);
@@ -3648,8 +3655,8 @@
     text-align: left;
     cursor: pointer;
     transition:
-        border-color 0.12s,
-        background 0.12s;
+        border-color 150ms,
+        background 150ms;
 }
 .previs-add-dialog__card:hover {
     border-color: var(--ad-line-strong);
@@ -3677,7 +3684,7 @@
 .previs-add-dialog__card-title {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     font-size: 12px;
     font-weight: 600;
 }
@@ -3689,13 +3696,13 @@
 }
 .previs-add-dialog__card-hint {
     color: var(--ad-faint);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.35;
 }
 .previs-add-dialog__section {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
 }
 .previs-add-dialog__section-title {
     color: var(--ad-muted);
@@ -3709,7 +3716,7 @@
 }
 .previs-add-dialog__chip {
     height: 26px;
-    padding: 0 10px;
+    padding: 0 8px;
     border: 1px solid var(--ad-line);
     border-radius: 999px;
     background: transparent;
@@ -3728,7 +3735,7 @@
 }
 .previs-add-dialog__swatches {
     display: flex;
-    gap: 6px;
+    gap: 8px;
 }
 .previs-add-dialog__swatch {
     width: 22px;
@@ -3746,7 +3753,7 @@
 .previs-add-dialog__link {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     align-self: flex-start;
     color: var(--ad-muted);
     font-size: 12px;
@@ -3765,7 +3772,7 @@
     position: relative;
     overflow: hidden;
     border: 1px solid var(--ad-line);
-    border-radius: 10px;
+    border-radius: 8px;
     background: #d8dde3;
 }
 .previs-add-dialog__preview canvas {
@@ -3776,11 +3783,11 @@
     position: absolute;
     left: 10px;
     z-index: 1;
-    padding: 3px 8px;
+    padding: 4px 8px;
     border-radius: 999px;
     background: oklch(0.14 0.018 236 / 0.72);
     color: var(--ad-text);
-    font-size: 10px;
+    font-size: 11px;
     pointer-events: none;
 }
 .previs-add-dialog__preview-label {
@@ -3794,7 +3801,7 @@
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
-    padding-top: 10px;
+    padding-top: 8px;
     border-top: 1px solid var(--ad-line);
 }
 .previs-add-dialog__footer-hint {
@@ -3805,8 +3812,8 @@
 }
 .previs-add-dialog__footer .pv-btn {
     height: 32px;
-    padding: 0 14px;
-    border-radius: 7px;
+    padding: 0 16px;
+    border-radius: 8px;
     font-size: 12px;
     border: 1px solid var(--ad-line-strong);
     background: transparent;
@@ -3849,7 +3856,7 @@
     height: 26px;
     padding: 0 8px;
     border: 1px solid var(--ad-line-strong);
-    border-radius: 6px;
+    border-radius: 8px;
     background: var(--ad-surface);
     color: var(--ad-text);
     font: 500 11px/1 var(--font-mono, ui-monospace, monospace);

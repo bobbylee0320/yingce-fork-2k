@@ -44,6 +44,14 @@ func QuotaExceeded(message string) *AppError {
 	return &AppError{Status: CodeForbidden, Code: CodeQuotaExceeded, Reason: ReasonQuotaExceeded, Message: message}
 }
 
+func StorageCapacityExceeded(message string) *AppError {
+	return &AppError{Status: CodeForbidden, Code: CodeQuotaExceeded, Reason: ReasonStorageCapacityExceeded, Message: message}
+}
+
+func StorageReadOnly(message string, details map[string]any) *AppError {
+	return &AppError{Status: CodeForbidden, Code: CodeStorageReadOnly, Reason: ReasonStorageReadOnly, Message: message, Details: details}
+}
+
 func BadAuthRequest(message string) *AppError {
 	return NewAppError(400, message)
 }

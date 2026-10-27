@@ -22,6 +22,8 @@ func newResourceFallbackTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err := db.AutoMigrate(
 		&model.Resource{},
 		&model.UploadReservation{},
+		&model.UserStorageGrant{},
+		&model.UserStorageState{},
 		&model.UserOSSSetting{},
 		&model.SystemSetting{},
 		&model.StorageLocation{},

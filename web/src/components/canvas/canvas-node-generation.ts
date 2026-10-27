@@ -4,7 +4,7 @@ import { seedanceReferenceLabel } from "@/lib/seedance-video";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import { CanvasNodeType, type CanvasConnection, type CanvasGenerationMode, type CanvasNodeData } from "@/types/canvas";
-import { getGenerationResourceNodes, getContextResourceNodes, getMentionResourceNodes } from "@/lib/canvas/canvas-resource-references";
+import { getGenerationResourceNodes, getContextResourceNodes, getMentionResourceNodes, isCharacterEntityAsset } from "@/lib/canvas/canvas-resource-references";
 import { canvasNodeVideoPreviewUrl, canvasVideoAssetPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { isNeutralColorGrade, resolveCanvasColorGradeReference } from "@/lib/canvas/canvas-color-grade";
 import { getNodeGenerationMode, getNodeResourceKind } from "@/lib/canvas/node-registry";
@@ -272,8 +272,10 @@ function hasResolvableGenerationMention(prompt: string, inputs: NodeGenerationIn
 
 function assertResolvableGenerationMentions(prompt: string, inputs: NodeGenerationInput[]) {
     const { unresolved } = inspectGenerationMentions(prompt, inputs);
-    if (!unresolved.length) return;
-    throw new Error(`提示词中的 ${unresolved.join("、")} 没有对应的画布资源，请重新选择引用后再生成`);
+    const canvasMentions = unresolved.filter((token) => !token.startsWith("@[asset:"));
+    if (canvasMentions.length) throw new Error(`提示词中的 ${canvasMentions.join("、")} 没有对应的画布资源，请重新选择引用后再生成`);
+    // 素材令牌只含内部 ID，提示里不展示 ID。
+    if (unresolved.length) throw new Error("提示词引用的素材库素材已删除、无权访问或不能用于生成，请删除该引用或重新从素材库选择后再生成");
 }
 
 function inspectGenerationMentions(prompt: string, inputs: NodeGenerationInput[]) {
@@ -375,7 +377,7 @@ function buildAssetGenerationInputs(assets: Asset[]): NodeGenerationInput[] {
         if (asset.kind === "image") return [{ nodeId, type: "image", title: asset.title, image: { id: asset.id, name: asset.title, type: asset.data.mimeType, dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, bytes: asset.data.bytes, width: asset.data.width, height: asset.data.height, ...(asset.arkAssetId ? { arkAssetId: asset.arkAssetId } : {}) } }];
         if (asset.kind === "video") return [{ nodeId, type: "video", title: asset.title, previewUrl: canvasVideoAssetPreviewUrl(asset.data.url, asset.coverUrl), video: { id: asset.id, name: asset.title, type: asset.data.mimeType, url: asset.data.url, storageKey: asset.data.storageKey, bytes: asset.data.bytes, width: asset.data.width, height: asset.data.height, durationMs: asset.data.durationMs } }];
         if (asset.kind === "audio") return [{ nodeId, type: "audio", title: asset.title, audio: { id: asset.id, name: asset.title, type: asset.data.mimeType, url: asset.data.url, storageKey: asset.data.storageKey, bytes: asset.data.bytes, durationMs: asset.data.durationMs } }];
-        if (asset.kind === "entity" && asset.category === "character") return [{ nodeId, type: "character", title: asset.title, character: { nodeId, assetId: asset.id, requestedVersionId: asset.primaryVersionId } }];
+        if (isCharacterEntityAsset(asset)) return [{ nodeId, type: "character", title: asset.title, character: { nodeId, assetId: asset.id, requestedVersionId: asset.primaryVersionId } }];
         return [];
     });
 }

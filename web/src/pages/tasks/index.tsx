@@ -402,7 +402,7 @@ export default function TasksPage() {
                         active={Boolean(keyword || projectFilter !== "all" || kindFilter !== "all" || modelFilter !== "all" || statusFilter !== "all")}
                         onReset={() => { setKeyword(""); setProjectFilter("all"); setKindFilter("all"); setModelFilter("all"); setStatusFilter("all"); setPage(1); }}
                         trailing={(
-                            <div className="flex flex-wrap items-center gap-2.5">
+                            <div className="flex flex-wrap items-center gap-2">
                                 {viewMode === "list" ? (
                                     <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-foreground/55">
                                         <Switch size="sm" checked={groupEnabled} onChange={changeGroupEnabled} />
@@ -657,7 +657,7 @@ function formatTaskDuration(task: GenerationTask) {
 
 function InfoItem({ label, value, wrap = false }: { label: string; value: string; wrap?: boolean }) {
     return (
-        <div className="task-detail-fact min-w-0 px-3 py-2.5">
+        <div className="task-detail-fact min-w-0 px-3 py-2">
             <Typography.Text type="secondary" className="block text-xs">
                 {label}
             </Typography.Text>

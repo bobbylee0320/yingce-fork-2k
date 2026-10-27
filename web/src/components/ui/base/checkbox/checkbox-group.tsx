@@ -7,7 +7,7 @@ import { Checkbox } from "./checkbox";
 /**
  * CheckboxGroup — 复选框组（自研，原生 input，无依赖）。
  *
- * - 容器不预设布局：调用方用 className 决定排列（垂直传 `flex flex-col gap-1.5`，
+ * - 容器不预设布局：调用方用 className 决定排列（垂直传 `flex flex-col gap-2`，
  *   网格传 `grid grid-cols-2 gap-2`），与 AntD Checkbox.Group 行为一致。
  * - 受控 value: V[] + onChange(values)，泛型覆盖枚举/字符串场景；
  *   可直接替换 AntD Checkbox.Group（options/value/onChange/disabled）。

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // agentInterjectionState 取回并解码某个运行的运行态。
@@ -176,4 +177,61 @@ func agentHasEvent(state cloudAgentRuntime, kind string) bool {
 		}
 	}
 	return false
+}
+
+// 撤回插话只动待送队列：本轮继续、媒体任务不受影响，已送达的插话不能撤回。
+func TestCloudAgentWithdrawInterjectionKeepsRunAlive(t *testing.T) {
+	s, _, root := reliableAgentRoot(t)
+	if _, err := s.InterjectCloudAgent("user", root.ID, "msg-a", "改成黄昏"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.InterjectCloudAgent("user", root.ID, "msg-b", "镜头再近一点"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithdrawCloudAgentInterjection("other", root.ID, "msg-a"); err == nil {
+		t.Fatal("foreign user withdrew an interjection")
+	}
+	if err := s.WithdrawCloudAgentInterjection("user", root.ID, "msg-a"); err != nil {
+		t.Fatal(err)
+	}
+	run, state := agentInterjectionState(t, s, root.ID)
+	if run.Status != "running" && run.Status != "queued" {
+		t.Fatalf("withdrawal stopped the run: %s", run.Status)
+	}
+	if len(state.PendingInterjections) != 1 || state.PendingInterjections[0].ID != "msg-b" {
+		t.Fatalf("withdrawal removed the wrong interjection: %+v", state.PendingInterjections)
+	}
+	withdrawn := false
+	for _, event := range state.Events {
+		if event.Type == "user_interjection_withdrawn" && event.Payload["messageId"] == "msg-a" {
+			withdrawn = true
+		}
+	}
+	if !withdrawn {
+		t.Fatal("withdrawal event missing")
+	}
+	// 重试不能把已撤回的插话重新排进队列。
+	if _, err := s.InterjectCloudAgent("user", root.ID, "msg-a", "改成黄昏"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithdrawCloudAgentInterjection("user", root.ID, "msg-a"); err == nil {
+		t.Fatal("withdrawing twice must report the interjection is gone")
+	}
+	_, state = agentInterjectionState(t, s, root.ID)
+	if len(state.PendingInterjections) != 1 {
+		t.Fatalf("withdrawn interjection was re-queued: %+v", state.PendingInterjections)
+	}
+	cloudAgentDrainInterjections(root.ID, &state)
+	run, _ = s.repo.CloudAgent("user", root.ID)
+	if err := s.repo.MutateCloudAgent("user", root.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		return cloudAgentSave(current, &state)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithdrawCloudAgentInterjection("user", root.ID, "msg-b"); err == nil {
+		t.Fatal("delivered interjection was withdrawn")
+	}
+	if err := s.WithdrawCloudAgentInterjection("user", root.ID, "missing"); err == nil {
+		t.Fatal("unknown interjection was withdrawn")
+	}
 }

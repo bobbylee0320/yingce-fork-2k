@@ -99,6 +99,12 @@ description: 信封、错误码与 OpenAPI
 
 Pi 模型桥在保存待执行调用之前，复用单步输出限制校验：一次回复最多 8 个工具调用，正文最多 32000 字节。超限时整批未执行，释放本步模型任务并附带 `invalid_output` 及具体上限要求模型分批纠正；与既有异常重试共用首次失败后最多 3 次的上限，不截取部分调用执行。纠正请求仍是正常计费的文本模型任务，不创建媒体任务。
 
+## Agent 媒体规格与会话恢复
+
+媒体准入发现解析规格与申请值不一致时，返回具体参数的 `field`、`issue=invalid_value` 及申请值与解析值，进入现有的有限次工具纠正流程；同一工具累计三次失败后停止。视频时长字段映射为 `durationSeconds`，视频清晰度映射为 `quality`。修正后仍须用户审批，未通过准入不创建媒体任务或媒体账单。图片 `quality` 档位已解析为同值 `imageResolution` 时按等价表达核对，不能因原质量字段为空误拒绝，也不能放过真正不同的分辨率。
+
+Pi 审批或中断后恢复时，缺失的工具结果先按调用 ID 查找服务端已持久化的回执，保留其中的任务提交与失败事实；只有没有持久化回执的缺口才使用既有的审批暂停占位结果。运行时已经收到的结果不被旧占位覆盖。补齐只修复模型请求历史，不重新执行工具或自动重发收费任务；孤立结果、无效调用 ID 等其他历史错误仍由原校验拒绝。
+
 当前系统行为合同为 v17，工具调用数量与单个 `canvas_apply_ops` 操作数量分别校验。既有活动运行受冻结合同版本保护；新会话采用新合同，不改写旧检查点。
 ## Agent 分镜连线参数反馈
 
@@ -120,6 +126,39 @@ handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提
 `POST /resources/uploads` 在接收分片前预留整个文件的日额度和账号容量。文件大小必须严格小于 `resourceUploadMB`；同一账号最多 32 个未到期会话，跨后端实例共同计数。未满足配额的请求不会创建分片目录。分片和完成请求按会话串行执行；会话过期或已完成返回 404，重新创建会话后可整传重试。
 
 完成上传时以数据库事务提交容量并消费预留，使用既有资源幂等标识。失败释放预留；跨 UTC 日期完成需要通过当天日额度检查。请求与响应字段不变。
+
+## 存储容量与只读
+
+账号有效文件容量 = 后台全局 `storedFileGB` + 当前生效的存储扩容（支付购买或管理员赠送，多笔叠加、各自到期）。
+
+`GET /api/resources/storage-usage` 返回 `{ usage }`：
+
+| 字段 | 说明 |
+| --- | --- |
+| `usedBytes` / `totalBytes` | 已用与有效总容量 |
+| `baseBytes` / `purchasedBytes` | 全局基础容量与生效扩容合计 |
+| `nextExpiresAt` | 最近一笔有期限扩容的到期时间，可为空 |
+| `overLimit` | `usedBytes > totalBytes` |
+| `overLimitSince` / `readOnlyAt` | 首次观察到超额的时间及其 7 天后进入只读的时间 |
+| `readOnly` | 宽限期已结束且仍超额 |
+
+该接口每次实时计算，并刷新本实例的只读判定缓存（15 秒），所以用户删除素材或扩容后刷新用量即可解除限制。
+
+超额后的行为：
+
+- 宽限期内：上传、分片上传、生成资源落库和媒体生成任务准入返回 `storage_capacity_exceeded`，其它写入照常。
+- 宽限期结束：`/api` 下的非 GET 请求先经过只读守卫，返回 HTTP 403、`code=40302`、`reason=storage_read_only`。放行的请求：所有 `GET`/`HEAD`/`OPTIONS`/`DELETE`；路径前缀 `/auth/`、`/payments/`、`/wallet/`、`/admin/`、`/settings/`、`/diagnostics/`、`/model-catalog/`；以及 `POST /assets/batch-delete`、`/assets/batch`、`/resources/access`、`/announcements/read`、`/models/available`、`/models/:id/quote`、`/ai/models`、`/runninghub/*-info`、`/canvas-projects/:id/edit-lease`、`/feedbacks`、`/feedbacks/attachments`、`/tasks/:id/{cancel,query-provider,recover-media,text-deltas,text-replay-complete}`、`/agent/runs/:id/cancel`、`/dramas/:id/pause`、`/creation-runs/:id/{release,heartbeat}`。新增的写接口默认受只读约束，确需放行时在 `backend/internal/handler/storage_guard.go` 登记。
+
+扩容相关接口：
+
+| 方法 | 路径 | 行为 |
+| --- | --- | --- |
+| GET | `/api/resources/storage-grants` | 当前用户的扩容记录（含已到期、已撤销），最多 100 条 |
+| GET | `/api/admin/users/:id/storage` | 管理员查看用户有效容量（不写入超额状态）和扩容记录 |
+| POST | `/api/admin/users/:id/storage-grants` | 管理员赠送，请求 `{ "bytes": 10737418240, "durationDays": 30, "note": "" }`；`bytes` 必须是整 GB，`durationDays=0` 为永久；写管理员审计 |
+| POST | `/api/admin/storage-grants/:id/revoke` | 管理员撤销，请求 `{ "reason": "线下退款" }`，原因必填；写管理员审计 |
+
+存储空间商品与积分商品共用 `/api/payments/*` 和 `/api/admin/payments/products`。商品和订单增加 `kind`/`productKind`（`credits`|`storage`）、`storageBytes`、`storageDurationDays`。`/payments/providers` 与下单不再要求积分功能；积分功能关闭时，`/payments/products` 只返回存储空间商品，积分商品下单返回功能未开启。商品类型创建后不能修改。
 
 ## AutoDL 视频画面规格配置
 
@@ -179,6 +218,12 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 ## 生成成功后的重试保存
 
 `POST /tasks/:id/recover-media` 无需请求体。当前用户只能恢复自己有保存恢复记录的失败任务；重入队仍返回原任务 ID，不请求重新生成、不新建计费订单。已排队、运行或完成时幂等返回当前任务。取消任务、已退款订单、任务/账单归属不一致、项目已删除或归档时拒绝恢复。
+
+管理员接口 `POST /admin/api-logs/:id/recover-media` 按请求日志关联的任务重新排队保存作品（图片、视频、音频），不重新生成、不新建订单，不受用户手动次数限制，并重新给满 20 分钟自动重试窗口；写管理员审计 `api_log.recover_task_media`。请求体可选 `{"refundedBilling": "charge" | "waive"}`：原订单已退款时必须提供，`charge` 在作品保存成功后从可用余额补扣（余额不足会变为负数），`waive` 保持已退款；订单未退款时忽略该字段，成功后按原订单结算。响应 `data.task` 为任务摘要。
+
+生成作品直传平台对象存储失败或该存储处于熔断时，作品先保存到服务器并继续登记、结算，任务状态为成功；请求日志依次出现失败的 `upload`（错误文案附存储错误码，如“上传 OSS 失败（存储返回 SlowDownWrite/503）”）和成功的 `local_fallback`，后台补传写 `offload` 阶段日志。`GET /admin/storage/stats` 的 `data.stats.offload` 返回待补传数量、字节数、最早时间、最近错误码和本地文件丢失数。
+
+冻结积分自动退回不处理“上游已确认生成作品”的订单：任务带作品恢复记录，或诊断为结果保存失败时跳过，等待作品交付后结算或由管理员处理。
 
 任务详情和摘要新增 `mediaStage`、`canRecoverMedia`。后者表示失败任务存在保存恢复记录，实际操作仍校验权限、账单、项目及重试额度。每任务最多手动恢复三次，两次之间至少一分钟，每次手动操作只执行一次保存尝试；接口另受用户维度任务请求限流约束。普通 `/tasks/:id/retry` 不接受带保存恢复记录的任务，避免误走重新生成。
 
@@ -351,12 +396,15 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 
 - `POST /agent/runs` 创建一轮；`POST /agent/runs/:id/messages` 以上一轮为父节点创建新的不可变轮次，两者返回 `{ run }`，追加后必须使用新的 `run.id` 订阅。
 - `GET /agent/conversations?canvasId=&limit=100&before=` 只读查询当前用户在该画布中参与过的对话，返回 `{ items, nextCursor? }`。每项包含 `id`（现有 `conversationId`）、`canvasId`、`title`、`latestRunId`、`status`、`revision`、`cleanupPending` 和时间；按最新轮 `createdAt`、`id` 倒序。对话换绑画布后，目录摘要仍取整个对话的最新轮次，不能使用旧画布内的最后一轮。画布必须属于当前用户。
-- `GET /agent/conversations/:id/runs?limit=100&after=` 返回 `{ items, nextCursor? }`，按 `createdAt`、`id` 升序恢复同一用户、同一对话的全部轮次，包括跨页面的轮次。两处 `limit` 为 1–100，分页游标直接回传服务端的 `nextCursor`。运行视图增加 `conversationId`、`userPrompt`、`idempotencyKey`，供另一设备恢复用户消息并去重；每轮仍只返回一页事件。首次恢复用 `GET /agent/runs/:id?fromStart=true&sinceSeq=0&eventLimit=500` 从第一条事件开始，再以 `latestSeq` 作为后续 `sinceSeq`，直到追平 `eventCount`；默认不带 `fromStart` 的尾部窗口行为不变。读取接口不创建模型或媒体任务。
+- `GET /agent/conversations/:id/runs?limit=100&after=` 返回 `{ items, nextCursor? }`，按 `createdAt`、`id` 升序恢复同一用户、同一对话的全部轮次，包括跨页面的轮次。两处 `limit` 为 1–100，分页游标直接回传服务端的 `nextCursor`。运行视图增加 `conversationId`、`userPrompt`、`idempotencyKey`，供另一设备恢复用户消息并去重；每轮仍只返回一页事件。首次恢复用 `GET /agent/runs/:id?fromStart=true&sinceSeq=0&eventLimit=500` 从第一条事件开始，再以 `latestSeq` 作为后续 `sinceSeq`，直到追平 `eventCount`；默认不带 `fromStart` 的尾部窗口行为不变。客户端已恢复过某轮时，应把本机从 seq=1 连续的事件前缀与列表尾部窗口合并：合并后追平 `eventCount` 就不再请求，否则从前缀末尾按 `sinceSeq` 增量读取，不能因为尾部窗口不从 1 开始而回到 `sinceSeq=0`。读取接口不创建模型或媒体任务。
+- `GET /agent/conversations/:id` 返回单个对话的目录项（字段同上），只读控制列、不载入事件，`latestRunId`/`status`/`revision`/`cleanupPending` 取该对话全局最新一轮；会话不存在或不属于当前用户返回 404。前端轮询时，已选中但不在当前画布目录里的对话用它判断是否变化，未变化就复用本机快照，不再每轮重读全部轮次。
 - 同一对话只允许从最新终态轮次接续。另一设备已经提交后续轮次时，旧父轮新请求返回 409，`reason: agent_conversation_stale_parent`，客户端先同步历史，不能自动重发。该检查与任务创建、积分预留同事务串行，覆盖新子轮尚未保存执行检查点的间隙；原请求的幂等回放仍先执行，画布独占和防重复生成规则保持。
 - `POST /agent/runs/:id/interjections` 向**正在运行**的轮次插入一句话，不新建轮次、不产生新的扣费身份。请求 `{ text, messageId }`，`text` 最多 4000 字符；同一 `messageId` 幂等。插话在下一次模型调用前注入；运行已结束返回 409，前端应回落为新一轮发送。步数耗尽或运行失败时发出 `user_interjection_dropped`，不会静默吞掉，也不会自动替用户开新一轮。
 - 请求字段：`canvasId`（空字符串为未绑定画布的对话）、`prompt`、受管 `logicalModelId` 或 `channelId` + `channelModelKey`、`permissionMode: "read_only" | "request_approval" | "auto"`、`reasoningMode`、`profileRevision`、`skillIds`、`contextScope: [] | ["canvas"]`、`focusNodeIds`（最多 8 个）、`focusNodeOmittedCount`、`budget: { maxCredits, maxGenerationTasks, maxVideoSeconds, maxSteps }` 和 `idempotencyKey`。前端多选超过 8 个时保留前 8 个并报告省略数量，不清空全部焦点；计数只提供事实，不授予访问权限。未绑定画布时上下文与焦点必须为空。不接受密钥、自定义 URL、客户端历史或未知字段。
 - 同用户同幂等键及相同请求返回同一运行；不同请求复用键返回 409。失败后重试同一提交应保留键。上一轮未完成时禁止追加；已完成、失败、取消或已拒绝的终态轮次作为不可变历史读取，即使其冻结的策略或节点能力版本早于当前服务，也可用于创建采用当前执行合同的新一轮，父运行不会被改写。旧版合同下仍活动或待审批的运行不得恢复执行。历史只保留最近 10 轮用户目标；运行历史与跨轮摘要仍受独立的持久化 JSON 保护，超限先丢掉更早的可重读正文并保留结构化事实，单轮仍超出当前模型能力预算时才提示缩小范围或新建对话；历史结构损坏返回明确 409，不投影为通用 500。
-- 续轮交接是一条**有界结构化事实帧**（`{ source: "server", kind: "run_handoff", parentRunId, status, failureReason?, submittedTaskIds?, canvasChanges?, omittedCanvasChanges?, authority }`）：画布改动取自上一轮真实的 `canvas_updated` 事件，最多 12 组（operation、去重后的 nodeId/title、actionCount），超出的组数只记 `omittedCanvasChanges`，不静默丢弃；帧还带 `authority` 明写"执行事实交接，不是重放写入、重复提交任务或扩大权限的授权"。帧按字节封顶（单个 nodeId 截 64 字符、整帧 8 KiB，超限按最近改动优先裁剪），失败原因沿用 `cloudAgentSafeUserMessage` 的脱敏口径，不合格退回固定说法。身份由服务端字段 `agentContextSource=continuation` 承载并要求"来源元数据 + `【运行状态】` 前缀 + JSON `source=server`/`kind=run_handoff`"三者同时成立，因此用户逐字复制帧正文也拿不到该身份；升级前落库、没有来源字段的旧散文交接只在历史裁剪与轮次计数上按"紧跟上一轮 assistant 回复 + 旧版文案前缀"识别，该判据不影响 canonical 身份。
+- 续轮交接是一条**有界结构化事实帧**（`{ source: "server", kind: "run_handoff", parentRunId, status, failureReason?, submittedTaskIds?, canvasChanges?, omittedCanvasChanges?, rejectedAction?, authority }`）。上一轮状态为 `rejected` 时，`rejectedAction` 带被拒绝的工具名、审批说明（截 200 字符）、用户拒绝理由（截 300 字符）和"不要原样再次申请"的说明，让模型换方向而不是重复申请；画布改动取自上一轮真实的 `canvas_updated` 事件，最多 12 组（operation、去重后的 nodeId/title、actionCount），超出的组数只记 `omittedCanvasChanges`，不静默丢弃；帧还带 `authority` 明写"执行事实交接，不是重放写入、重复提交任务或扩大权限的授权"。帧按字节封顶（单个 nodeId 截 64 字符、整帧 8 KiB，超限按最近改动优先裁剪），失败原因沿用 `cloudAgentSafeUserMessage` 的脱敏口径，不合格退回固定说法。身份由服务端字段 `agentContextSource=continuation` 承载并要求"来源元数据 + `【运行状态】` 前缀 + JSON `source=server`/`kind=run_handoff`"三者同时成立，因此用户逐字复制帧正文也拿不到该身份；升级前落库、没有来源字段的旧散文交接只在历史裁剪与轮次计数上按"紧跟上一轮 assistant 回复 + 旧版文案前缀"识别，该判据不影响 canonical 身份。
+- 新一轮只沿用状态为 `completed` 的上一轮 Pi 会话快照，且该快照必须能修复成合法的工具调用历史。上一轮失败、取消或被拒绝时，新一轮从文本历史和 `run_handoff` 帧开始，不继承停在半批工具调用或"等待审批"占位上的会话；帧里的状态、失败原因和 `submittedTaskIds` 用来避免重复提交。
+- 每次模型请求前，服务端修复工具调用与结果的配对，不因历史形状让整轮失败。具体规则：缺结果的调用优先补服务端已保存的真实回执（只认该调用声明之后、同工具名的结果），否则补 `errorClass: approval_deferred` 的"未执行"结果；"等待审批"或"未执行"占位在服务端已有真实回执时换成回执；同一调用的重复结果只保留一份，真实结果优先于占位；找不到调用的结果改为 `orphan_tool_results` 运行状态数据消息；调用 ID 缺失或别名冲突的调用被移除。运行时历史仍无法使用时退回服务端历史。
 - `POST /agent/runs/:id/approvals/:approvalId/decision` 的 `{ decision, reason? }` 可在批准图片生成时附带 `mediaSettings: { logicalModelId? | channelId? + channelModelKey?, size, quality }`。仅替换本次模型选择、画幅和质量，不允许修改目标、提示词、引用、模式或快照。服务端先无收费预检，失败保留待审批状态；成功原子更新审批调用、哈希及预览，提交任务时再次校验内容、资源归属、模型能力、价格与累计预算。相同参数重复批准幂等，不同参数复用已决定审批返回 409。
 - 审批拒绝是独立终态 `rejected`，表示本次操作未执行；不会生成 `tool_failed`、继续调用模型、写入画布、提交生成任务或扣费。拒绝后的草稿按既有草稿策略保留，用户可在下一轮说明修改方向。
 - 创建和追加消息可选择 `reasoningMode`，默认 `off`；`auto`/`deep` 为服务端行为策略与模型推理配置的选择，不等于允许暴露内部思维链。供应商能力由后端校验；声明式 Agent 渠道不支持时明确报错。推理可能增加耗时和费用。
@@ -388,6 +436,8 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 - `generate_media.prompt` 使用 `@图片1`、`@视频1`、`@音频1` 引用素材，各类型按 `referenceNodeIds` 的出现顺序独立编号，文本来源不占媒体编号。角色主图属于图片序列，与普通图片共享编号；编辑器显示时保留 `@角色N` 前缀，但 N 仍对应实际图片位置，例如角色、场景图、角色依次显示为 `@角色1`、`@图片2`、`@角色3`，任务使用 `@图片1`、`@图片2`、`@图片3`。已有标签保留；遗漏的画布素材以“素材名称：@标签”补入 `【资产参考】`，不推断素材用途。节点入边同步排列，草稿、审批和实际任务的标签对应同一组参考资源，编辑器与任务仅转换显示前缀。未绑定的媒体编号和补齐后超过16000字符的提示词会在提交前被拒绝，模型自身的提示词长度限制仍由任务准入校验。临时标注图没有持久画布节点，不自动添加无法解析的编辑器标签；历史节点不自动改写。
 - Agent 的 `snapshotHash` 忽略顶层 `viewport`、`updatedAt`。`canvas_get_state` 另返回 `mediaSnapshotHash`，供 `generate_media.snapshotHash` 使用：仅比较节点与连线，节点忽略 `position`、`width`、`height`、`createdAt`、`updatedAt`，保留全部业务字段及未知 metadata。生成草稿审批也固定该哈希，移动、调整显示尺寸、自动补时间戳和保存聊天记录不会使生成审批失效，执行保留最新展示信息；提示词、素材、锁定状态、任务绑定和连线变化仍需重新读取并审批。画布修改与撤销继续使用完整内容哈希，数据库写入保持完整快照 CAS。发布前已按旧算法生成的待审批内容可能要求重新读取和审批，不自动替换旧快照重提任务。
 - `canvas_get_state.nodes[].outputReference` 的 `ready` / `issue` 仅表示该节点产物能否作为其他生成的参考，不诊断本节点的生成输入。`generation` 返回当前画布、当前用户所属任务的 `taskId`、`taskStatus` 和安全的失败 / 取消 `error`；无任务绑定为 `not_submitted`，无法验证归属或读取失败为 `unavailable`。节点无法作为草稿提交时返回 `submitBlockedReason` / `submitBlockedIssue`，与写路径共用节点准入规则；未被阻止不等于已获授权，草稿所属运行和审批仍在提交时校验。`task_get` 同样返回安全错误详情。`generate_media` 准入失败可返回 `snapshot_conflict`、`task_bound`、`target_locked` 等结构化 `reason` 和 `nodeId`，不自动选择新节点或重新生成。
+- 模型目录解析后的规格与申请值不同时，返回 `reason: invalid_tool_arguments` 及对应 `field`（`videoSeconds` 映射为 `durationSeconds`，视频清晰度映射为 `quality`），消息给出申请值和解析值，由 Agent 修正后重新申请审批；同一工具每轮最多 3 次失败尝试，失败阶段不创建任务和订单。比例按预设换算成同一画幅的像素（例如 `16:9` → `1824x1024`，宽高比误差不超过 2%）不算规格变化；像素换回比例仍按不一致处理。旧的 `quality` 档位被解析为同值 `imageResolution` 时不报不一致。
+- 用户批准后、提交任务前，若报价过期、生成依赖或角色卡版本变化、解析规格或价格与批准时不同，返回 `reason: approval_stale`、`errorClass: state_conflict`、`taskSubmitted: false`。此时没有任务和订单，整轮继续，Agent 需重新调用并再次等待审批；这类失败计入同一工具的 3 次上限。恢复提示会说明提交前未通过，不再提示"已执行一次"。批准后解析结果的哈希与批准时一致时，不再逐字段比较批准参数。
 - `task_get` / `generation` 的执行状态与回写状态分开：`succeeded` 不返回执行 `error`；回写失败仍通过 `writebackOutcome` / `writebackError` 暴露，不能因生成成功而隐藏。失败 / 取消任务保留脱敏错误，缺少详情不能伪装成成功。Agent 文本步骤的持久诊断为 `upstream_dns_failed` 时，`run_failed.reason` 同步该分类并明确提示检查渠道域名及后端 DNS，不自动重跑。
 - 模型选择将 `model_list.selection` 展开到顶层：非空 `logicalModelId`，或完整非空 `channelId` + `channelModelKey`，不得混用；未使用字段可省略或传空字符串，不能传 `null` 或纯空白。`generate_media` 完全省略选择字段时，仅允许继承草稿或本轮最新同模式、同参考节点查询的唯一候选；最新查询失败、无候选、多候选或存在未查询的临时参考时不补模型。`image_layer_split` 仍要求显式选择。显式选择先检查结构，省略时在解析草稿和目录后检查，均早于创建草稿、审批和计费。错误返回 `reason: invalid_tool_arguments`、`field`、`issue` 和本轮工具 `parameters`。补齐后仍校验目录、能力、权限、价格和预算，不猜模型、不切换渠道、不吞掉未知字段。
 - `canvas_apply_ops` 创建节点、编辑提示词或连线不会提交生成任务，也不会改变已提交任务的输入；收费生成独立使用 `generate_media`。操作参数错误按数组项返回 `field`（例如 `ops[0].snapshotHash`）和 `issue`（例如 `unexpected_field`、`type_mismatch`、`required`），并附本轮工具 schema；不把未知字段误报成缺少其他必填字段，不回显任意参数键和值。
@@ -517,12 +567,15 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 | 404 | 404 | `not_found` | 资源不存在 |
 | 409 | 409 | `conflict` | 冲突 |
 | 409 | 409 | `project_name_conflict` | `POST /projects` 同一用户下已有同名项目；客户端可有限更换名称重试 |
+| 409 | 409 | `skill_version_conflict` | `PUT /skills/:id/files` 的 `baseVersionId` 已不是当前版本；`details.currentVersionId` 为最新版本，客户端需重新加载后再编辑 |
 | 429 | 429 | `rate_limited` | 限流（未细分） |
 | 500 | 500 | `internal` | 内部错误 |
 | 502 | 502 | `bad_gateway` | 上游失败 |
 | 503 | 503 | `unavailable` | 暂时不可用 |
 | 504 | 504 | `timeout` | 超时 |
 | 40301 | 403 | `quota_exceeded` | 账号配额用尽（不自动重试） |
+| 40301 | 403 | `storage_capacity_exceeded` | 账号文件容量不足，上传或媒体生成被拒；前端据此展示“购买空间”入口 |
+| 40302 | 403 | `storage_read_only` | 账号超出文件容量且 7 天宽限期已结束，内容写入被拒；`details` 含 `usedBytes`、`totalBytes`、`readOnlyAt` |
 | 40901 | 409 | `conflict` | 幂等冲突 |
 | 42901 | 429 | `rate_limited` | 请求限流（可带 Retry-After） |
 
@@ -544,6 +597,37 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 `GET /api/skills` 可带 `libraryCategoryId` 或 `libraryUncategorized=true`，仅用于 `scope=mine` / `scope=created`，且两者不能同时使用。它们可与共享分类筛选 `tag` 同时提供，结果需同时满足两个筛选条件。分类列表的数量不受搜索词影响，表示对应技能库范围内的完整数量。
 
 技能列表响应中的 `categories` 是技能广场共享分类，包含 `value`、`label` 和 `count`；`count` 统计已启用且公开的技能，不受当前搜索词、分页和视图筛选影响。它与技能库个人/平台分类是两套独立分类。
+
+## 技能包文件 API
+
+以下接口需要登录。读取接口沿用技能可见性（私有技能仅作者可读）；写入只允许作者。
+
+| 方法 | 路径 | 行为 |
+| --- | --- | --- |
+| GET | `/api/skills/:id/files` | 当前版本的文件清单：`path`、`kind`、`mimeType`、`size`、`sha256` |
+| GET | `/api/skills/:id/file?path=` | 单个文件；文本返回 `content`，二进制只返回 `binary=true`，文本超过 512KB 返回 400 |
+| GET | `/api/skills/:id/file/raw?path=` | 原始字节，`Content-Security-Policy: sandbox`、`nosniff`、`no-store` |
+| PUT | `/api/skills/:id/files` | 作者批量修改文本文件并生成新版本，见下文 |
+
+`PUT /api/skills/:id/files` 请求：
+
+```json
+{
+  "baseVersionId": "编辑开始时的 versionId",
+  "operations": [
+    { "op": "delete", "path": "old.md" },
+    { "op": "rename", "path": "draft.md", "to": "references/camera.md" },
+    { "op": "write", "path": "SKILL.md", "content": "# 技能\n..." }
+  ]
+}
+```
+
+- 服务端按顺序把操作应用到当前版本的完整文件集，再整体重建 ZIP、`skill_versions` 和 `skill_files`，并在同一事务里以 `current_version_id = baseVersionId` 为条件更新技能行；并发写入（另一标签页、GitHub 同步、技能信息抽屉）会让后到请求得到 409 `skill_version_conflict`，`details.currentVersionId` 为最新版本。
+- 路径必须已经规范化：相对路径、不含 `..`、`.`、空层级、反斜杠、控制字符和首尾空格，最多 8 层、单层不超过 255 字节，不能使用 `.git`、`__MACOSX` 或 `.DS_Store`；文件与文件夹不能重名。
+- `write` 只接受 UTF-8 文本，单文件不超过 512KB，且目标类型必须可按文本预览；已有二进制文件不能被覆盖。`SKILL.md` 不能删除或重命名。整包仍受 512 个文件、20MB 限制，单次最多 256 个操作，请求体上限与安装上传一致。
+- `SKILL.md` 变化时同步 `skills.instruction`；frontmatter 的 `metadata.version` 作为版本号，缺省时使用时间戳。单文件 Markdown 技能编辑后包含多个文件时 `sourceType` 变为 `zip`，避免技能信息抽屉以 instruction 重建整包时丢失附属文件。
+- GitHub 技能返回 409 `failed_precondition`，请在仓库修改后同步。内容与当前版本完全相同时返回 `changed=false`，不生成新版本。
+- 成功响应 `data={ skill, files, changed }`；单个操作校验失败返回 400，`details.operationIndex` 指向出错的操作。
 
 ## 画布工具 API
 
@@ -586,3 +670,38 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 | POST | `/admin/provider-catalog/:id/install` | `{ name, apiKey, markupPercent, models: [{ modelKey, markupPercent? }], enabled }`，一次事务创建渠道、模型和规格档，返回 `{ channel }` |
 
 install 的 Base URL、协议、能力和成本全部从服务端快照读取，不信任请求体。售价 = 成本 × (1 + 加价率)，向上取整到微积分；加价率 0–1000%，最多两位小数。推广期已过返回 404。API Key 只加密存入渠道，不写日志。
+
+## 短剧自动制作
+
+所有 `/api/dramas` 路径都需要登录 Cookie 并受 `shortDrama` 功能开关保护；对象归属在 service 中按当前用户校验，返回标准业务信封。
+
+| 方法与路径 | 用途 |
+| --- | --- |
+| `GET /dramas?page&pageSize&q&status` | 作品列表：只含自动制作短剧；`q` 按作品名搜索，`status` 为 draft/running/paused/completed。每项含状态、集数、完成数、最多 4 张角色参考图拼封面、风格、画幅、已用积分与更新时间；`statusCounts` 给出各状态总数（`all` 为全部） |
+| `GET /dramas/asset-schemes` | 参考图方案目录：定妆照、三视图设定板、四格资产板的默认提示词、画幅与版式说明，场景默认提示词，以及角色/场景可用变量；道具参考图使用固定模板 |
+| `GET /dramas/models` | text / image / video 三类平台模型：`options` 为可由服务端独立执行的模型及默认选择，视频模型附 `maxVideoSeconds`（单次最长秒数，也是剧情段时长上限）；`unavailable` 为平台目录里有、但短剧用不了的模型及 `reason`（例如视频模型未声明原声对白或不支持图生视频），前端置灰展示。参考图走文生图，不再要求图片模型支持参考图输入 |
+| `POST /dramas/estimate` | 按章节数、字数与设置估算集数、镜头数、剧情段视频数、参考图数与费用区间（基于真实报价，含重试余量） |
+| `POST /dramas` | 一次性创建作品、写入小说章节与制作设置；`start=true` 立即进入自动制作。请求体上限 32 MiB，单章 ≤ 6 万字，全书 ≤ 600 万字 |
+| `GET /dramas/:id` | 制作台摘要：控制面状态、每集按剧情段聚合的进度 `stats`（`segments`、`promptReady`、`videoReady`、`failed`）、队列计数、待处理收件箱。`cast_failed` 的 `castKind` 为 character/prop/scene；`segment_failed` 带 `episodeNumber`、`segmentIndex` 与失败环节 `media`（prompt/video） |
+| `PATCH /dramas/:id/settings` | 修改单集时长（30–1200 秒）、分镜规则 `storyboard`（`segmentMode` auto/fixed/range、`segmentSeconds`、`segmentMinSeconds`、`segmentMaxSeconds`、`pacing`、`dialogue`、`transition`、`transitionMs`）、视频提示词技能 `promptSkill`（`{ skillId, skillName, path }`，不可读时返回 400；传空 `skillId` 清除）、审阅方式、生成节奏、参考图方案、模型、并发与预算；开工后不能修改画幅；提示词包含未知变量时返回 400 |
+| `POST /dramas/:id/media/release` | 手动模式下放行生成：`target=assets` 只生成参考图，`episodes`（配合 `episodeIds`，最多 500）生成指定集的参考图与剧情段视频，`all` 全部开始 |
+| `POST /dramas/:id/start` · `/pause` · `/retry-failed` | 继续 / 暂停 / 把失败的参考图、段提示词与段视频重新排队，返回 `{ segments, casts }` |
+
+显式要求产出的操作（`retry-failed`、`media/release`、`approve`、`rescript`、`segments/prompts`、`segments/generate`、`cast/:castId/regenerate`）在作品暂停或已完成时会按 `start` 的同一套校验（模型可用、预算未超）恢复制作；校验不通过返回 400，已写入的请求保留，处理后点继续即可。只改内容的操作（改镜头脚本、改设定文字）不恢复暂停中的制作。
+| `GET /dramas/:id/jobs?limit` | 最近的调度工作（类型、状态、错误、实际花费、重试次数、入队/开始/结束时间） |
+| `GET /dramas/:id/jobs/:jobId` | 单项工作详情：历次提交（最新在前），每次含任务状态、模型、请求参数白名单（尺寸、时长、是否同步生成声音等，不含渠道配置）、提示词、错误、花费与产出资源；只限作品所有者 |
+| `GET /dramas/:id/episodes/:episodeId` | 单集详情：镜头脚本、剧情段、改编来源章节、进行中的工作与 `scriptJob`。每个剧情段含 `videoPrompt`（生效内容，手动改写优先）、`generated`、`custom`、`promptStatus`、`videoStatus`、`videoResourceId`、`tailFrameResourceId`、`videoModel`、`promptJob` / `videoJob`，以及 `request`：生成本段视频时实际发送的生成方式 `operation`、秒数、模型上限、首帧（`firstFrameResourceId`，上一段未生成时 `firstFramePending=true`）、参考图列表（编号、类型、名称、资源、是否随请求发送）、追加在提示词开头的 `header` 与限制说明 `warning`；与提交时同一函数计算 |
+| `PATCH /dramas/:id/episodes/:episodeId` | 修改集标题 |
+| `POST /dramas/:id/episodes/:episodeId/approve` · `/rescript` | 确认本集提示词（样片模式下确认第 1 集样片）/ 重新改编本集 |
+| `POST /dramas/:id/episodes/:episodeId/segments/prompts` | `{ segments: number[] }` 让文本模型（重新）撰写这些剧情段的完整视频提示词，正在撰写的段跳过；返回 `{ queued }` |
+| `PATCH /dramas/:id/episodes/:episodeId/segments/:index` | 保存剧情段视频提示词改写 `{ videoPromptOverride }`，最多 12000 字，空串恢复为模型撰写的版本；本段与后续已生成的段视频标记过期 |
+| `POST /dramas/:id/episodes/:episodeId/segments/generate` | `{ segments, videoModel? }` 按剧情段生成视频，可同时换视频模型（只接受目录中的模型）。提示词缺失或过期、视频正在生成时返回 400；样片模式下第 1 集样片确认前，其他集返回 400。段按顺序提交，第 2 段起等上一段最后一帧 |
+| `POST /dramas/:id/episodes/:episodeId/segments/:index/reprocess` | 重新处理已生成、但结果回写（如抽尾帧）失败的段视频：只重放最近一次已成功的生成任务结果，不重新调用模型、不重复扣费，返回 `{ reprocessing: true }`。段视频不是 failed、没有已入库视频或最近一次作业不可重放时返回 400。段视图的 `videoReprocessable` 为 true 时可调用 |
+| `PATCH /dramas/:id/shots/:shotId` | 修改镜头脚本：说话人、台词、动作、景别、运镜、起幅画面、运动描述、转场、时长（1–60 秒，且本段合计不超过视频模型单次上限）；所在段的提示词改写被清空、视频标记过期；已写好的提示词标记过期，尚未写完的退回待撰写并自动按新镜头重写 |
+| `GET /dramas/:id/cast` · `PATCH /dramas/:id/cast/:castId` | 读取 / 修改角色、道具与场景设定（名称、别名、外观、声线、锁定） |
+| `GET /dramas/:id/cast/:castId/impact` · `POST …/regenerate` | 预览引用该设定的集数与剧情段数 `{ episodes, segments }`；重新生成参考图，`restyleSegments=true` 时引用它、且已生成或生成中的剧情段视频标记过期（段提示词只引用参考图编号，保持不变），返回实际受影响的 `{ affectedSegments }` |
+| `POST /dramas/:id/cast/regenerate-all` | 按当前参考图方案重做某一类（`kind` 为 character/prop/scene）全部未锁定的参考图，可选 `restyleSegments` |
+| `GET /dramas/:id/chapters/:chapterId` | 读取单章原文 |
+| `DELETE /dramas/:id` | 删除作品与全部制作记录 |
+
+编排由后端调度循环推进，浏览器只提交意图；制作台目前按 3 秒轮询摘要和当前集详情，没有新增 SSE，也不需要调整代理缓冲配置。模型选择只接受逻辑模型或系统渠道模型；浏览器自定义渠道密钥无法驱动无人值守流水线。

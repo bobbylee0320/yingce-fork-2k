@@ -20,7 +20,7 @@ export function CanvasCameraControlPopover({ cameraControl, onCameraControlChang
         <>
             <button
                 type="button"
-                className={`canvas-node-composer-camera-tools-trigger inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 text-[var(--fs-tiny)] transition-colors ${compact ? "is-compact h-7" : "h-8"}`}
+                className={`canvas-node-composer-camera-tools-trigger inline-flex shrink-0 items-center gap-1 rounded-full px-2 text-[var(--fs-tiny)] transition-colors ${compact ? "is-compact size-8 justify-center" : "h-8"}`}
                 style={{
                     background: cameraEnabled ? `${theme.node.activeStroke}66` : theme.node.fill,
                     color: cameraEnabled ? theme.node.panel : theme.node.text,

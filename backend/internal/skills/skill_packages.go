@@ -381,13 +381,27 @@ func (s *Service) addSkillArchiveVersion(skill *model.Skill, archive skillPackag
 		if sourceCommit != "" {
 			versionLabel = shortCommit(sourceCommit)
 		} else if skill.CurrentVersionID != "" {
-			versionLabel = time.Now().UTC().Format("20060102-150405")
+			versionLabel = editedSkillVersionLabel()
 		}
 	}
 	version.VersionLabel = versionLabel
+	applySkillArchiveVersion(skill, version, archive, sourceType, sourceURL, sourceRef, sourceSubdir, sourceCommit, autoUpdate)
+	if err := s.repo.AddSkillVersion(skill, version, files); err != nil {
+		_ = os.Remove(filepath.Join(s.dataDir, "skill-packages", filepath.FromSlash(packageKey)))
+		return err
+	}
+	return nil
+}
+
+func editedSkillVersionLabel() string {
+	return time.Now().UTC().Format("20060102-150405")
+}
+
+// applySkillArchiveVersion 把新版本的包元数据同步到技能行；调用方负责在同一事务里写入版本和文件清单。
+func applySkillArchiveVersion(skill *model.Skill, version *model.SkillVersion, archive skillPackageArchive, sourceType string, sourceURL string, sourceRef string, sourceSubdir string, sourceCommit string, autoUpdate bool) {
 	now := time.Now()
-	skill.CurrentVersionID = versionID
-	skill.VersionLabel = versionLabel
+	skill.CurrentVersionID = version.ID
+	skill.VersionLabel = version.VersionLabel
 	skill.ContentHash = archive.ContentHash
 	skill.FileCount = len(archive.Files)
 	skill.TotalBytes = archive.TotalBytes
@@ -401,11 +415,6 @@ func (s *Service) addSkillArchiveVersion(skill *model.Skill, archive skillPackag
 	skill.AutoUpdate = autoUpdate
 	skill.LastCheckedAt = &now
 	skill.LastSyncedAt = &now
-	if err := s.repo.AddSkillVersion(skill, version, files); err != nil {
-		_ = os.Remove(filepath.Join(s.dataDir, "skill-packages", filepath.FromSlash(packageKey)))
-		return err
-	}
-	return nil
 }
 
 func (s *Service) persistSkillArchive(skillID string, versionID string, archive skillPackageArchive, sourceCommit string) (string, *model.SkillVersion, []model.SkillFile, error) {

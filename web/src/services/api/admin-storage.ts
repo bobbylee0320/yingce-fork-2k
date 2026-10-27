@@ -42,6 +42,15 @@ export type AdminStorageStats = {
     remoteBytes: number;
     byKind: Array<AdminStorageDimensionStat & { kind: string }>;
     byProvider: Array<AdminStorageDimensionStat & { provider: string }>;
+    /** 对象存储写入失败后先保存到服务器、等待补传的生成作品。 */
+    offload: AdminStorageOffloadSummary;
+};
+export type AdminStorageOffloadSummary = {
+    pending: number;
+    pendingBytes: number;
+    failed: number;
+    oldestPending?: string;
+    lastErrorCode?: string;
 };
 
 export type AdminResourceQuery = {

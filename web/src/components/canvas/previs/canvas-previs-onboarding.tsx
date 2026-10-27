@@ -198,8 +198,8 @@ export function CanvasPrevisOnboarding({ scope, open = true, restartSignal = 0, 
                     <span
                         key={index}
                         style={{
-                            width: "var(--space-1-half)",
-                            height: "var(--space-1-half)",
+                            width: "var(--space-2)",
+                            height: "var(--space-2)",
                             borderRadius: "var(--r-full)",
                             background: index < position ? "var(--workspace-accent)" : "var(--cn-stroke)",
                         }}

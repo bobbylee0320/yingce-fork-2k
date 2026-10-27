@@ -28,6 +28,8 @@ func (s *Service) storageSettingWithRuntimePolicy(setting ossSettingValue) ossSe
 
 var (
 	putOSSObject                = storage.PutOSSObject
+	putOSSObjectContext         = storage.PutOSSObjectContext
+	classifyStorageError        = storage.ClassifyError
 	getOSSObjectRange           = storage.GetOSSObjectRange
 	getAliyunOSSObjectRange     = storage.GetAliyunOSSObjectRange
 	signedOSSObjectURL          = storage.SignedOSSObjectURL

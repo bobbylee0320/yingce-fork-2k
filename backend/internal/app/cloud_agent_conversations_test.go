@@ -57,10 +57,17 @@ func TestCloudAgentConversationHistoryRestoresTurnsAndOwnership(t *testing.T) {
 	if second.Items[0].ParentID != root.ID || second.Items[0].ConversationID != root.ID || second.Items[0].UserPrompt != req.Prompt {
 		t.Fatalf("child history was not restored: %+v", second.Items[0])
 	}
+	// 目录之外的已选对话用单条摘要判断变化：必须取全局最新一轮，且不跨用户。
+	latest, err := s.CloudAgentConversationSummaryByID("user", root.ID)
+	if err != nil || latest.ID != root.ID || latest.LatestRunID != child.ID || latest.CanvasID != req.CanvasID || latest.Revision != child.Revision || latest.Status != child.Status {
+		t.Fatalf("conversation summary used a stale turn: %+v %v", latest, err)
+	}
 	for _, query := range []func() error{
 		func() error { _, err := s.CloudAgentConversations("other", "agent-canvas", "", 100); return err },
 		func() error { _, err := s.CloudAgentConversationRuns("other", root.ID, "", 100); return err },
 		func() error { _, err := s.CloudAgentConversationRuns("user", "missing-run", "", 100); return err },
+		func() error { _, err := s.CloudAgentConversationSummaryByID("other", root.ID); return err },
+		func() error { _, err := s.CloudAgentConversationSummaryByID("user", "missing-run"); return err },
 	} {
 		var appErr *AppError
 		if err := query(); !errors.As(err, &appErr) || appErr.Status != 404 {

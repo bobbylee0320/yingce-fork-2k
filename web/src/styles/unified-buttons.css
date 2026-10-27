@@ -6,9 +6,28 @@
 }
 
 :where(button, .ant-btn):focus-visible[data-input-modality="keyboard"] {
-    outline: 1px solid color-mix(in srgb, var(--foreground) 36%, transparent) !important;
-    outline-offset: 1px !important;
+    /* 与全局 :focus-visible 同一套：主色焦点环、宽度与偏移全站一致。 */
+    outline: var(--focus-ring-width) solid var(--ring) !important;
+    outline-offset: 2px !important;
     box-shadow: none !important;
+}
+/* 加载中宽度不变：转圈图标叠在按钮中央替换文字，文字只隐藏不移除（保留无障碍名称）。
+   antd 在按钮原本没有图标时会插入加载图标并撑宽按钮，这里统一改为覆盖式。 */
+.ant-btn.ant-btn-loading:not(.ant-btn-icon-only) {
+    position: relative;
+}
+.ant-btn.ant-btn-loading:not(.ant-btn-icon-only) > .ant-btn-loading-icon {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    width: auto !important;
+    margin: 0 !important;
+    opacity: 1 !important;
+    transform: none !important;
+}
+.ant-btn.ant-btn-loading:not(.ant-btn-icon-only) > :not(.ant-btn-loading-icon) {
+    opacity: 0;
 }
 
 .ant-select.app-unified-select[data-input-modality="keyboard"]:not(.ant-select-open) {
@@ -19,5 +38,5 @@
 .ant-select.app-unified-select .ant-select-content,
 .ant-select.app-unified-select .ant-select-selection-item,
 .ant-select.app-unified-select .ant-select-placeholder {
-    padding-inline-start: 10px !important;
+    padding-inline-start: 8px !important;
 }

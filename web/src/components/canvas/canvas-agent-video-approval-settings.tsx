@@ -71,12 +71,13 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
             },
         });
         if (!selected) return;
-        onChange({ ...agentApprovalModelSelection(config, selected), ...nextSettings });
+        // 兼容模型可能因新规格自动切换；模型字段必须以 selected 为准，不能被旧设置覆盖。
+        onChange({ ...nextSettings, logicalModelId: undefined, channelId: undefined, channelModelKey: undefined, ...agentApprovalModelSelection(config, selected) });
     };
 
     return (
         <fieldset disabled={disabled} className="min-w-0 space-y-3 border-0 p-0" data-canvas-no-zoom data-canvas-wheel-scroll aria-label="视频生成设置">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
                 <div className="text-xs" style={{ color: theme.node.muted }}>
                     生成模型
                 </div>

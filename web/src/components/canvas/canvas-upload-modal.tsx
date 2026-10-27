@@ -112,7 +112,7 @@ export function CanvasUploadModal({ open, onClose, onUpload }: CanvasUploadModal
                                             <X className="size-3.5" aria-hidden="true" />
                                         </button>
                                     </div>
-                                    <div className="truncate px-2 py-1.5 text-[var(--fs-micro)] text-foreground/70" title={file.name}>{file.name}</div>
+                                    <div className="truncate px-2 py-2 text-[var(--fs-micro)] text-foreground/70" title={file.name}>{file.name}</div>
                                 </article>
                             ))}
                         </div>

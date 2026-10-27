@@ -4,7 +4,7 @@ import { Tooltip } from "@/components/ui/base/tooltip";
 
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { DataNode } from "antd/es/tree";
-import { Check, ChevronRight, Code2, ExternalLink, File, FileArchive, FileCode2, FileImage, FileText, Folder, FolderOpen, Heart, Pencil, Plus, RefreshCw, Users } from "lucide-react";
+import { Check, ChevronRight, Code2, ExternalLink, File, FileArchive, FileCode2, FileImage, FileText, Folder, FolderOpen, Heart, Info, Pencil, Plus, RefreshCw, Users } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -14,7 +14,7 @@ import { getSkillFile, listSkillFiles, skillFileRawURL, type Skill, type SkillCa
 
 type PreviewMode = "preview" | "source";
 
-export function SkillDetailModal({ skill, loading, mutating, categories, onClose, onAdd, onLike, onEdit, onSync }: { skill: Skill | null; loading: boolean; mutating: boolean; categories: SkillCategory[]; onClose: () => void; onAdd: (skill: Skill) => void; onLike: (skill: Skill) => void; onEdit: (skill: Skill) => void; onSync: (skill: Skill) => void }) {
+export function SkillDetailModal({ skill, loading, mutating, categories, onClose, onAdd, onLike, onEdit, onOpenWorkbench, onSync }: { skill: Skill | null; loading: boolean; mutating: boolean; categories: SkillCategory[]; onClose: () => void; onAdd: (skill: Skill) => void; onLike: (skill: Skill) => void; onEdit: (skill: Skill) => void; onOpenWorkbench: (skill: Skill) => void; onSync: (skill: Skill) => void }) {
     const [files, setFiles] = useState<SkillPackageFile[]>([]);
     const [filesLoading, setFilesLoading] = useState(false);
     const [filesError, setFilesError] = useState("");
@@ -107,7 +107,12 @@ export function SkillDetailModal({ skill, loading, mutating, categories, onClose
                         </div>
                         <div className="skill-package-actions">
                             {skill.sourceType === "github" && skill.isOwner ? <Tooltip title={skill.syncError || "从 GitHub 检查并同步最新提交"}><Button loading={mutating} icon={<RefreshCw className="size-4" />} onClick={() => onSync(skill)}>同步</Button></Tooltip> : null}
-                            {skill.isOwner ? <Button icon={<Pencil className="size-4" />} onClick={() => onEdit(skill)}>编辑</Button> : null}
+                            {skill.isOwner ? <Tooltip title="编辑名称、简介、分类和展示信息"><Button icon={<Info className="size-4" />} onClick={() => onEdit(skill)}>技能信息</Button></Tooltip> : null}
+                            {skill.isOwner && skill.sourceType !== "github" ? (
+                                <Button icon={<Pencil className="size-4" />} onClick={() => onOpenWorkbench(skill)}>编辑</Button>
+                            ) : (
+                                <Tooltip title="在工作台中只读浏览全部文件"><Button icon={<Code2 className="size-4" />} onClick={() => onOpenWorkbench(skill)}>工作台</Button></Tooltip>
+                            )}
                             <Button loading={mutating} icon={<Heart className={`size-4 ${skill.isLike ? "fill-current text-rose-500" : ""}`} />} onClick={() => onLike(skill)}>{skill.isLike ? "已收藏" : "收藏"}</Button>
                             <Button type={skill.isAdded ? "default" : "primary"} loading={mutating} disabled={skill.isOwner} icon={skill.isAdded ? <Check className="size-4" /> : <Plus className="size-4" />} onClick={() => onAdd(skill)}>{skill.isOwner ? "我的技能" : skill.isAdded ? "已加入" : "加入技能"}</Button>
                         </div>
@@ -174,7 +179,7 @@ function SkillFilePreview({ skill, file, content, mode, filePaths, onNavigate }:
     return <pre className="skill-package-source"><code>{content.content}</code></pre>;
 }
 
-function SkillMarkdown({ source, currentPath, filePaths, onNavigate }: { source: string; currentPath: string; filePaths: Set<string>; onNavigate: (path: string) => void }) {
+export function SkillMarkdown({ source, currentPath, filePaths, onNavigate }: { source: string; currentPath: string; filePaths: Set<string>; onNavigate: (path: string) => void }) {
     const navigate = (event: MouseEvent<HTMLAnchorElement>, href?: string) => {
         const target = resolveSkillPath(currentPath, href || "");
         if (!target || !filePaths.has(target)) return;

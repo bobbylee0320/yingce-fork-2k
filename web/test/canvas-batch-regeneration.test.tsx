@@ -193,15 +193,16 @@ describe("batch regeneration result ownership", () => {
         expect(copied.content).toBe("/old.png");
     });
 
-    test("ordinary existing images still generate a separate result and keep their original node", async () => {
+    test("ordinary generated images regenerate in place and keep the previous result as a media version", async () => {
         const state = fixture();
         const candidate = { ...prepare(state), nodes: [state.input, state.output] };
         const result = await executeCandidate(candidate, "failed");
-        expect(result.started).toHaveLength(1);
-        expect(result.started[0]).not.toBe(state.output.id);
-        expect(result.nodes).toHaveLength(3);
-        expect(result.nodes.find((node) => node.id === state.output.id)).toBe(state.output);
-        expect(result.nodes.find((node) => node.id === result.started[0])!.metadata!.status).toBe("error");
+        expect(result.started).toEqual([state.output.id]);
+        expect(result.nodes).toHaveLength(2);
+        const regenerated = result.nodes.find((node) => node.id === state.output.id)!;
+        expect(regenerated.metadata!.status).toBe("error");
+        // 失败后旧图仍在版本历史中，可从版本面板恢复。
+        expect(regenerated.metadata!.mediaVersions?.map((version) => version.media.storageKey)).toEqual(["resource:old"]);
     });
 
     test("old thumbnails do not hide waiting, running or failed task status", () => {

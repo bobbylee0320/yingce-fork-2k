@@ -43,13 +43,13 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
 }
 [data-admin-root] .admin-update-announcement-toolbar > div,
 [data-admin-root] .admin-update-announcement-add-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
 }
 [data-admin-root] .admin-update-announcement-meta {
     display: grid;
@@ -58,7 +58,7 @@
 }
 [data-admin-root] .admin-update-announcement-block {
     display: grid;
-    gap: 14px;
+    gap: 16px;
     padding: 16px;
     border: 1px solid var(--admin-border);
     border-radius: var(--admin-radius-lg);
@@ -80,9 +80,9 @@
 }
 [data-admin-root] .admin-update-announcement-preview-heading {
     display: grid;
-    gap: 6px;
-    padding-bottom: 18px;
-    margin-bottom: 22px;
+    gap: 8px;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
     border-bottom: 1px solid var(--admin-border);
     overflow-wrap: anywhere;
 }

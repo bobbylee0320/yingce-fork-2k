@@ -22,6 +22,7 @@ import {
     decideAgentApproval,
     sendAgentInterjection,
     sendAgentMessage,
+    withdrawAgentInterjection,
     subscribeAgentEvents,
     undoAgentCanvasRun,
     updateAgentProfile,
@@ -151,6 +152,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
     const undoRequestsRef = useRef(new Set<string>());
     const [exporting, setExporting] = useState(false);
     const [stopping, setStopping] = useState(false);
+    const [withdrawingInterjectionId, setWithdrawingInterjectionId] = useState<string | null>(null);
     const [approval, setApproval] = useState<ApprovalState | null>(null);
     const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>("request_approval");
     const [contextScope, setContextScope] = useState<AgentContextKey[]>(["canvas"]);
@@ -687,7 +689,8 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 if (active) {
                     setCloudHistoryLoading(false);
                     clearTimeout(timer);
-                    timer = setTimeout(() => { void refresh(); }, 4000);
+                    // 后台标签页不轮询；回到前台由 visibilitychange 立即补一次并恢复定时。
+                    timer = setTimeout(() => { if (document.visibilityState !== "hidden") void refresh(); }, 4000);
                 }
             }
         };
@@ -812,6 +815,30 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
             if (status === 409) setPrompt(value);
         } finally {
             if (accountIsCurrent() && currentScope.current === scope) setBusy(false);
+        }
+    };
+
+    // 撤回只作用于这句尚未送达的插话：本轮继续运行，已提交的生成任务照常完成。
+    const withdrawInterjection = async (messageId: string) => {
+        const activeRun = run;
+        if (!accountIsCurrent() || !activeRun?.id || withdrawingInterjectionId) return;
+        const scope = conversationScope;
+        const original = messages.find((item) => item.id === messageId)?.text || "";
+        setWithdrawingInterjectionId(messageId);
+        try {
+            await withdrawAgentInterjection(activeRun.id, messageId);
+            if (!accountIsCurrent() || currentScope.current !== scope) return;
+            // SSE 也会推送撤回事件；这里先落本地状态，断线时界面也与服务端一致。
+            setMessages((current) => current.map((item) => (item.id === messageId ? { ...item, interjection: "withdrawn" as const } : item)));
+            setPrompt((current) => (current.trim() ? current : original));
+        } catch (cause) {
+            if (!accountIsCurrent() || currentScope.current !== scope) return;
+            if ((cause as { status?: number }).status === 409) {
+                setMessages((current) => current.map((item) => (item.id === messageId && item.interjection === "sent" ? { ...item, interjection: "delivered" as const } : item)));
+            }
+            setMessages((current) => appendAgentError(current, `interject-withdraw-${messageId}`, cause, "插话没有撤回"));
+        } finally {
+            if (accountIsCurrent() && currentScope.current === scope) setWithdrawingInterjectionId(null);
         }
     };
 
@@ -1393,6 +1420,8 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                         onApprovalReasonChange={(reason) => setApproval((current) => (current ? { ...current, reason } : current))}
                                         onApprove={(settings) => void submitApproval("approve", settings)}
                                         onReject={() => void submitApproval("reject")}
+                                        onWithdrawInterjection={running && !otherAgentRunning && connectionStatus === "connected" ? (messageId) => void withdrawInterjection(messageId) : undefined}
+                                        withdrawingInterjectionId={withdrawingInterjectionId}
                                     />
                                     {canvasCloudConversation && !canvasCloudConversationIsCurrent ? (
                                         <div role="status" className="flex items-center justify-between gap-2 px-5 py-2 text-xs" style={{ color: theme.node.muted }}>

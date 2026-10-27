@@ -208,16 +208,19 @@ func (s *Service) comparePaymentReconciliation(ctx context.Context, provider pay
 		if paidAt.IsZero() {
 			paidAt = billDate.Add(12 * time.Hour)
 		}
-		_, _, creditErr := s.repo.CompletePaymentOrder(run.ProviderID, merchantOrderNo, repository.PaymentEvidence{
+		recoveredOrder, granted, creditErr := s.repo.CompletePaymentOrder(run.ProviderID, merchantOrderNo, repository.PaymentEvidence{
 			ProviderTradeNo: confirmed.ProviderTradeNo, ProviderStatus: confirmed.ProviderStatus,
 			AmountFen: confirmed.AmountFen, Currency: confirmed.Currency, PaidAt: paidAt,
 		})
 		if creditErr != nil {
 			item.Result = model.PaymentReconciliationCreditFailed
-			item.Detail = "渠道账单确认已支付，但自动补发积分失败：" + safePaymentError(creditErr)
+			item.Detail = "渠道账单确认已支付，但自动补发权益失败：" + safePaymentError(creditErr)
 			items = append(items, item)
 			failed++
 			continue
+		}
+		if granted {
+			s.afterStorageOrderGranted(recoveredOrder)
 		}
 		item.Result = model.PaymentReconciliationRecovered
 		item.Resolved = true

@@ -12,9 +12,13 @@ import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { isAudioFile } from "@/lib/canvas/canvas-project-generation";
 import { fitImageNodeSize, fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { CANVAS_UPLOAD_ACCEPT, createFileUploadPlaceholder, uploadNodeType, uploadPercent } from "@/lib/canvas/canvas-file-upload";
+import { recordReplacedMediaVersion } from "@/lib/canvas/canvas-media-versions";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { uploadMediaFile } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
+import { prepareCanvasImage } from "@/services/canvas-image-loader";
+import { registerUploadPreview, releaseUploadPreview } from "@/services/canvas-upload-preview";
+import { peekCachedResourceObjectUrl } from "@/services/resource-blob-cache";
 import { getProjectUnit } from "@/services/api/projects";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useAssetStore, type ImageAsset } from "@/stores/use-asset-store";
@@ -36,13 +40,26 @@ type UseCanvasUploadOptions = {
     setDialogNodeId: Dispatch<SetStateAction<string | null>>;
 };
 
-export type StartCanvasUploadStatus = (title: string, detail: string, total?: number) => {
+export type StartCanvasUploadStatus = (title: string, detail: string, total?: number, initialStep?: number) => CanvasUploadProgress;
+
+type CanvasUploadProgress = {
     update: (detail: string, step: number) => void;
     done: (detail?: string) => void;
     fail: (detail?: string) => void;
 };
 
+type FileNodeUploadOptions = {
+    // 批量上传由批量入口统一展示进度、选中结果和汇总提示，并在全部完成后只刷新一次项目。
+    batch?: { onLocalOnly: () => void };
+};
+
+const SILENT_UPLOAD_PROGRESS: CanvasUploadProgress = { update: () => {}, done: () => {}, fail: () => {} };
 const NODE_STATUS_SUCCESS = "success" as const;
+// 同时上传的文件数：足以重叠网络等待与素材同步，又不会一次性抢满后端上传限流。
+const BATCH_UPLOAD_CONCURRENCY = 3;
+// 进度回调可能每几毫秒触发一次；节点进度按此间隔合并，避免整份节点数组被高频重建。
+const UPLOAD_PROGRESS_PAINT_MS = 120;
+const UPLOAD_WARM_TIMEOUT_MS = 1500;
 const BATCH_UPLOAD_COLUMNS = 3;
 const BATCH_UPLOAD_COLUMN_GAP = 380;
 const BATCH_UPLOAD_ROW_GAP = 300;
@@ -51,6 +68,21 @@ const CANVAS_BATCH_TABLE_SELECTOR = "[data-canvas-batch-table]";
 function isBatchTableDragEvent(event: DragEvent<HTMLElement>) {
     const target = event.target instanceof Element ? event.target : null;
     return Boolean(target?.closest(CANVAS_BATCH_TABLE_SELECTOR));
+}
+
+// 切换为正式图片节点前先解码本地原图，节点首帧即可上屏；超时或失败只放弃预热，不影响上传结果。
+async function warmUploadedImage(storageKey?: string) {
+    const url = storageKey ? peekCachedResourceObjectUrl(storageKey) : "";
+    if (!url) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), UPLOAD_WARM_TIMEOUT_MS);
+    try {
+        await prepareCanvasImage(url, controller.signal);
+    } catch {
+        // 预热只是体验优化；节点仍会按正常资源加载路径显示。
+    } finally {
+        window.clearTimeout(timer);
+    }
 }
 
 export function useCanvasUpload({
@@ -83,9 +115,9 @@ export function useCanvasUpload({
         statusTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     }, []);
 
-    const startUploadStatus = useCallback<StartCanvasUploadStatus>((title, detail, total = 3) => {
+    const startUploadStatus = useCallback<StartCanvasUploadStatus>((title, detail, total = 3, initialStep = 1) => {
         const id = (uploadStatusIdRef.current += 1);
-        setUploadStatus({ id, title, detail, step: 1, total });
+        setUploadStatus({ id, title, detail, step: initialStep, total });
         const dismiss = (delay: number) => {
             const timer = window.setTimeout(() => {
                 statusTimersRef.current.delete(timer);
@@ -94,7 +126,7 @@ export function useCanvasUpload({
             statusTimersRef.current.add(timer);
         };
         return {
-            update: (nextDetail: string, step: number) => setUploadStatus((current) => (current?.id === id ? { ...current, detail: nextDetail, step: Math.min(Math.max(step, 1), total) } : current)),
+            update: (nextDetail: string, step: number) => setUploadStatus((current) => (current?.id === id ? { ...current, detail: nextDetail, step: Math.min(Math.max(step, 0), total) } : current)),
             done: (nextDetail = "处理完成") => {
                 setUploadStatus((current) => (current?.id === id ? { ...current, detail: nextDetail, step: total, done: true } : current));
                 dismiss(850);
@@ -112,11 +144,11 @@ export function useCanvasUpload({
         if (dialog !== "preserve") setDialogNodeId(dialog === "open" ? nodeId : null);
     }, [setDialogNodeId, setSelectedConnectionId, setSelectedNodeIds]);
 
-    const persistMediaNode = useCallback(async (node: CanvasNodeData) => {
+    const persistMediaNode = useCallback(async (node: CanvasNodeData, options: { refreshProject?: boolean } = {}) => {
         try {
             const result = await ensureCanvasNodeAsset({ canvasId, domainProjectId, node, source: "canvas-upload" });
             setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item));
-            if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
+            if (domainProjectId && options.refreshProject !== false) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
             return { persisted: true, syncPending: result.syncPending };
         } catch (error) {
             message.warning(error instanceof Error ? `媒体已添加到画布，但素材同步失败：${error.message}` : "媒体已添加到画布，但素材同步失败");
@@ -150,31 +182,42 @@ export function useCanvasUpload({
     }, [canvasId, domainProjectId, queryClient]);
 
     const activeUploadsRef = useRef(new Set<string>());
-    const createFileNode = useCallback(async (file: File, position: Position, replaceId?: string) => {
+    const createFileNode = useCallback(async (file: File, position: Position, replaceId?: string, options: FileNodeUploadOptions = {}) => {
         const original = replaceId ? nodesRef.current.find((node) => node.id === replaceId) : undefined;
         if (replaceId && (!original || activeUploadsRef.current.has(replaceId))) return null;
         const id = replaceId || `upload-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const batch = options.batch;
         activeUploadsRef.current.add(id);
-        const progress = startUploadStatus(replaceId ? "替换文件" : "上传文件", "读取文件信息", domainProjectId ? 4 : 3);
+        const progress = batch ? SILENT_UPLOAD_PROGRESS : startUploadStatus(replaceId ? "替换文件" : "上传文件", "读取文件信息", domainProjectId ? 4 : 3);
+        const fileType = uploadNodeType(file);
+        // 占位节点首帧就显示本地文件，上传进度叠加在预览之上，不再是一块空白。
+        if (fileType === CanvasNodeType.Image || fileType === CanvasNodeType.Video) registerUploadPreview(id, file);
         try {
             const placeholder = await createFileUploadPlaceholder(id, file, position);
             setNodes((current) => replaceId ? current.map((item) => item.id === id ? {
                 ...item, width: placeholder.width, height: placeholder.height,
                 metadata: { ...item.metadata, fileUpload: "uploading", fileUploadProgress: undefined, status: undefined, size: undefined, errorDetails: undefined },
             } : item) : [...current, placeholder]);
-            selectInsertedNode(id, "close");
+            if (!batch) selectInsertedNode(id, "close");
             let lastPercent: number | undefined;
+            let lastPaintAt = 0;
             const onProgress = (loaded: number, total: number) => {
                 const percent = uploadPercent(loaded, total);
                 if (percent === undefined || percent === lastPercent) return;
+                const now = performance.now();
+                if (percent < 100 && now - lastPaintAt < UPLOAD_PROGRESS_PAINT_MS) return;
                 lastPercent = percent;
+                lastPaintAt = now;
                 setNodes((current) => current.map((item) => item.id === id ? { ...item, metadata: { ...item.metadata, fileUploadProgress: percent } } : item));
                 progress.update(percent === 100 ? "文件已传输，正在保存与处理" : `已上传 ${percent}%`, 2);
             };
             progress.update("上传文件并同步资源", 2);
             let metadata: CanvasNodeData["metadata"];
             if (placeholder.type === CanvasNodeType.Image) {
-                metadata = imageMetadata(await uploadImage(file, onProgress));
+                const naturalSize = { width: placeholder.metadata?.naturalWidth || 0, height: placeholder.metadata?.naturalHeight || 0 };
+                const uploaded = await uploadImage(file, onProgress, naturalSize);
+                metadata = imageMetadata(uploaded);
+                await warmUploadedImage(uploaded.storageKey);
             } else if (placeholder.type === CanvasNodeType.Text) {
                 const content = await file.text();
                 const resource = await uploadResourceFile(file, "file", { fileName: file.name }, onProgress);
@@ -189,7 +232,7 @@ export function useCanvasUpload({
                 progress.done("上传完成，画布占位已移除");
                 return null;
             }
-            const node: CanvasNodeData = {
+            const uploadedNode: CanvasNodeData = {
                 ...currentNode, type: placeholder.type,
                 metadata: {
                     ...currentNode.metadata, ...metadata,
@@ -208,13 +251,18 @@ export function useCanvasUpload({
                     } : {}),
                 },
             };
+            // 替换文件保留旧媒体为历史版本，可在版本面板切回。
+            const node = replaceId ? recordReplacedMediaVersion(original, uploadedNode, "upload") : uploadedNode;
             setNodes((current) => current.map((item) => item.id === id ? { ...item, type: node.type, metadata: node.metadata } : item));
             if (domainProjectId) progress.update("写入项目资产", 4);
-            const persisted = await persistMediaNode(node);
+            const persisted = await persistMediaNode(node, { refreshProject: !batch });
             const localOnly = metadata.storageKey && !resourceIdFromStorageKey(metadata.storageKey);
             const pendingLabel = domainProjectId ? "项目资产正在自动同步" : "云端素材正在自动同步";
             progress.done(localOnly ? "已保存在本机，尚未上传到服务器" : persisted.syncPending ? `文件已添加到画布，${pendingLabel}` : persisted.persisted ? "文件已添加到画布" : "文件已添加，项目资产待重试");
-            if (localOnly) message.warning("文件已保存在本机，尚未上传到服务器");
+            if (localOnly) {
+                if (batch) batch.onLocalOnly();
+                else message.warning("文件已保存在本机，尚未上传到服务器");
+            }
             return id;
         } catch (error) {
             const details = error instanceof Error ? error.message : "文件上传失败";
@@ -222,10 +270,12 @@ export function useCanvasUpload({
                 ...item, width: original.width, height: original.height, metadata: original.metadata,
             } : { ...item, metadata: { ...item.metadata, fileUpload: "error", fileUploadProgress: undefined, errorDetails: details } }));
             progress.fail(details);
-            message.error(details);
+            // 批量上传的失败原因留在各自节点上，并由批量汇总提示数量，避免逐个弹错。
+            if (!batch) message.error(details);
             return null;
         } finally {
             activeUploadsRef.current.delete(id);
+            releaseUploadPreview(id);
         }
     }, [domainProjectId, message, nodesRef, persistMediaNode, selectInsertedNode, setNodes, startUploadStatus]);
 
@@ -341,27 +391,46 @@ export function useCanvasUpload({
             return false;
         }
         const center = uploadTargetRef.current?.position || getCanvasCenter();
-        const columns = Math.min(BATCH_UPLOAD_COLUMNS, supportedFiles.length);
+        const total = supportedFiles.length;
+        const columns = Math.min(BATCH_UPLOAD_COLUMNS, total);
         const originX = center.x - ((columns - 1) * BATCH_UPLOAD_COLUMN_GAP) / 2;
-        const createdIds: string[] = [];
-        for (let index = 0; index < supportedFiles.length; index += 1) {
-            const file = supportedFiles[index];
-            const position = {
-                x: originX + (index % columns) * BATCH_UPLOAD_COLUMN_GAP,
-                y: center.y + Math.floor(index / columns) * BATCH_UPLOAD_ROW_GAP,
-            };
-            const createdId = await createFileNode(file, position);
-            if (createdId) createdIds.push(createdId);
+        const positionAt = (index: number) => ({
+            x: originX + (index % columns) * BATCH_UPLOAD_COLUMN_GAP,
+            y: center.y + Math.floor(index / columns) * BATCH_UPLOAD_ROW_GAP,
+        });
+        // 单个文件沿用逐步进度；多个文件改为有限并发，整体进度按已完成数量展示。
+        const progress = total > 1 ? startUploadStatus(`上传 ${total} 个文件`, `已完成 0/${total}`, total, 0) : null;
+        const results: Array<string | null> = new Array(total).fill(null);
+        let nextIndex = 0;
+        let settled = 0;
+        let localOnlyCount = 0;
+        const batch = progress ? { onLocalOnly: () => { localOnlyCount += 1; } } : undefined;
+        const worker = async () => {
+            while (nextIndex < total) {
+                const index = nextIndex;
+                nextIndex += 1;
+                results[index] = await createFileNode(supportedFiles[index], positionAt(index), undefined, { batch });
+                settled += 1;
+                progress?.update(`已完成 ${settled}/${total}`, settled);
+            }
+        };
+        await Promise.all(Array.from({ length: Math.min(BATCH_UPLOAD_CONCURRENCY, total) }, worker));
+        const createdIds = results.filter((id): id is string => Boolean(id));
+        if (batch && domainProjectId && createdIds.length) void queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
+        if (!createdIds.length) {
+            progress?.fail("文件均未上传成功，请查看节点上的失败原因");
+            return false;
         }
-        if (!createdIds.length) return false;
         setSelectedNodeIds(new Set(createdIds));
         setSelectedConnectionId(null);
         setDialogNodeId(null);
-        const failedCount = supportedFiles.length - createdIds.length;
+        const failedCount = total - createdIds.length;
+        progress?.done(failedCount ? `已添加 ${createdIds.length} 个，${failedCount} 个失败` : `已添加 ${createdIds.length} 个文件`);
         if (failedCount) message.warning(`已添加 ${createdIds.length} 个文件，${failedCount} 个上传失败`);
+        else if (localOnlyCount) message.warning(`已添加 ${createdIds.length} 个文件，其中 ${localOnlyCount} 个暂存在本机，稍后自动同步`);
         else message.success(`已添加 ${createdIds.length} 个文件到画布`);
         return true;
-    }, [createFileNode, getCanvasCenter, message, setDialogNodeId, setSelectedConnectionId, setSelectedNodeIds]);
+    }, [createFileNode, domainProjectId, getCanvasCenter, message, queryClient, setDialogNodeId, setSelectedConnectionId, setSelectedNodeIds, startUploadStatus]);
 
     // 时间线专用：把本地音视频文件上传为直连媒体（仅时间线作用域，不创建画布节点），返回媒体描述数组。
     const uploadTimelineMedia = useCallback(async (files: File[]): Promise<TimelineDirectMedia[]> => {

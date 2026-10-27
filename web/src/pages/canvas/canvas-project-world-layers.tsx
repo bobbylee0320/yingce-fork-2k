@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { Link2 } from "lucide-react";
 import { CANVAS_CONNECTION_STROKE_WIDTH, canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -14,6 +14,8 @@ import { sortCanvasNodesByStackOrder, type CanvasNodeStackOrder } from "@/lib/ca
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import type { CanvasNodeRenderLOD } from "@/lib/canvas/canvas-node-lod";
+import type { CanvasSpatialBounds } from "@/lib/canvas/canvas-spatial-index";
+import { useCanvasProgressiveNodeMount } from "./use-canvas-progressive-node-mount";
 import type { CanvasDisplayConnection, CanvasFolderStyle, CanvasFolderTheme, CanvasNodeData, Position, SelectionBox } from "@/types/canvas";
 
 type DragPreview = { x: number; y: number; nodeIds: Set<string> } | null;
@@ -32,7 +34,10 @@ type CanvasProjectWorldLayersProps = {
     isConnecting: boolean;
     connectionApproach: CanvasConnectionApproach;
     nodeById: Map<string, CanvasNodeData>;
-    visibleNodes: CanvasNodeData[];
+    /** 视口内与缓冲区候选节点；屏外部分由本层分帧挂载。 */
+    candidateNodes: CanvasNodeData[];
+    immediateRenderNodeIds: Set<string>;
+    renderViewBounds: CanvasSpatialBounds;
     nodeRenderLODById: Map<string, CanvasNodeRenderLOD>;
     nodeStackOrder: CanvasNodeStackOrder;
     frameChildrenById: Map<string, CanvasNodeData[]>;
@@ -92,17 +97,26 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
     useEffect(() => {
         if (activeMediaNodeId && !props.nodeById.has(activeMediaNodeId)) setActiveMediaNodeId(null);
     }, [activeMediaNodeId, props.nodeById]);
+    const visibleNodes = useCanvasProgressiveNodeMount(props.candidateNodes, props.immediateRenderNodeIds, props.renderViewBounds);
     const orderedVisibleNodes = useMemo(() => [
-        ...props.visibleNodes.filter(isFrameNode),
-        ...sortCanvasNodesByStackOrder(props.visibleNodes.filter((node) => !isFrameNode(node)), props.nodeStackOrder),
-    ], [props.nodeStackOrder, props.visibleNodes]);
-    const batchPreviews = useMemo(() => new Map(props.visibleNodes.filter((node) => node.metadata?.isBatchRoot).map((node) => [
-        node.id,
-        (node.metadata?.batchChildIds || []).filter((id) => id !== node.metadata?.primaryImageId)
-            .map((id) => props.nodeById.get(id))
-            .filter((child): child is CanvasNodeData => Boolean(child && child.metadata?.batchRootId === node.id))
-            .slice(0, 5),
-    ])), [props.visibleNodes, props.nodeById]);
+        ...visibleNodes.filter(isFrameNode),
+        ...sortCanvasNodesByStackOrder(visibleNodes.filter((node) => !isFrameNode(node)), props.nodeStackOrder),
+    ], [props.nodeStackOrder, visibleNodes]);
+    const batchPreviewsRef = useRef(new Map<string, CanvasNodeData[]>());
+    const batchPreviews = useMemo(() => {
+        const previous = batchPreviewsRef.current;
+        const next = new Map(visibleNodes.filter((node) => node.metadata?.isBatchRoot).map((node): [string, CanvasNodeData[]] => {
+            const children = (node.metadata?.batchChildIds || []).filter((id) => id !== node.metadata?.primaryImageId)
+                .map((id) => props.nodeById.get(id))
+                .filter((child): child is CanvasNodeData => Boolean(child && child.metadata?.batchRootId === node.id))
+                .slice(0, 5);
+            // 子图对象未变时沿用旧数组，避免挂载/视口变化让所有批次封面重渲染。
+            const current = previous.get(node.id);
+            return [node.id, current && current.length === children.length && children.every((child, index) => child === current[index]) ? current : children];
+        }));
+        batchPreviewsRef.current = next;
+        return next;
+    }, [visibleNodes, props.nodeById]);
     const framePreviewNodes = (node: CanvasNodeData) => {
         const assetFolderId = node.metadata?.folder?.assetFolderId;
         if (assetFolderId) return props.linkedFolderPreviewNodesById.get(assetFolderId) || EMPTY_CANVAS_NODES;
@@ -288,7 +302,7 @@ function BatchConnectionHandle({ scale, count, active, onPointerDown }: { scale:
             type="button"
             data-canvas-no-zoom
             data-icon-only
-            className="pointer-events-auto absolute grid -translate-y-1/2 translate-x-1/2 place-items-center rounded-full border shadow-md transition hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="pointer-events-auto absolute grid -translate-y-1/2 translate-x-1/2 place-items-center rounded-full border shadow-md transition-opacity duration-150 hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             style={buttonStyle}
             title={`批量连接 ${count} 个节点`}
             aria-label={`批量连接 ${count} 个节点`}

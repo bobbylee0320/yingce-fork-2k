@@ -105,6 +105,29 @@ func registerAdminAPILogRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, result)
 	})
+	r.POST("/admin/api-logs/:id/recover-media", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req struct {
+			// charge：订单已退款时恢复后补扣；waive：免除扣费。订单未退款时忽略。
+			RefundedBilling string `json:"refundedBilling"`
+		}
+		if c.Request.ContentLength != 0 {
+			if err := c.ShouldBindJSON(&req); err != nil {
+				fail(c, http.StatusBadRequest, err)
+				return
+			}
+		}
+		task, err := svc.AdminRecoverTaskMedia(user, c.Param("id"), req.RefundedBilling)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"task": task})
+	})
 	r.POST("/admin/api-logs/recover-batch", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

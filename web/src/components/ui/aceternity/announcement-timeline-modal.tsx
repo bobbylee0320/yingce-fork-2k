@@ -108,7 +108,7 @@ function AnnouncementTimelineItem({ announcement, last, reducedMotion }: { annou
             whileHover={reducedMotion ? undefined : { x: 2 }}
             className="relative grid grid-cols-[26px_minmax(0,1fr)] gap-3 pb-7 last:pb-2 sm:grid-cols-[32px_minmax(0,1fr)] sm:gap-4"
         >
-            <div className="relative flex justify-center pt-1.5" aria-hidden>
+            <div className="relative flex justify-center pt-2" aria-hidden>
                 {!last ? <span className="absolute left-1/2 top-5 h-[calc(100%+4px)] w-px -translate-x-1/2 bg-border" /> : null}
                 <span className={`relative z-10 size-3.5 rounded-full border-[3px] border-background ${meta.dot}`} />
             </div>

@@ -16,6 +16,7 @@ const (
 	CodeUnavailable         = kernel.CodeUnavailable
 	CodeTimeout             = kernel.CodeTimeout
 	CodeQuotaExceeded       = kernel.CodeQuotaExceeded
+	CodeStorageReadOnly     = kernel.CodeStorageReadOnly
 	CodeIdempotencyConflict = kernel.CodeIdempotencyConflict
 	CodeRateLimited         = kernel.CodeRateLimited
 )
@@ -31,6 +32,8 @@ const (
 	ReasonProjectNameConflict = kernel.ReasonProjectNameConflict
 	ReasonFailedPrecondition  = kernel.ReasonFailedPrecondition
 	ReasonQuotaExceeded       = kernel.ReasonQuotaExceeded
+	ReasonStorageCapacity     = kernel.ReasonStorageCapacityExceeded
+	ReasonStorageReadOnly     = kernel.ReasonStorageReadOnly
 	ReasonRateLimited         = kernel.ReasonRateLimited
 	ReasonUnavailable         = kernel.ReasonUnavailable
 	ReasonTimeout             = kernel.ReasonTimeout

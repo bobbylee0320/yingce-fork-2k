@@ -50,7 +50,7 @@ export function WorkingDots({
                 const behind = (phase - scalar + 1) % 1;
                 const lit = Math.max(0, 1 - behind / trail) ** 1.5;
                 const opacity = minOpacity + (1 - minOpacity) * lit;
-                return <span key={index} className="rounded-[1px] bg-current" style={{ width: dotSize, height: dotSize, opacity }} />;
+                return <span key={index} className="rounded-[4px] bg-current" style={{ width: dotSize, height: dotSize, opacity }} />;
             })}
         </span>
     );

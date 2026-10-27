@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Alert, App, Button, Drawer, Input, Skeleton, Tabs, Typography } from "antd";
 import { AdminEmpty, AdminStatusBadge } from "@/pages/admin/components/admin-ui";
-import { Activity, Clipboard, Link2, RefreshCw, Save, Video } from "lucide-react";
+import { Activity, Clipboard, HardDriveUpload, Link2, RefreshCw, Save, Video } from "lucide-react";
 import { formatCredits } from "@/constant/credits";
-import { getAdminApiLog, queryAdminApiLogTask, recoverAdminApiLogVideoByURL, type ApiCallLog } from "@/services/api/auth";
+import { getAdminApiLog, queryAdminApiLogTask, recoverAdminApiLogTaskMedia, recoverAdminApiLogVideoByURL, type ApiCallLog } from "@/services/api/auth";
 
 export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: string | null; onClose: () => void; onLogUpdated?: (log: ApiCallLog) => void }) {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const [log, setLog] = useState<ApiCallLog | null>(null);
     const [loading, setLoading] = useState(false);
     const [querying, setQuerying] = useState(false);
@@ -80,13 +80,47 @@ export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: st
         }
     };
 
+    const runMediaRecovery = async (refundedBilling?: "charge" | "waive") => {
+        if (!log) return;
+        setQuerying(true);
+        setResultText("");
+        try {
+            await recoverAdminApiLogTaskMedia(log.id, refundedBilling);
+            await refresh(log.id);
+            setResultText("已重新排队保存作品。对象存储仍不可用时会先保存到服务器，稍后自动同步。");
+            message.success("已重新排队保存作品");
+        } catch (error) {
+            setResultText(error instanceof Error ? error.message : "恢复作品保存失败");
+        } finally {
+            setQuerying(false);
+        }
+    };
+
+    const confirmMediaRecovery = (refundedBilling?: "charge" | "waive") => {
+        if (!log) return;
+        if (!refundedBilling) {
+            void runMediaRecovery();
+            return;
+        }
+        const charge = refundedBilling === "charge";
+        modal.confirm({
+            title: charge ? "恢复作品并补扣积分？" : "恢复作品并免除扣费？",
+            content: charge
+                ? `原订单已退回 ${formatCredits(log.billingAmountMicrocredits)} 积分。作品保存成功后会从用户可用余额补扣，余额不足时会变为负数。`
+                : "原订单保持已退回状态，作品保存成功后不再扣费。",
+            okText: charge ? "恢复并补扣" : "恢复，不扣费",
+            cancelText: "取消",
+            onOk: () => runMediaRecovery(refundedBilling),
+        });
+    };
+
     const title = log ? (
         <div className="flex min-w-0 items-center gap-3">
             <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-500/12 text-blue-500">
                 <Activity className="size-[18px]" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-                <div className="truncate text-[15px] font-semibold text-foreground">请求日志详情</div>
+                <div className="truncate text-[var(--fs-body)] font-semibold text-foreground">请求日志详情</div>
                 <div className="mt-0.5 truncate text-xs font-normal text-foreground/50">
                     {capabilityText(log.capability)} · {log.model || "未识别模型"} · {formatTime(log.startedAt || log.createdAt)}
                 </div>
@@ -96,7 +130,7 @@ export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: st
 
     return (
         <Drawer title={title} open={Boolean(logId)} onClose={onClose} size="min(1120px, 66vw)" destroyOnHidden className="api-log-detail-drawer-panel" rootClassName="admin-drawer api-log-detail-drawer">
-            {loading ? <Skeleton active paragraph={{ rows: 10 }} /> : log ? <LogDetail log={log} providerRequestId={providerRequestId} videoURL={videoURL} resultText={resultText} querying={querying} onProviderRequestIdChange={setProviderRequestId} onVideoURLChange={setVideoURL} onQuery={runQuery} onRecoverURL={runURLRecovery} /> : <AdminEmpty size="compact" title="没有请求详情" />}
+            {loading ? <Skeleton active paragraph={{ rows: 10 }} /> : log ? <LogDetail log={log} providerRequestId={providerRequestId} videoURL={videoURL} resultText={resultText} querying={querying} onProviderRequestIdChange={setProviderRequestId} onVideoURLChange={setVideoURL} onQuery={runQuery} onRecoverURL={runURLRecovery} onRecoverMedia={confirmMediaRecovery} /> : <AdminEmpty size="compact" title="没有请求详情" />}
         </Drawer>
     );
 }
@@ -111,9 +145,12 @@ type LogDetailProps = {
     onVideoURLChange: (value: string) => void;
     onQuery: () => void;
     onRecoverURL: () => void;
+    onRecoverMedia: (refundedBilling?: "charge" | "waive") => void;
 };
 
-function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onProviderRequestIdChange, onVideoURLChange, onQuery, onRecoverURL }: LogDetailProps) {
+function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onProviderRequestIdChange, onVideoURLChange, onQuery, onRecoverURL, onRecoverMedia }: LogDetailProps) {
+    const mediaRecoverable = log.taskStatus === "failed" && Boolean(log.mediaStage) && log.mediaStage !== "completed";
+    const refunded = log.billingStatus === "refunded";
     const providerStatus = log.providerStatus?.toLowerCase();
     const processing = ["queued", "pending", "processing", "running", "in_progress"].includes(providerStatus || "");
     const failed = log.status === "failed" || ["failed", "cancelled", "expired"].includes(providerStatus || "");
@@ -152,10 +189,44 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
                 ) : null}
             </section>
 
+            {mediaRecoverable ? (
+                <section className="api-log-detail-section api-log-recovery-section">
+                    <div className="api-log-detail-section-heading">
+                        <div className="flex items-center gap-2">
+                            <div className="grid size-8 place-items-center rounded-md bg-amber-500/12 text-amber-500">
+                                <HardDriveUpload className="size-4" aria-hidden="true" />
+                            </div>
+                            <div>
+                                <div className="api-log-detail-eyebrow">MEDIA DELIVERY</div>
+                                <h2>作品保存恢复</h2>
+                            </div>
+                        </div>
+                        <span className="text-xs text-foreground/45">作品已生成，不会重新生成</span>
+                    </div>
+                    <div className="api-log-recovery-body">
+                        <div className="api-log-recovery-row">
+                            <div className="api-log-recovery-label">
+                                <span>重新保存作品</span>
+                                <small>{refunded ? "原订单已退回，请选择恢复后是否补扣" : "保存成功后按原订单结算"}</small>
+                            </div>
+                            {refunded ? (
+                                <>
+                                    <Button icon={<Save className="size-3.5" />} loading={querying} onClick={() => onRecoverMedia("waive")}>恢复，不扣费</Button>
+                                    <Button type="primary" icon={<Save className="size-3.5" />} loading={querying} onClick={() => onRecoverMedia("charge")}>恢复并补扣</Button>
+                                </>
+                            ) : (
+                                <Button type="primary" icon={<Save className="size-3.5" />} loading={querying} onClick={() => onRecoverMedia()}>重新保存</Button>
+                            )}
+                        </div>
+                        {resultText ? <Alert className="api-log-recovery-result" type={resultText.includes("失败") || resultText.includes("错误") || resultText.includes("请") ? "error" : "success"} showIcon message={resultText} /> : null}
+                    </div>
+                </section>
+            ) : null}
+
             {log.capability === "video" ? (
                 <section className="api-log-detail-section api-log-recovery-section">
                     <div className="api-log-detail-section-heading">
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2">
                             <div className="grid size-8 place-items-center rounded-md bg-violet-500/12 text-violet-500">
                                 <Video className="size-4" aria-hidden="true" />
                             </div>
@@ -249,7 +320,7 @@ function mediaDeliveryText(log: ApiCallLog) {
 }
 
 function requestKindText(value: ApiCallLog["requestKind"]) {
-    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", upload: "上传 OSS", local_save: "保存文件", register: "登记素材", repair: "结果修复" };
+    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", upload: "上传 OSS", local_save: "保存文件", local_fallback: "本地兜底保存", offload: "同步 OSS", register: "登记素材", repair: "结果修复" };
     return labels[value] || "上游请求";
 }
 

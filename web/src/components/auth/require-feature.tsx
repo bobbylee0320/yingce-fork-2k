@@ -62,7 +62,8 @@ export function RequireFeature({ feature, children }: { feature: FeatureKey; chi
         return (
             <WorkspacePage>
                 <WorkspaceState
-                    icon="empty"
+                    kind="forbidden"
+                    icon="settings"
                     title={`${featureNames[feature]}暂未开放`}
                     description="当前功能已由平台管理员关闭。"
                     action={

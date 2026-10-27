@@ -2,6 +2,9 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
+	"strconv"
 	"strings"
 
 	"yingce/backend/internal/model"
@@ -85,6 +88,11 @@ func (s *Service) updateCloudAgentMediaApproval(repo *repository.Repository, run
 		return err
 	}
 	requested, _ := req.Input["config"].(map[string]any)
+	if cloudAgentImageTierSelectorConsumed(requested, resolved) {
+		// 用户在审批卡里点选的档位已换算进像素尺寸，不再作为质量参数参与核对。
+		delete(requested, "quality")
+		plan.Args.Quality = ""
+	}
 	if err := validateCloudAgentResolvedMediaOptions(requested, resolved); err != nil {
 		return err
 	}
@@ -143,6 +151,21 @@ func replaceCloudAgentPreparedLeases(repo *repository.Repository, userID, runID,
 	return repo.ReplaceCloudAgentResourceLeases(userID, runID, approvalID, ids, prepared.Quote.ExpiresAt)
 }
 
+// cloudAgentImageTierSelectorConsumed 识别画布尺寸选择器的档位约定：未声明质量参数的
+// 比例/预设模型用 quality=1K/1.5K/2K/4K 选择像素预设，任务准入换算尺寸后会清空 quality。
+// 只用于用户编辑审批：选择器只展示模型已配置的档位，换算结果随报价一起固定。
+func cloudAgentImageTierSelectorConsumed(requested, resolvedInput map[string]any) bool {
+	if stringValue(resolvedInput["mode"]) != "image" || declaredImageResolutionTier(stringValue(requested["quality"])) == "" {
+		return false
+	}
+	options, _ := resolvedInput["capabilityOptions"].(map[string]any)
+	config, _ := resolvedInput["config"].(map[string]any)
+	if _, declared := options["quality"]; declared {
+		return false
+	}
+	return strings.TrimSpace(stringValue(config["quality"])) == ""
+}
+
 func validateCloudAgentResolvedMediaOptions(requested, resolvedInput map[string]any) error {
 	resolvedOptions, _ := resolvedInput["capabilityOptions"].(map[string]any)
 	resolvedConfig, _ := resolvedInput["config"].(map[string]any)
@@ -170,9 +193,18 @@ func validateCloudAgentResolvedMediaOptions(requested, resolvedInput map[string]
 		if key == "size" && stringValue(resolvedInput["mode"]) == "image" && requestedValue != "" && strings.EqualFold(requestedValue, stringValue(resolvedConfig[key])) {
 			continue
 		}
+		// 比例按预设换成像素（16:9 → 1824x1024）是同一个画幅，不是改了规格；审批卡展示的就是
+		// 解析后的像素值。反方向（像素换回比例）会丢掉像素档位，仍按不一致处理。
+		if key == "size" && (cloudAgentMediaSizeSameFrame(requestedValue, stringValue(resolvedOptions[key])) || cloudAgentMediaSizeSameFrame(requestedValue, stringValue(resolvedConfig[key]))) {
+			continue
+		}
 		if key == "quality" && requestedValue != "" {
-			if _, declared := resolvedOptions[key]; !declared && !strings.EqualFold(requestedValue, stringValue(resolvedOptions["imageResolution"])) {
-				return creationConflict("所选图片模型未声明质量参数，请使用模型声明的图片分辨率或质量选项")
+			if _, declared := resolvedOptions[key]; !declared {
+				if strings.EqualFold(requestedValue, stringValue(resolvedOptions["imageResolution"])) {
+					// 任务准入已把旧 quality 档位解析为图片分辨率，不能再次与空 quality 比较。
+					continue
+				}
+				return cloudAgentMediaSpecMismatch(key, requestedValue, "", "所选图片模型未声明质量参数，请使用模型声明的图片分辨率或质量选项")
 			}
 		}
 		resolved := stringValue(resolvedOptions[key])
@@ -180,8 +212,73 @@ func validateCloudAgentResolvedMediaOptions(requested, resolvedInput map[string]
 			resolved = stringValue(resolvedConfig[key])
 		}
 		if requestedValue != "" && !strings.EqualFold(requestedValue, resolved) {
-			return creationConflict("模型解析后的生成规格与审批参数不同，请重新读取目录并审批")
+			return cloudAgentMediaSpecMismatch(key, requestedValue, resolved, "")
 		}
 	}
 	return nil
+}
+
+// cloudAgentMediaSizeFrameTolerance 是比例与像素写法视为同一画幅的宽高比相对误差。
+// 预设像素按 16/32 取整（16:9 → 1824x1024 约差 0.2%）；常见比例之间至少差 6%。
+const cloudAgentMediaSizeFrameTolerance = 0.02
+
+// cloudAgentMediaSizeSameFrame 判断申请的比例是否被换算成了同一画幅的像素尺寸。
+// 只认"比例 → 像素"：两边都是比例或都是像素时不放行，那是真的换了规格。
+func cloudAgentMediaSizeSameFrame(requested, resolved string) bool {
+	requested, resolved = strings.TrimSpace(requested), strings.TrimSpace(resolved)
+	if requested == "" || resolved == "" || !strings.Contains(requested, ":") || strings.Contains(resolved, ":") {
+		return false
+	}
+	left, leftOK := cloudAgentMediaFrameRatio(requested)
+	right, rightOK := cloudAgentMediaFrameRatio(resolved)
+	return leftOK && rightOK && math.Abs(left-right)/right <= cloudAgentMediaSizeFrameTolerance
+}
+
+// cloudAgentMediaFrameRatio 解析 "16:9" 或 "1824x1024" 的宽高比；auto 等非尺寸值返回 false。
+func cloudAgentMediaFrameRatio(value string) (float64, bool) {
+	value = strings.ToLower(strings.ReplaceAll(value, "×", "x"))
+	separator := "x"
+	if strings.Contains(value, ":") {
+		separator = ":"
+	}
+	left, right, found := strings.Cut(value, separator)
+	if !found {
+		return 0, false
+	}
+	width, widthErr := strconv.ParseFloat(strings.TrimSpace(left), 64)
+	height, heightErr := strconv.ParseFloat(strings.TrimSpace(right), 64)
+	if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
+		return 0, false
+	}
+	return width / height, true
+}
+
+// cloudAgentMediaSpecArgument 把任务配置键映射回 generate_media 参数名，便于模型和用户定位。
+var cloudAgentMediaSpecArgument = map[string]string{"videoSeconds": "durationSeconds", "vquality": "quality"}
+
+var cloudAgentMediaSpecLabel = map[string]string{
+	"size": "画幅/尺寸", "imageResolution": "图片分辨率", "quality": "质量", "vquality": "视频清晰度", "videoSeconds": "视频时长",
+	"count": "生成数量", "videoGenerateAudio": "同步生成音频", "videoWatermark": "水印", "videoArkPrivateAssetUpload": "参考图同步",
+}
+
+// cloudAgentMediaSpecMismatch 说明具体哪一项被模型目录改写：此时还没有提交收费任务，
+// 返回参数错误让 Agent 按目录修正后重新申请审批，而不是整轮失败；用户编辑审批时同样能看到原因。
+// 仍然拒绝静默替换：用户批准的规格必须与最终提交的一致。
+func cloudAgentMediaSpecMismatch(key, requested, resolved, message string) error {
+	field := key
+	if mapped, ok := cloudAgentMediaSpecArgument[key]; ok {
+		field = mapped
+	}
+	if message == "" {
+		label := cloudAgentMediaSpecLabel[key]
+		if label == "" {
+			label = key
+		}
+		if resolved == "" {
+			message = fmt.Sprintf("所选模型不支持%s「%s」，请去掉该参数或改用 model_list 中该模型声明的取值", label, truncateRunes(requested, 40))
+		} else {
+			message = fmt.Sprintf("所选模型会把%s「%s」解析为「%s」，与申请的规格不一致；请改用「%s」或 model_list 中该模型声明的其他取值", label, truncateRunes(requested, 40), truncateRunes(resolved, 40), truncateRunes(resolved, 40))
+		}
+	}
+	return cloudAgentFieldError(field, "invalid_value", message)
 }

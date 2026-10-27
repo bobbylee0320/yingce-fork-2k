@@ -379,7 +379,7 @@ export function CanvasSubtitleDialog({ node, open, projectId, config, onClose, o
                     <span>关键词高亮</span>
                     <Switch size="sm" checked={style.highlightEnabled} onChange={(highlightEnabled) => setStyle((current) => ({ ...current, highlightEnabled }))} />
                 </div>
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                     <label className="flex items-center justify-between gap-2 text-xs opacity-70">
                         <span>背景色</span>
                         <ColorPicker size="small" value={style.highlightBackgroundColor} onChange={(color) => setStyle((current) => ({ ...current, highlightBackgroundColor: color.toHexString() }))} />
@@ -413,7 +413,7 @@ export function CanvasSubtitleDialog({ node, open, projectId, config, onClose, o
                     return (
                         <div
                             key={`${entry.index}-${idx}`}
-                            className="cursor-pointer rounded-xl border p-2.5 transition-colors"
+                            className="cursor-pointer rounded-xl border p-2 transition-colors"
                             title="点击跳转到该条字幕时间"
                             style={{ background: theme.node.fill, borderColor: activeEntry?.index === entry.index ? theme.accent.primary : theme.node.stroke }}
                             onClick={(event) => {
@@ -422,7 +422,7 @@ export function CanvasSubtitleDialog({ node, open, projectId, config, onClose, o
                                 seekToEntry(entry);
                             }}
                         >
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2">
                                 <span className="grid size-6 shrink-0 place-items-center rounded-md text-xs font-semibold" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
                                     {idx + 1}
                                 </span>
@@ -452,7 +452,7 @@ export function CanvasSubtitleDialog({ node, open, projectId, config, onClose, o
                             </div>
                             <Input.TextArea value={entry.text} autoSize={{ minRows: 1, maxRows: 3 }} placeholder="字幕文本" className="mt-2" onChange={(event) => updateEntry(idx, { text: event.target.value })} />
                             {highlight ? (
-                                <div className="mt-1.5 text-xs" style={{ color: theme.accent.primary }}>
+                                <div className="mt-2 text-xs" style={{ color: theme.accent.primary }}>
                                     重点：{highlight.highlightText}
                                 </div>
                             ) : null}
@@ -471,7 +471,7 @@ export function CanvasSubtitleDialog({ node, open, projectId, config, onClose, o
     );
 
     const title = (
-        <div className="flex min-w-0 items-center gap-2.5 pr-10">
+        <div className="flex min-w-0 items-center gap-2 pr-10">
             <span className="grid size-8 shrink-0 place-items-center rounded-lg" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
                 <Captions className="size-4" />
             </span>

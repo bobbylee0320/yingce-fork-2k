@@ -1,6 +1,6 @@
 import { CanvasNodeAnnotationDialog, type CanvasImageAnnotationPayload } from "@/components/canvas/canvas-node-annotation-dialog";
 import { CanvasNodeCropDialog, type CanvasImageCropRect } from "@/components/canvas/canvas-node-crop-dialog";
-import { CanvasNodeMaskEditDialog, type CanvasImageMaskEditPayload } from "@/components/canvas/canvas-node-mask-edit-dialog";
+import { CanvasNodeRegionEditDialog, type CanvasImageRegionEditPayload } from "@/components/canvas/canvas-node-region-edit-dialog";
 import { CanvasNodeUpscaleDialog, type CanvasImageUpscaleParams } from "@/components/canvas/canvas-node-upscale-dialog";
 import { CanvasNodeImageEditDialog, type CanvasImageEditPayload } from "@/components/canvas/canvas-node-image-edit-dialog";
 import { CanvasNodeLayerDecompositionDialog, type CanvasImageLayerDecompositionPayload } from "@/components/canvas/canvas-node-layer-decomposition-dialog";
@@ -12,7 +12,7 @@ type CanvasProjectMediaDialogsProps = {
     cropNode: CanvasNodeData | null;
     annotationNode: CanvasNodeData | null;
     annotationEditNode: CanvasNodeData | null;
-    maskEditNode: CanvasNodeData | null;
+    regionEditNode: CanvasNodeData | null;
     imageEditNode: CanvasNodeData | null;
     layerDecompositionNode: CanvasNodeData | null;
     textEditNode: CanvasNodeData | null;
@@ -21,7 +21,7 @@ type CanvasProjectMediaDialogsProps = {
     onCloseCrop: () => void;
     onCloseAnnotation: () => void;
     onCloseAnnotationEdit: () => void;
-    onCloseMaskEdit: () => void;
+    onCloseRegionEdit: () => void;
     onCloseUpscale: () => void;
     onCloseImageEdit: () => void;
     onCloseLayerDecomposition: () => void;
@@ -29,7 +29,7 @@ type CanvasProjectMediaDialogsProps = {
     onCrop: (node: CanvasNodeData, crop: CanvasImageCropRect) => void;
     onAnnotate: (node: CanvasNodeData, dataUrl: string) => void;
     onAnnotationEdit: (node: CanvasNodeData, payload: CanvasImageAnnotationPayload) => void;
-    onMaskEdit: (node: CanvasNodeData, payload: CanvasImageMaskEditPayload) => void;
+    onRegionEdit: (node: CanvasNodeData, payload: CanvasImageRegionEditPayload) => void;
     onUpscale: (node: CanvasNodeData, params: CanvasImageUpscaleParams) => void;
     onImageOperation: (node: CanvasNodeData, payload: CanvasImageEditPayload) => void;
     onLayerDecomposition: (node: CanvasNodeData, payload: CanvasImageLayerDecompositionPayload) => void;
@@ -42,7 +42,7 @@ export function CanvasProjectMediaDialogs({
     cropNode,
     annotationNode,
     annotationEditNode,
-    maskEditNode,
+    regionEditNode,
     imageEditNode,
     layerDecompositionNode,
     textEditNode,
@@ -51,7 +51,7 @@ export function CanvasProjectMediaDialogs({
     onCloseCrop,
     onCloseAnnotation,
     onCloseAnnotationEdit,
-    onCloseMaskEdit,
+    onCloseRegionEdit,
     onCloseUpscale,
     onCloseImageEdit,
     onCloseLayerDecomposition,
@@ -59,7 +59,7 @@ export function CanvasProjectMediaDialogs({
     onCrop,
     onAnnotate,
     onAnnotationEdit,
-    onMaskEdit,
+    onRegionEdit,
     onUpscale,
     onImageOperation,
     onLayerDecomposition,
@@ -72,7 +72,7 @@ export function CanvasProjectMediaDialogs({
             {cropNode?.metadata?.content ? <CanvasNodeCropDialog dataUrl={cropNode.metadata.content} open onClose={onCloseCrop} onConfirm={(crop) => onCrop(cropNode, crop)} /> : null}
             {annotationNode?.metadata?.content ? <CanvasNodeAnnotationDialog image={{ url: annotationNode.metadata.content, storageKey: annotationNode.metadata.storageKey }} open onClose={onCloseAnnotation} onConfirm={(dataUrl) => { if (typeof dataUrl === "string") onAnnotate(annotationNode, dataUrl); }} /> : null}
             {annotationEditNode?.metadata?.content ? <CanvasNodeAnnotationDialog image={{ url: annotationEditNode.metadata.content, storageKey: annotationEditNode.metadata.storageKey }} editMode open onClose={onCloseAnnotationEdit} onConfirm={(payload) => { if (typeof payload !== "string") onAnnotationEdit(annotationEditNode, payload); }} /> : null}
-            {maskEditNode?.metadata?.content ? <CanvasNodeMaskEditDialog dataUrl={maskEditNode.metadata.content} config={{ ...config, model: maskEditNode.metadata.model || config.model, imageModel: maskEditNode.metadata.model || config.imageModel, size: maskEditNode.metadata.size || config.size, quality: maskEditNode.metadata.quality || config.quality, count: String(maskEditNode.metadata.count || config.count) }} open onClose={onCloseMaskEdit} onConfirm={(payload) => onMaskEdit(maskEditNode, payload)} /> : null}
+            {regionEditNode?.metadata?.content ? <CanvasNodeRegionEditDialog image={{ url: regionEditNode.metadata.content, storageKey: regionEditNode.metadata.storageKey }} config={{ ...config, model: regionEditNode.metadata.model || config.model, imageModel: regionEditNode.metadata.model || config.imageModel, size: regionEditNode.metadata.size || config.size, quality: regionEditNode.metadata.quality || config.quality, count: String(regionEditNode.metadata.count || config.count) }} open onClose={onCloseRegionEdit} onConfirm={(payload) => onRegionEdit(regionEditNode, payload)} /> : null}
             {upscaleNode?.metadata?.content ? <CanvasNodeUpscaleDialog dataUrl={upscaleNode.metadata.content} open onClose={onCloseUpscale} onConfirm={(params) => onUpscale(upscaleNode, params)} /> : null}
             {imageEditNode?.metadata?.content ? <CanvasNodeImageEditDialog dataUrl={imageEditNode.metadata.content} preset={imageEditPreset} config={{ ...config, model: imageEditNode.metadata.model || config.model, imageModel: imageEditNode.metadata.model || config.imageModel, size: imageEditNode.metadata.size || config.size, quality: imageEditNode.metadata.quality || config.quality }} open onClose={onCloseImageEdit} onConfirm={(payload) => onImageOperation(imageEditNode, payload)} /> : null}
             {layerDecompositionNode?.metadata?.content ? <CanvasNodeLayerDecompositionDialog dataUrl={layerDecompositionNode.metadata.content} sourceSize={layerDecompositionNode.metadata.naturalWidth && layerDecompositionNode.metadata.naturalHeight ? { width: layerDecompositionNode.metadata.naturalWidth, height: layerDecompositionNode.metadata.naturalHeight } : undefined} config={{ ...config, model: layerDecompositionNode.metadata.model || config.model, imageModel: layerDecompositionNode.metadata.model || config.imageModel, size: layerDecompositionNode.metadata.size || config.size, quality: layerDecompositionNode.metadata.quality || config.quality }} open onClose={onCloseLayerDecomposition} onConfirm={(payload) => onLayerDecomposition(layerDecompositionNode, payload)} /> : null}

@@ -115,7 +115,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
 
     return (
         <aside className="canvas-project-sidebar relative z-[var(--z-panel)] hidden w-[var(--canvas-sidebar-width)] shrink-0 flex-col border-r border-border bg-background/94 backdrop-blur-xl lg:flex">
-            <header className="canvas-project-sidebar-header flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-2.5">
+            <header className="canvas-project-sidebar-header flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-2">
                 <Link to={`/projects/${projectId}/canvases`} className="flex min-w-0 items-center gap-2 text-xs font-semibold" title="返回项目画布列表">
                     <FolderKanban className="size-3.5 shrink-0" />
                     <span className="truncate">{projectDetail?.project.name || "项目空间"}</span>
@@ -126,8 +126,8 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
             </header>
 
             <section className="canvas-project-sidebar-style shrink-0 border-b border-border/70 p-2">
-                <div className="mb-1.5 flex h-5 items-center justify-between px-1 text-[var(--fs-label)] font-medium text-foreground/48">
-                    <span className="flex items-center gap-1.5">
+                <div className="mb-2 flex h-5 items-center justify-between px-1 text-[var(--fs-label)] font-medium text-foreground/48">
+                    <span className="flex items-center gap-2">
                         <Palette className="size-3.5" />
                         项目画风
                     </span>
@@ -139,7 +139,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                     type="button"
                     disabled={!style}
                     onClick={onLocateStyle}
-                    className="canvas-project-sidebar-style-button group flex h-11 w-full items-center gap-2 rounded-md px-1.5 text-left hover:bg-surface-hover disabled:cursor-default disabled:hover:bg-transparent"
+                    className="canvas-project-sidebar-style-button group flex h-11 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-surface-hover disabled:cursor-default disabled:hover:bg-transparent"
                     title={style ? "定位画布中的项目画风节点" : "项目尚未设置画风"}
                 >
                     {style ? (
@@ -159,7 +159,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
 
             <section className="canvas-project-sidebar-chapters flex min-h-0 flex-1 flex-col">
                 <div className="canvas-project-sidebar-section-heading flex h-9 shrink-0 items-center justify-between px-3">
-                    <span className="flex items-center gap-1.5 text-[var(--fs-label)] font-medium text-foreground/48">
+                    <span className="flex items-center gap-2 text-[var(--fs-label)] font-medium text-foreground/48">
                         <BookOpenText className="size-3.5" />
                         剧情章节 <span className="tabular-nums text-foreground/32">{orderedUnits.length.toLocaleString("zh-CN")}</span>
                     </span>
@@ -170,7 +170,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                     ) : null}
                 </div>
                 <div className="shrink-0 px-2 pb-2">
-                    <label className="canvas-project-sidebar-search flex h-8 items-center gap-1.5 rounded-md border border-border/75 bg-foreground/[.025] px-2 focus-within:border-[var(--workspace-accent)] focus-within:ring-2 focus-within:ring-[var(--workspace-accent-soft)]">
+                    <label className="canvas-project-sidebar-search flex h-8 items-center gap-2 rounded-md border border-border/75 bg-foreground/[.025] px-2 focus-within:border-[var(--workspace-accent)] focus-within:ring-2 focus-within:ring-[var(--workspace-accent-soft)]">
                         <Search className="size-3.5 shrink-0 text-foreground/32" />
                         <input
                             value={query}
@@ -191,7 +191,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                     {deferredQuery ? <div className="mt-1 px-0.5 text-[var(--fs-micro)] tabular-nums text-foreground/35">找到 {visibleUnits.length.toLocaleString("zh-CN")} 章</div> : null}
                 </div>
 
-                <div ref={scrollRef} className="canvas-project-sidebar-chapter-scroll thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5" aria-label="项目章节列表">
+                <div ref={scrollRef} className="canvas-project-sidebar-chapter-scroll thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-2" aria-label="项目章节列表">
                     {visibleUnits.length ? (
                         <div className="relative w-full" style={{ height: chapterVirtualizer.getTotalSize() }}>
                             {chapterVirtualizer.getVirtualItems().map((virtualItem) => {
@@ -214,7 +214,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                                             <button
                                                 type="button"
                                                 onClick={() => setSelectedId(unit.id)}
-                                                className="flex min-w-0 flex-1 items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]"
+                                                className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]"
                                                 aria-label={`预览第 ${index + 1} 章 ${unit.title}`}
                                             >
                                                 <span className="w-7 shrink-0 text-[var(--fs-micro)] tabular-nums text-foreground/34">{String(index + 1).padStart(Math.max(2, String(orderedUnits.length).length), "0")}</span>
@@ -245,7 +245,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                 <button type="button" onClick={onOpenAssets} className="canvas-project-sidebar-assets-button flex h-9 w-full items-center gap-2 rounded-md border border-border/45 px-2 text-xs text-foreground/65 hover:border-[var(--workspace-accent)] hover:bg-[var(--workspace-accent-soft)]">
                     <Images className="size-3.5 text-foreground/42" />
                     <span className="flex-1 text-left">引用项目资产</span>
-                    <span className="rounded bg-foreground/[.06] px-1.5 py-0.5 text-[var(--fs-micro)] tabular-nums text-foreground/45">{mediaAssetCount.toLocaleString("zh-CN")}</span>
+                    <span className="rounded bg-foreground/[.06] px-2 py-0.5 text-[var(--fs-micro)] tabular-nums text-foreground/45">{mediaAssetCount.toLocaleString("zh-CN")}</span>
                 </button>
             </section>
 
@@ -290,7 +290,7 @@ function ChapterPreview({
             className="absolute bottom-20 left-[calc(100%+8px)] top-14 z-[var(--z-panel-floating)] flex w-[var(--panel-width-compact)] flex-col overflow-hidden rounded-lg border border-border/85 bg-background/[.96] shadow-[0_18px_48px_rgba(0,0,0,.22)] backdrop-blur-xl"
             aria-label={`第 ${chapterNumber} 章预览`}
         >
-            <header className="flex items-start gap-2 border-b border-border/70 px-3 py-2.5">
+            <header className="flex items-start gap-2 border-b border-border/70 px-3 py-2">
                 <div className="min-w-0 flex-1">
                     <div className="text-[var(--fs-tiny)] tabular-nums text-foreground/38">第 {chapterNumber.toLocaleString("zh-CN")} 章</div>
                     <h2 className="mt-0.5 truncate text-sm font-semibold">{unit.title}</h2>
@@ -308,11 +308,11 @@ function ChapterPreview({
                     type="button"
                     disabled={adding}
                     onClick={() => void onAdd()}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-[var(--workspace-accent)] hover:bg-[var(--workspace-accent-soft)] disabled:cursor-wait"
+                    className="inline-flex h-8 items-center gap-2 rounded-md px-2 text-xs font-medium text-[var(--workspace-accent)] hover:bg-[var(--workspace-accent-soft)] disabled:cursor-wait"
                 >
                     {adding ? <LoaderCircle className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}添加到画布
                 </button>
-                <Link to={`/projects/${projectId}/chapters/${unit.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs text-foreground/62 hover:bg-surface-hover hover:text-foreground">
+                <Link to={`/projects/${projectId}/chapters/${unit.id}`} className="inline-flex h-8 items-center gap-2 rounded-md px-2 text-xs text-foreground/62 hover:bg-surface-hover hover:text-foreground">
                     打开编辑器
                     <ArrowUpRight className="size-3.5" />
                 </Link>

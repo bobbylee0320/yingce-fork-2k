@@ -36,11 +36,39 @@
     .workspace-quiet-popup .ant-dropdown-menu-item-selected {
         background: var(--user-surface-hover) !important;
         color: var(--user-ink) !important;
-        font-weight: 600;
+    }
+
+    /* antd 默认 slide 动画从 scaleY(.8) 拉伸展开，观感像回弹；工作台菜单只做短淡入。 */
+    .workspace-quiet-popup:is(.ant-slide-up-enter-active, .ant-slide-up-appear-active, .ant-slide-down-enter-active, .ant-slide-down-appear-active) {
+        animation-name: workspace-popup-in !important;
+        animation-duration: 120ms !important;
+        animation-timing-function: ease-out !important;
+    }
+    .workspace-quiet-popup:is(.ant-slide-up-leave-active, .ant-slide-down-leave-active) {
+        animation-name: workspace-popup-out !important;
+        animation-duration: 90ms !important;
+        animation-timing-function: ease-in !important;
     }
 
     .workspace-quiet-popup .ant-dropdown-menu-item-disabled,
     .workspace-quiet-popup .ant-select-item-option-disabled {
         color: var(--user-ink-soft) !important;
+    }
+}
+
+@keyframes workspace-popup-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+@keyframes workspace-popup-out {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
     }
 }

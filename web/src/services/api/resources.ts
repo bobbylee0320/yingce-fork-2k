@@ -61,9 +61,17 @@ export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "provider" | 
     allowPrivateProxy?: boolean;
 };
 
+/** totalBytes = baseBytes（后台全局容量）+ purchasedBytes（当前生效的扩容）。 */
 export type AccountFileStorageUsage = {
     usedBytes: number;
     totalBytes: number;
+    baseBytes: number;
+    purchasedBytes: number;
+    nextExpiresAt?: string;
+    overLimit: boolean;
+    overLimitSince?: string;
+    readOnlyAt?: string;
+    readOnly: boolean;
 };
 
 export type ArkPrivateAssetSync = {
@@ -320,7 +328,7 @@ export async function uploadResourceFile(file: Blob, kind: "image" | "video" | "
         if (meta?.height) formData.append("height", String(Math.round(meta.height)));
         if (meta?.durationMs) formData.append("durationMs", String(Math.round(meta.durationMs)));
         const data = await http.post<{ resource: RemoteResource }>("/resources", formData, {
-            ...uploadRequestConfig(meta?.idempotencyKey),
+            ...uploadRequestConfig(meta?.idempotencyKey, file.size),
             onUploadProgress: onProgress
                 ? ({ loaded, total }) => {
                       if (total && total > 0) onProgress(Math.min(file.size, (file.size * loaded) / total), file.size);
@@ -392,17 +400,16 @@ async function runChunkedUpload(file: Blob, name: string, kind: "image" | "video
         const start = index * session.chunkSize;
         const end = Math.min(file.size, start + session.chunkSize);
         const blob = file.slice(start, end);
-        const data = new FormData();
-        data.append("chunk", blob);
-        // raw 二进制直传，与后端按裸 body 逐片落盘对齐（勿设手动 Content-Type，让 axios 处理）。
+        // raw 二进制直传，与后端按裸 body 逐片落盘对齐。
         await http.put<{ index: number }>(`/resources/uploads/${encodeURIComponent(session.uploadId)}/chunks/${index}`, blob, {
-            timeout: 60_000,
+            timeout: uploadTimeoutMs(blob.size),
             headers: { "Content-Type": "application/octet-stream" },
             onUploadProgress: onProgress ? ({ loaded }) => onProgress(start + Math.min(loaded, blob.size), file.size) : undefined,
         });
         onProgress?.(Math.min(end, file.size), file.size);
     }
-    const complete = await http.post<{ resource: RemoteResource }>(`/resources/uploads/${encodeURIComponent(session.uploadId)}/complete`, undefined, { timeout: 60_000 });
+    // 合并时后端要把整份文件写入存储（对象存储为同步上传），超时按整份大小计算。
+    const complete = await http.post<{ resource: RemoteResource }>(`/resources/uploads/${encodeURIComponent(session.uploadId)}/complete`, undefined, { timeout: uploadTimeoutMs(file.size) });
     return complete.resource;
 }
 
@@ -433,9 +440,20 @@ export async function importResourceFromUrl(url: string, kind: "image" | "video"
     return data.resource;
 }
 
-function uploadRequestConfig(idempotencyKey?: string) {
+const UPLOAD_TIMEOUT_FLOOR_MS = 60_000;
+const UPLOAD_TIMEOUT_CEIL_MS = 15 * 60_000;
+// 按 256KB/s 的保守上行带宽估算传输时间，再加一分钟留给服务端保存。
+// 固定 60s 会让慢网下的大文件必然超时，退回本机后在同步时再完整重传一遍。
+const UPLOAD_MIN_BYTES_PER_SECOND = 256 * 1024;
+
+export function uploadTimeoutMs(bytes = 0) {
+    const transferMs = Math.ceil(Math.max(0, bytes) / UPLOAD_MIN_BYTES_PER_SECOND) * 1000;
+    return Math.min(UPLOAD_TIMEOUT_CEIL_MS, UPLOAD_TIMEOUT_FLOOR_MS + transferMs);
+}
+
+function uploadRequestConfig(idempotencyKey?: string, bytes?: number) {
     const value = idempotencyKey?.trim();
-    return { timeout: 60_000, ...(value ? { headers: { "X-Idempotency-Key": value } } : {}) };
+    return { timeout: uploadTimeoutMs(bytes), ...(value ? { headers: { "X-Idempotency-Key": value } } : {}) };
 }
 
 export function getResource(id: string): Promise<RemoteResource> {

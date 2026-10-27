@@ -1,0 +1,4982 @@
+/* 短剧自动制作：作品列表、新建流程与制作台。只引用设计 token，不散落颜色字面值。 */
+
+.drama-root {
+    --drama-line: color-mix(in oklab, var(--foreground) 9%, transparent);
+    --drama-line-strong: color-mix(in oklab, var(--foreground) 16%, transparent);
+    --drama-muted: color-mix(in oklab, var(--foreground) 56%, transparent);
+    --drama-faint: color-mix(in oklab, var(--foreground) 38%, transparent);
+    --drama-panel: color-mix(in oklab, var(--surface) 72%, var(--background));
+    --drama-sunken: color-mix(in oklab, var(--foreground) 3%, var(--background));
+    --drama-ok: var(--status-success);
+    --drama-warn: var(--status-warning);
+    --drama-err: var(--status-error);
+    --drama-run: var(--workspace-accent);
+    color: var(--foreground);
+}
+
+/* 只给自绘的可点击元素加焦点环；antd 输入框、下拉自带焦点态，叠加会出现双框。 */
+.drama-root :is(button, a[href], [role="button"], [role="tab"], [role="radio"], [role="option"]):focus-visible {
+    outline: 2px solid var(--workspace-accent);
+    outline-offset: 2px;
+}
+
+/* ===== 通用 ===== */
+.drama-eyebrow {
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--drama-faint);
+}
+
+.drama-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: var(--fs-tiny);
+    font-weight: 500;
+    color: var(--drama-muted);
+    background: var(--drama-sunken);
+    border: 1px solid var(--drama-line);
+    white-space: nowrap;
+}
+
+.drama-chip.is-running {
+    color: var(--drama-run);
+    background: var(--workspace-accent-soft);
+    border-color: transparent;
+}
+.drama-chip.is-paused {
+    color: var(--drama-warn);
+    background: color-mix(in oklab, var(--drama-warn) 12%, transparent);
+    border-color: transparent;
+}
+.drama-chip.is-completed {
+    color: var(--drama-ok);
+    background: color-mix(in oklab, var(--drama-ok) 12%, transparent);
+    border-color: transparent;
+}
+
+.drama-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: currentColor;
+    flex: none;
+}
+
+.drama-chip.is-running .drama-dot {
+    animation: drama-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes drama-pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.35;
+    }
+}
+
+@keyframes drama-shimmer {
+    from {
+        background-position: -200% 0;
+    }
+    to {
+        background-position: 200% 0;
+    }
+}
+
+/* 流水线进度点：每集 5 步 */
+.drama-pips {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+}
+.drama-pip {
+    position: relative;
+    width: 14px;
+    height: 4px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--drama-line-strong);
+}
+.drama-pips.is-md .drama-pip {
+    width: 22px;
+    height: 5px;
+}
+.drama-pip-fill {
+    position: absolute;
+    inset: 0;
+    transform-origin: left;
+    transform: scaleX(var(--pip, 0));
+    background: var(--drama-run);
+    border-radius: inherit;
+    transition: transform 250ms ease;
+}
+.drama-pips.is-done .drama-pip-fill {
+    background: var(--drama-ok);
+}
+.drama-pips.is-review .drama-pip-fill {
+    background: var(--drama-warn);
+}
+.drama-pips.is-error .drama-pip-fill {
+    background: var(--drama-err);
+}
+
+/* ===== 新建流程：铺满工作区的三栏 ===== */
+.drama-compose-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 56px;
+    padding: 0 12px 0 8px;
+    flex: none;
+}
+.drama-compose-head h1 {
+    font-size: var(--fs-section);
+    font-weight: 600;
+}
+
+.drama-compose-empty {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0 16px 16px;
+}
+.drama-compose-empty .drama-compose-head {
+    padding: 0;
+}
+
+.drama-drop {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    min-height: 360px;
+    padding: 40px 24px;
+    border-radius: var(--radius-2xl);
+    border: 1.5px dashed var(--drama-line-strong);
+    background: radial-gradient(70% 60% at 50% 0%, var(--workspace-accent-soft), transparent 70%), var(--drama-sunken);
+    text-align: center;
+    transition:
+        border-color 0.15s,
+        background-color 0.15s;
+}
+.drama-drop.is-over {
+    border-color: var(--workspace-accent);
+    background-color: var(--workspace-accent-soft);
+}
+.drama-drop h2 {
+    font-size: var(--fs-title);
+    font-weight: 600;
+}
+.drama-drop p {
+    font-size: var(--fs-body);
+    color: var(--drama-muted);
+    max-width: 560px;
+    line-height: 1.7;
+}
+.drama-drop-icon {
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow-md);
+    color: var(--workspace-accent);
+}
+.drama-drop-steps {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 16px;
+}
+.drama-drop-steps span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 16px 0 8px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--drama-line);
+    font-size: var(--fs-label);
+    color: var(--drama-muted);
+}
+.drama-drop-steps b {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--workspace-accent-soft);
+    color: var(--workspace-accent);
+    font-size: 11px;
+}
+
+.drama-compose {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr) 380px;
+    height: 100%;
+    min-height: 0;
+    background: var(--background);
+}
+@media (max-width: 1280px) {
+    .drama-compose {
+        grid-template-columns: 260px minmax(0, 1fr) 340px;
+    }
+}
+@media (max-width: 1024px) {
+    .drama-compose {
+        grid-template-columns: minmax(0, 1fr) 340px;
+    }
+    .drama-compose-novel {
+        display: none;
+    }
+}
+@media (max-width: 760px) {
+    .drama-compose {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
+        height: auto;
+    }
+    .drama-compose-side {
+        border-left: 0;
+        border-top: 1px solid var(--drama-line);
+    }
+}
+
+.drama-compose-novel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--drama-line);
+    background: var(--drama-sunken);
+}
+.drama-compose-novel .drama-stats {
+    border-top: 1px solid var(--drama-line);
+    border-bottom: 1px solid var(--drama-line);
+}
+.drama-compose-novel .drama-stat {
+    padding: 12px 16px;
+}
+.drama-compose-novel .drama-stat-value {
+    font-size: var(--fs-section);
+}
+.drama-compose-novel .drama-issues {
+    border-top: 0;
+    border-bottom: 1px solid var(--drama-line);
+}
+.drama-compose-novel .drama-chapter-list {
+    flex: 1;
+    max-height: none;
+    border-top: 0;
+    padding: 8px;
+}
+
+.drama-compose-main {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 28px 28px;
+    display: grid;
+    gap: 28px;
+    align-content: start;
+}
+.drama-compose-preview {
+    display: flex;
+    flex-direction: column;
+}
+.drama-compose-text {
+    max-height: 420px;
+    overflow-y: auto;
+    padding: 16px 24px;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--drama-line);
+    background: var(--drama-sunken);
+    white-space: pre-wrap;
+    font-size: var(--fs-body);
+    line-height: 1.95;
+    color: color-mix(in oklab, var(--foreground) 76%, transparent);
+}
+
+.drama-compose-side {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-left: 1px solid var(--drama-line);
+    background: var(--drama-sunken);
+}
+.drama-compose-side-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+    align-content: start;
+}
+.drama-compose-models {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--drama-line);
+    background: var(--surface);
+}
+.drama-compose-models-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 2px 2px;
+    min-width: 0;
+}
+.drama-compose-models-head strong {
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+.drama-compose-models-head span {
+    margin-left: auto;
+    font-size: var(--fs-micro);
+    color: var(--drama-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.drama-compose-model-row {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+}
+.drama-compose-model-row > span {
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+}
+.drama-compose-launch {
+    flex: none;
+    display: grid;
+    gap: 8px;
+    padding: 16px 16px 16px;
+    border-top: 1px solid var(--drama-line);
+    background: var(--background);
+}
+.drama-compose-estimate {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+.drama-compose-estimate > div {
+    padding: 8px 12px;
+    border-radius: var(--radius-lg);
+    background: var(--drama-sunken);
+    border: 1px solid var(--drama-line);
+    min-width: 0;
+}
+.drama-compose-estimate b {
+    display: block;
+    font-size: var(--fs-section);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.drama-compose-estimate span {
+    font-size: var(--fs-micro);
+    color: var(--drama-muted);
+}
+
+.drama-section-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.drama-section-title h2 {
+    font-size: var(--fs-section);
+    font-weight: 600;
+}
+.drama-section-title span {
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+}
+
+.drama-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.drama-stat {
+    padding: 16px 16px;
+}
+.drama-stat + .drama-stat {
+    border-left: 1px solid var(--drama-line);
+}
+.drama-stat-value {
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.drama-stat-label {
+    margin-top: 2px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+}
+
+.drama-chapter-list {
+    overflow-y: auto;
+}
+.drama-chapter-row {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 34px;
+    padding: 0 8px;
+    border-radius: var(--radius-md);
+    font-size: var(--fs-label);
+    color: color-mix(in oklab, var(--foreground) 78%, transparent);
+}
+.drama-chapter-row:hover {
+    background: var(--surface-hover);
+}
+.drama-chapter-row[aria-selected="true"] {
+    background: var(--surface);
+    color: var(--foreground);
+    box-shadow: var(--shadow-xs);
+}
+.drama-chapter-row .is-num,
+.drama-chapter-row .is-count {
+    color: var(--drama-faint);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-tiny);
+}
+.drama-chapter-row.is-warn .is-count {
+    color: var(--drama-warn);
+}
+
+.drama-issues {
+    padding: 8px 16px;
+    display: grid;
+    gap: 8px;
+}
+.drama-issue {
+    display: flex;
+    gap: 8px;
+    font-size: var(--fs-tiny);
+    line-height: 1.5;
+    color: var(--drama-muted);
+}
+.drama-issue svg {
+    flex: none;
+    margin-top: 2px;
+    color: var(--drama-warn);
+}
+
+.drama-option-label {
+    margin-bottom: 8px;
+    font-size: var(--fs-label);
+    font-weight: 600;
+    color: color-mix(in oklab, var(--foreground) 78%, transparent);
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+.drama-option-label small {
+    font-weight: 400;
+    color: var(--drama-faint);
+}
+
+.drama-ratio-group {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+.drama-ratio {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 64px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--drama-line);
+    background: var(--surface);
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+    transition:
+        border-color 0.15s,
+        color 0.15s,
+        background 0.15s;
+}
+.drama-ratio:hover {
+    border-color: var(--drama-line-strong);
+}
+.drama-ratio[aria-pressed="true"] {
+    border-color: var(--workspace-accent);
+    color: var(--foreground);
+    background: var(--workspace-accent-soft);
+}
+.drama-ratio-shape {
+    border: 1.5px solid currentColor;
+    border-radius: 4px;
+}
+
+/* 风格库：分类 + 搜索 + 封面卡 */
+.drama-styles {
+    display: grid;
+    gap: 12px;
+}
+.drama-styles-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+}
+.drama-styles-head h2 {
+    font-size: var(--fs-section);
+    font-weight: 600;
+}
+.drama-styles-head p {
+    margin-top: 4px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-styles-head p b {
+    color: var(--foreground);
+    font-weight: 600;
+}
+.drama-styles-search {
+    width: 240px;
+    flex: none;
+}
+.drama-styles-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.drama-styles-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid var(--drama-line);
+    background: var(--surface);
+    font-size: var(--fs-label);
+    color: var(--drama-muted);
+    white-space: nowrap;
+    transition:
+        border-color 0.15s,
+        color 0.15s,
+        background 0.15s;
+}
+.drama-styles-tab:hover {
+    color: var(--foreground);
+    border-color: var(--drama-line-strong);
+}
+.drama-styles-tab[aria-selected="true"] {
+    color: var(--foreground);
+    border-color: var(--workspace-accent);
+    background: var(--workspace-accent-soft);
+}
+.drama-styles-tab span {
+    font-size: var(--fs-micro);
+    color: var(--drama-faint);
+    font-variant-numeric: tabular-nums;
+}
+/* 两行高度内滚动，不把审阅方式和原文预览挤出首屏 */
+.drama-style-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    grid-auto-rows: max-content;
+    gap: 8px;
+    max-height: 268px;
+    overflow-y: auto;
+    padding: 4px 4px 4px 4px;
+    margin: -4px;
+    overscroll-behavior: contain;
+}
+.drama-style {
+    position: relative;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 2px solid transparent;
+    text-align: left;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+.drama-style:hover {
+    border-color: var(--drama-line-strong);
+    box-shadow: var(--shadow-sm);
+}
+.drama-style[aria-checked="true"] {
+    border-color: var(--workspace-accent);
+    box-shadow: 0 0 0 3px var(--workspace-accent-soft);
+}
+.drama-style-swatch {
+    position: relative;
+    display: block;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+}
+.drama-style-overlay {
+    position: absolute;
+    inset: auto 0 0 0;
+    display: grid;
+    gap: 2px;
+    padding: 16px 8px 8px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0));
+}
+.drama-style-name {
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.drama-style-tags {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.72);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-style-hot {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--status-error) 88%, transparent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+}
+.drama-style-check {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--workspace-accent);
+    color: var(--background);
+    box-shadow: var(--shadow-sm);
+}
+.drama-style-glyph {
+    position: absolute;
+    inset: 12% 0 auto;
+    text-align: center;
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.22);
+    mix-blend-mode: overlay;
+    pointer-events: none;
+}
+@media (max-width: 1280px) {
+    .drama-styles-search {
+        width: 180px;
+    }
+}
+
+/* 审阅方式：横向三卡，窄屏换行 */
+.drama-review-modes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px;
+}
+.drama-review-mode {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 8px;
+    padding: 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--drama-line);
+    background: var(--surface);
+    text-align: left;
+    transition:
+        border-color 0.15s,
+        background 0.15s;
+}
+.drama-review-mode:hover {
+    border-color: var(--drama-line-strong);
+}
+.drama-review-mode[aria-checked="true"] {
+    border-color: var(--workspace-accent);
+    background: var(--workspace-accent-soft);
+}
+.drama-radio {
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    border-radius: 999px;
+    border: 1.5px solid var(--drama-line-strong);
+    display: grid;
+    place-items: center;
+}
+.drama-review-mode[aria-checked="true"] .drama-radio {
+    border-color: var(--workspace-accent);
+}
+.drama-review-mode[aria-checked="true"] .drama-radio::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--workspace-accent);
+}
+.drama-review-mode strong {
+    display: block;
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+.drama-review-mode span {
+    display: block;
+    margin-top: 4px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+    line-height: 1.55;
+}
+
+/* ===== 制作台 ===== */
+.drama-studio {
+    display: grid;
+    grid-template-rows: 56px minmax(0, 1fr) auto;
+    height: 100%;
+    min-height: 0;
+    background: var(--background);
+}
+.drama-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px 0 8px;
+    border-bottom: 1px solid var(--drama-line);
+    min-width: 0;
+}
+.drama-topbar-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.drama-topbar-title h1 {
+    font-size: var(--fs-section);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.drama-topbar-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 8px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+    white-space: nowrap;
+}
+.drama-meter {
+    width: 120px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--drama-line-strong);
+    overflow: hidden;
+}
+.drama-meter > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--drama-run), color-mix(in oklab, var(--drama-run) 60%, var(--drama-ok)));
+    transition: transform 250ms var(--motion-ease-out);
+}
+.drama-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+@media (max-width: 1100px) {
+    .drama-topbar-progress {
+        display: none;
+    }
+}
+
+.drama-body {
+    display: grid;
+    grid-template-columns: 292px minmax(0, 1fr) 344px;
+    min-height: 0;
+}
+.drama-body.is-inspector-hidden {
+    grid-template-columns: 292px minmax(0, 1fr);
+}
+@media (max-width: 1280px) {
+    .drama-body {
+        grid-template-columns: 260px minmax(0, 1fr) 312px;
+    }
+}
+@media (max-width: 1024px) {
+    .drama-body,
+    .drama-body.is-inspector-hidden {
+        grid-template-columns: 232px minmax(0, 1fr);
+    }
+}
+@media (max-width: 720px) {
+    .drama-body,
+    .drama-body.is-inspector-hidden {
+        grid-template-columns: 1fr;
+    }
+    .drama-rail {
+        display: none;
+    }
+}
+
+/* 左栏：集列表 */
+.drama-rail {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--drama-line);
+    background: var(--drama-sunken);
+}
+.drama-rail-head {
+    padding: 8px 8px 8px;
+    display: grid;
+    gap: 8px;
+    border-bottom: 1px solid var(--drama-line);
+}
+.drama-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--drama-line);
+    background: var(--surface);
+    font-size: var(--fs-label);
+}
+.drama-search:focus-within {
+    border-color: var(--workspace-accent);
+    box-shadow: 0 0 0 3px var(--workspace-accent-soft);
+}
+.drama-search input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    outline: none;
+}
+.drama-search input::placeholder {
+    color: var(--drama-faint);
+}
+.drama-filters {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.drama-filter {
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+.drama-filter:hover {
+    background: var(--surface-hover);
+}
+.drama-filter[aria-pressed="true"] {
+    color: var(--foreground);
+    background: var(--surface);
+    border-color: var(--drama-line-strong);
+}
+.drama-filter b {
+    margin-left: 4px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--drama-faint);
+}
+.drama-filter.is-alert b {
+    color: var(--drama-err);
+}
+
+.drama-rail-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px;
+}
+.drama-ep {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    height: 60px;
+    padding: 8px 8px 8px 8px;
+    border-radius: var(--radius-lg);
+    text-align: left;
+    border: 1px solid transparent;
+    transition: background 150ms;
+}
+.drama-ep:hover {
+    background: var(--surface-hover);
+}
+.drama-ep[aria-current="true"] {
+    background: var(--surface);
+    border-color: var(--drama-line-strong);
+    box-shadow: var(--shadow-xs);
+}
+.drama-ep-num {
+    display: grid;
+    place-items: center;
+    height: 38px;
+    border-radius: var(--radius-md);
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--drama-faint);
+    background: color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+.drama-ep[aria-current="true"] .drama-ep-num {
+    color: var(--workspace-accent);
+    background: var(--workspace-accent-soft);
+}
+.drama-ep.is-done .drama-ep-num {
+    color: var(--drama-ok);
+}
+.drama-ep.is-error .drama-ep-num {
+    color: var(--drama-err);
+    background: color-mix(in oklab, var(--drama-err) 10%, transparent);
+}
+.drama-ep.is-review .drama-ep-num {
+    color: var(--drama-warn);
+    background: color-mix(in oklab, var(--drama-warn) 12%, transparent);
+}
+.drama-ep-title {
+    font-size: var(--fs-body);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-ep-meta {
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: var(--fs-micro);
+    color: var(--drama-faint);
+    white-space: nowrap;
+}
+.drama-ep-meta span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.drama-ep.is-error .drama-ep-meta span {
+    color: var(--drama-err);
+}
+.drama-ep.is-review .drama-ep-meta span {
+    color: var(--drama-warn);
+}
+
+/* 矩阵视图：200 集一屏看清卡在哪 */
+.drama-matrix {
+    padding: 8px;
+    display: grid;
+    gap: 8px;
+}
+.drama-matrix-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: var(--fs-micro);
+    color: var(--drama-muted);
+}
+.drama-matrix-legend i {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 4px;
+    margin-right: 4px;
+    vertical-align: -1px;
+}
+.drama-matrix-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+}
+.drama-cell {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: transparent;
+    background: var(--drama-line-strong);
+}
+.drama-cell:hover {
+    color: var(--background);
+    box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--foreground) 45%, transparent);
+}
+.drama-cell.is-active {
+    background: color-mix(in oklab, var(--drama-run) 70%, transparent);
+}
+.drama-cell.is-done {
+    background: var(--drama-ok);
+}
+.drama-cell.is-review {
+    background: var(--drama-warn);
+}
+.drama-cell.is-error {
+    background: var(--drama-err);
+}
+.drama-cell[aria-current="true"] {
+    outline: 2px solid var(--foreground);
+    outline-offset: 1px;
+}
+
+/* 中栏 */
+.drama-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+.drama-ep-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--drama-line);
+}
+.drama-ep-heading {
+    min-width: 0;
+}
+.drama-ep-heading h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    line-height: 1.25;
+}
+.drama-ep-heading p {
+    margin-top: 8px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+}
+.drama-title-edit {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-sm);
+    color: var(--drama-faint);
+}
+.drama-title-edit:hover {
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+/* 行内改名：与标题同字号，原位出现浅底和强调色描边，不跳出白框 */
+.drama-title-editor {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.drama-title-input {
+    width: min(520px, 100%);
+    min-width: 220px;
+    height: 36px;
+    margin-left: -8px;
+    padding: 0 8px;
+    border: 1px solid color-mix(in oklab, var(--workspace-accent) 55%, transparent);
+    border-radius: var(--radius-md);
+    background: var(--drama-sunken);
+    box-shadow: 0 0 0 3px var(--workspace-accent-soft);
+    color: var(--foreground);
+    font: inherit;
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    line-height: 1.25;
+    outline: none;
+}
+.drama-title-input::selection {
+    background: color-mix(in oklab, var(--workspace-accent) 28%, transparent);
+}
+.drama-title-input:disabled {
+    opacity: 0.6;
+}
+.drama-title-hint {
+    flex: none;
+    font-size: var(--fs-micro);
+    color: var(--drama-faint);
+    white-space: nowrap;
+}
+
+.drama-tabs {
+    display: inline-flex;
+    padding: 4px;
+    gap: 2px;
+    border-radius: var(--radius-lg);
+    background: var(--drama-sunken);
+    border: 1px solid var(--drama-line);
+}
+.drama-tab {
+    height: 30px;
+    padding: 0 16px;
+    border-radius: var(--radius-md);
+    font-size: var(--fs-label);
+    color: var(--drama-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.drama-tab:hover {
+    color: var(--foreground);
+}
+.drama-tab:is([aria-selected="true"], [aria-checked="true"]) {
+    background: var(--surface);
+    color: var(--foreground);
+    box-shadow: var(--shadow-xs);
+}
+.drama-tab-count {
+    font-size: var(--fs-micro);
+    font-weight: 500;
+    color: var(--drama-faint);
+    font-variant-numeric: tabular-nums;
+}
+.drama-tabs.is-block {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    width: 100%;
+}
+.drama-tabs.is-block .drama-tab {
+    justify-content: center;
+    height: 34px;
+    font-variant-numeric: tabular-nums;
+}
+
+.drama-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid color-mix(in oklab, var(--drama-warn) 34%, transparent);
+    background: color-mix(in oklab, var(--drama-warn) 9%, transparent);
+    font-size: var(--fs-label);
+}
+.drama-banner.is-error {
+    border-color: color-mix(in oklab, var(--drama-err) 34%, transparent);
+    background: color-mix(in oklab, var(--drama-err) 8%, transparent);
+}
+.drama-banner.is-info {
+    border-color: color-mix(in oklab, var(--drama-run) 30%, transparent);
+    background: var(--workspace-accent-soft);
+}
+.drama-banner-text {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.5;
+}
+.drama-banner-text strong {
+    display: block;
+    font-weight: 600;
+}
+.drama-banner-text span {
+    color: var(--drama-muted);
+    font-size: var(--fs-tiny);
+}
+
+.drama-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* 分镜网格 */
+.drama-board-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    background: color-mix(in oklab, var(--background) 88%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--drama-line);
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+    min-height: 48px;
+}
+.drama-board-toolbar.is-selecting {
+    background: color-mix(in oklab, var(--workspace-accent-soft) 85%, var(--background));
+    color: var(--foreground);
+}
+.drama-scene {
+    padding: 16px 20px 4px;
+}
+
+.drama-shot-placeholder {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 12px;
+    text-align: center;
+    font-size: var(--fs-micro);
+    line-height: 1.5;
+    color: var(--drama-faint);
+}
+.drama-shot-placeholder.is-busy {
+    background: linear-gradient(110deg, transparent 30%, color-mix(in oklab, var(--foreground) 6%, transparent) 50%, transparent 70%) var(--drama-sunken);
+    background-size: 200% 100%;
+    animation: drama-shimmer 1.8s linear infinite;
+}
+
+.drama-shot-flags {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    gap: 4px;
+}
+.drama-flag {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 8px;
+    background: color-mix(in oklab, var(--background) 78%, transparent);
+    backdrop-filter: blur(6px);
+}
+.drama-flag.is-ok {
+    color: var(--drama-ok);
+}
+.drama-flag.is-err {
+    color: var(--drama-err);
+}
+.drama-flag.is-lock {
+    color: var(--drama-warn);
+}
+.drama-flag.is-video {
+    color: var(--drama-run);
+}
+
+/* 剧情段：九宫格卡片，每段单独选模型、看进度 */
+
+.drama-seg-num {
+    display: grid;
+    place-items: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 8px;
+    background: var(--workspace-accent-soft);
+    color: var(--workspace-accent);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* 右栏：检查器 */
+
+.drama-field-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    color: var(--drama-faint);
+    letter-spacing: 0.02em;
+}
+
+.drama-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--workspace-accent-soft);
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--workspace-accent);
+    flex: none;
+}
+.drama-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 全剧开工前：改编进度 */
+.drama-genesis {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    padding: 40px 20px;
+}
+.drama-genesis-card {
+    width: min(620px, 100%);
+    text-align: center;
+}
+.drama-genesis-orb {
+    width: 88px;
+    height: 88px;
+    margin: 0 auto 24px;
+    border-radius: 999px;
+    background: conic-gradient(from 0deg, var(--workspace-accent), var(--workspace-accent-soft), var(--workspace-accent));
+    display: grid;
+    place-items: center;
+    animation: drama-spin 3.2s linear infinite;
+}
+.drama-genesis-orb.is-idle {
+    animation: none;
+    background: var(--drama-line);
+}
+@media (prefers-reduced-motion: reduce) {
+    .drama-genesis-orb {
+        animation: none;
+    }
+}
+.drama-genesis-orb::after {
+    content: "";
+    width: 72px;
+    height: 72px;
+    border-radius: 999px;
+    background: var(--background);
+}
+.drama-genesis-action {
+    margin-top: 16px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+@keyframes drama-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+.drama-genesis h2 {
+    font-size: var(--fs-heading);
+    font-weight: 600;
+}
+.drama-genesis p {
+    margin-top: 8px;
+    color: var(--drama-muted);
+    font-size: var(--fs-body);
+    line-height: 1.7;
+}
+.drama-genesis-steps {
+    margin-top: 24px;
+    display: grid;
+    gap: 8px;
+    text-align: left;
+}
+.drama-genesis-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    background: var(--drama-sunken);
+    border: 1px solid var(--drama-line);
+    font-size: var(--fs-label);
+}
+.drama-genesis-step.is-done {
+    color: var(--drama-muted);
+}
+.drama-genesis-step.is-active {
+    border-color: color-mix(in oklab, var(--workspace-accent) 45%, transparent);
+    background: var(--workspace-accent-soft);
+}
+.drama-genesis-step svg {
+    flex: none;
+}
+
+/* 顶栏视图导航：制作 / 角色与场景 / 待处理 / 设置 */
+.drama-nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 12px;
+    padding: 4px;
+    border-radius: var(--radius-lg);
+    background: var(--drama-sunken);
+    border: 1px solid var(--drama-line);
+}
+.drama-nav-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: var(--radius-md);
+    font-size: var(--fs-label);
+    color: var(--drama-muted);
+    white-space: nowrap;
+}
+.drama-nav-item:hover {
+    color: var(--foreground);
+}
+.drama-nav-item[aria-current="page"] {
+    background: var(--surface);
+    color: var(--foreground);
+    box-shadow: var(--shadow-xs);
+}
+.drama-nav-count {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--drama-line-strong);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    text-align: center;
+    color: var(--drama-muted);
+    font-variant-numeric: tabular-nums;
+}
+.drama-nav-count.is-alert {
+    background: var(--drama-err);
+    color: #fff;
+}
+@media (max-width: 900px) {
+    .drama-nav-item {
+        padding: 0 8px;
+    }
+    .drama-nav-item svg {
+        display: none;
+    }
+}
+
+/* 整页视图 */
+.drama-view {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+}
+.drama-view-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+.drama-view-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--drama-line);
+}
+.drama-view-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 20px 28px;
+}
+.drama-view-side {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px;
+    border-left: 1px solid var(--drama-line);
+    background: var(--drama-sunken);
+}
+.drama-cast-layout {
+    grid-template-columns: minmax(0, 1fr) 380px;
+}
+@media (max-width: 1024px) {
+    .drama-cast-layout {
+        grid-template-columns: minmax(0, 1fr) 320px;
+    }
+}
+@media (max-width: 720px) {
+    .drama-cast-layout {
+        grid-template-columns: 1fr;
+    }
+    .drama-view-side {
+        border-left: 0;
+        border-top: 1px solid var(--drama-line);
+    }
+}
+
+.drama-cast-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 8px;
+}
+.drama-cast-grid.is-square {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+.drama-cast-grid.is-wide {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.drama-cast-card {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--drama-panel);
+    border: 1px solid var(--drama-line);
+    text-align: left;
+    transition:
+        border-color 150ms,
+        box-shadow 150ms;
+}
+.drama-cast-card:hover {
+    border-color: var(--drama-line-strong);
+}
+.drama-cast-card[aria-current="true"] {
+    border-color: var(--workspace-accent);
+    box-shadow: 0 0 0 3px var(--workspace-accent-soft);
+}
+/* 参考图按生成画幅完整显示（contain）；图片层绝对定位并裁在媒体框内，不会盖住下方名称。 */
+.drama-cast-card-media {
+    position: relative;
+    aspect-ratio: var(--drama-cast-ratio, 3 / 4);
+    overflow: hidden;
+    background: var(--drama-sunken);
+}
+.drama-cast-card-media > .cached-resource-image-shell,
+.drama-cast-hero > .cached-resource-image-shell {
+    position: absolute;
+    inset: 0;
+    grid-template-rows: minmax(0, 1fr);
+}
+.drama-cast-card-media img,
+.drama-cast-hero img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    object-fit: contain;
+}
+.drama-cast-media-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--fs-micro);
+    color: var(--drama-faint);
+}
+.drama-cast-media-state.is-loading {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 30%, color-mix(in oklab, var(--foreground) 6%, transparent) 50%, transparent 70%) var(--drama-sunken);
+    background-size: 200% 100%;
+    animation: drama-shimmer 1.8s linear infinite;
+}
+.drama-cast-card-media > .drama-cast-media-state:not(.is-loading),
+.drama-cast-hero > .drama-cast-media-state:not(.is-loading) {
+    position: absolute;
+    inset: 0;
+    justify-content: center;
+}
+.drama-cast-card-body {
+    padding: 8px 8px 8px;
+}
+.drama-cast-card-body strong {
+    display: block;
+    font-size: var(--fs-label);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-cast-card-body span {
+    display: block;
+    margin-top: 1px;
+    font-size: var(--fs-micro);
+    color: var(--drama-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-cast-hero {
+    position: relative;
+    aspect-ratio: var(--drama-cast-ratio, 3 / 4);
+    max-height: 420px;
+    margin: 0 auto;
+    width: 100%;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    background: var(--background);
+    border: 1px solid var(--drama-line);
+}
+.drama-cast-hero-zoom {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 8px;
+    cursor: zoom-in;
+    background: transparent;
+    border-radius: inherit;
+}
+.drama-cast-hero-zoom:focus-visible {
+    outline: 2px solid var(--workspace-accent);
+    outline-offset: -2px;
+}
+.drama-cast-hero-zoom-hint {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-md);
+    background: color-mix(in oklab, var(--background) 78%, transparent);
+    backdrop-filter: blur(6px);
+    color: var(--foreground);
+    opacity: 0;
+    transition: opacity 150ms;
+}
+.drama-cast-hero-zoom:hover .drama-cast-hero-zoom-hint,
+.drama-cast-hero-zoom:focus-visible .drama-cast-hero-zoom-hint {
+    opacity: 1;
+}
+@media (hover: none) {
+    .drama-cast-hero-zoom-hint {
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .drama-cast-media-state.is-loading {
+        animation: none;
+    }
+    .drama-cast-hero-zoom-hint {
+        transition: none;
+    }
+}
+
+/* 整页视图共用：标题、空态、表单字段 */
+.drama-view-title {
+    font-size: var(--fs-section);
+    font-weight: 600;
+}
+.drama-view-sub {
+    font-size: var(--fs-tiny);
+    color: var(--drama-faint);
+}
+.drama-empty {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 64px 16px;
+    text-align: center;
+    color: var(--drama-faint);
+    font-size: var(--fs-label);
+}
+.drama-empty > svg {
+    opacity: 0.5;
+}
+.drama-empty strong {
+    font-size: var(--fs-section);
+    font-weight: 600;
+    color: var(--foreground);
+}
+.drama-empty.is-tall {
+    padding-block: 18vh;
+}
+.drama-empty.is-compact {
+    padding: 32px 8px;
+}
+.drama-field {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+}
+.drama-field-label small {
+    font-size: var(--fs-micro);
+    font-weight: 400;
+    color: var(--drama-faint);
+    letter-spacing: 0;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-field .drama-field-label {
+    margin-bottom: 0;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+}
+.drama-field-label small.is-dirty {
+    color: var(--workspace-accent);
+    font-weight: 500;
+}
+
+/* 检查器表单：台词通栏，说话人/景别/运镜一行，长描述收进折叠区 */
+
+.drama-disclosure {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--drama-line);
+    background: var(--drama-panel);
+}
+.drama-disclosure summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 12px;
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    color: var(--drama-muted);
+    cursor: pointer;
+    list-style: none;
+    border-radius: inherit;
+}
+.drama-disclosure summary::-webkit-details-marker {
+    display: none;
+}
+.drama-disclosure summary:hover {
+    color: var(--foreground);
+}
+.drama-disclosure summary:focus-visible {
+    outline: 2px solid var(--workspace-accent);
+    outline-offset: 2px;
+}
+
+/* 角色设定编辑 */
+.drama-editor {
+    display: grid;
+    gap: 16px;
+}
+.drama-editor-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.drama-switch-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+    cursor: pointer;
+}
+.drama-editor-impact {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 8px;
+    padding: 8px 12px;
+    border-radius: var(--radius-lg);
+    background: var(--drama-panel);
+    border: 1px solid var(--drama-line);
+    font-size: var(--fs-label);
+}
+.drama-editor-impact > span {
+    font-size: var(--fs-micro);
+    color: var(--drama-faint);
+    font-variant-numeric: tabular-nums;
+}
+.drama-editor-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.drama-editor-note {
+    font-size: var(--fs-micro);
+    line-height: 1.6;
+    color: var(--drama-faint);
+}
+.drama-cast-card-failed {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--drama-err);
+    font-weight: 600;
+}
+
+/* 待处理：同类同因折叠成一张卡，铺满宽度两列排布 */
+.drama-inbox {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr));
+    gap: 16px;
+    align-items: start;
+}
+.drama-inbox-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.drama-inbox-summary > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--drama-sunken);
+    border: 1px solid var(--drama-line);
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+}
+.drama-inbox-summary > .is-err {
+    color: var(--drama-err);
+    border-color: transparent;
+    background: color-mix(in oklab, var(--drama-err) 10%, transparent);
+}
+.drama-inbox-summary > .is-info {
+    color: var(--drama-run);
+    border-color: transparent;
+    background: var(--workspace-accent-soft);
+}
+.drama-inbox-card {
+    display: grid;
+    gap: 12px;
+    padding: 16px 16px 16px;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--drama-line);
+    background: var(--drama-panel);
+}
+.drama-inbox-card.is-error {
+    border-color: color-mix(in oklab, var(--drama-err) 22%, var(--drama-line));
+}
+.drama-inbox-card.is-warning {
+    border-color: color-mix(in oklab, var(--drama-warn) 30%, var(--drama-line));
+}
+.drama-inbox-card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+}
+.drama-inbox-card-head h3 {
+    font-size: var(--fs-body);
+    font-weight: 600;
+    line-height: 1.4;
+}
+.drama-inbox-card-head p {
+    margin-top: 2px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+    line-height: 1.5;
+}
+.drama-inbox-card-actions {
+    display: flex;
+    flex: none;
+    gap: 8px;
+}
+.drama-inbox-card-actions .ant-btn svg {
+    flex: none;
+}
+.drama-inbox-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+}
+.drama-inbox-icon.is-error {
+    color: var(--drama-err);
+    background: color-mix(in oklab, var(--drama-err) 11%, transparent);
+}
+.drama-inbox-icon.is-warning {
+    color: var(--drama-warn);
+    background: color-mix(in oklab, var(--drama-warn) 14%, transparent);
+}
+.drama-inbox-icon.is-info {
+    color: var(--drama-run);
+    background: var(--workspace-accent-soft);
+}
+.drama-inbox-reason {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    align-items: baseline;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    background: var(--drama-sunken);
+    font-size: var(--fs-tiny);
+}
+.drama-inbox-reason > span {
+    font-weight: 600;
+    color: var(--drama-faint);
+}
+.drama-inbox-reason code {
+    font-family: inherit;
+    line-height: 1.6;
+    color: var(--drama-muted);
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.drama-inbox-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.drama-inbox-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    max-width: 180px;
+    padding: 0 8px;
+    border-radius: 999px;
+    border: 1px solid var(--drama-line);
+    background: var(--surface);
+    font-size: var(--fs-tiny);
+    color: color-mix(in oklab, var(--foreground) 80%, transparent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition:
+        border-color 150ms,
+        background-color 150ms;
+}
+.drama-inbox-chip.has-avatar {
+    padding-left: 2px;
+}
+.drama-inbox-chip:hover {
+    border-color: var(--drama-line-strong);
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+.drama-inbox-chip .drama-avatar {
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+}
+.drama-inbox-chip svg {
+    flex: none;
+    color: var(--drama-faint);
+}
+.drama-inbox-more {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 8px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-faint);
+}
+
+/* 制作设置：12 栏网格铺满宽度 */
+.drama-settings-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+.drama-settings-title h3 {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+.drama-settings-title h3 svg {
+    color: var(--workspace-accent);
+}
+.drama-settings-title span {
+    font-size: var(--fs-micro);
+    color: var(--drama-faint);
+}
+
+.drama-budget-meter {
+    display: grid;
+    gap: 8px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+}
+.drama-budget-meter b {
+    color: var(--foreground);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.drama-budget-track {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--drama-line-strong);
+    overflow: hidden;
+}
+.drama-budget-track span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--drama-run);
+    transition: transform 250ms var(--motion-ease-out);
+}
+.drama-budget-track span.is-warn {
+    background: var(--drama-warn);
+}
+
+/* 短剧模型下拉：通用 ModelPicker 触发器换成与表单一致的外观。
+   通用样式在 @layer utilities 里带 !important，只有更早的 components 层 !important 才能覆盖。 */
+@layer components {
+    .drama-root .drama-model-picker.canvas-composer-model-picker {
+        height: 38px !important;
+        padding: 0 8px 0 8px !important;
+        border: 1px solid var(--drama-line-strong) !important;
+        border-radius: var(--radius-md) !important;
+        background: var(--surface) !important;
+        color: var(--foreground) !important;
+        font-size: var(--fs-label) !important;
+        transition:
+            border-color 150ms,
+            box-shadow 150ms !important;
+    }
+    .drama-root .drama-model-picker.canvas-composer-model-picker:hover {
+        border-color: color-mix(in oklab, var(--foreground) 28%, transparent) !important;
+        background: var(--surface) !important;
+    }
+    .drama-root .drama-model-picker.canvas-composer-model-picker[aria-expanded="true"] {
+        border-color: var(--workspace-accent) !important;
+        background: var(--surface) !important;
+        box-shadow: 0 0 0 3px var(--workspace-accent-soft) !important;
+    }
+    .drama-root .drama-model-picker.is-sm.canvas-composer-model-picker {
+        height: 32px !important;
+        padding: 0 8px 0 4px !important;
+        font-size: var(--fs-tiny) !important;
+    }
+    .drama-root .drama-model-picker .canvas-model-picker-trigger-icon {
+        background: transparent !important;
+    }
+    .drama-root .drama-model-picker.is-sm .canvas-model-picker-trigger-icon {
+        flex-basis: 20px !important;
+        width: 20px !important;
+        height: 20px !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .drama-root *,
+    .drama-root *::before,
+    .drama-root *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+/* ===== 作品列表：与“我的画布”同一内容库壳层 ===== */
+.drama-library .drama-root {
+    position: relative;
+    min-height: 100%;
+}
+.drama-library-status {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--user-surface-muted);
+}
+.drama-library-status-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    color: var(--user-ink-muted);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition:
+        background-color 150ms ease-out,
+        color 150ms ease-out;
+}
+.drama-library-status-item b {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--user-ink-soft);
+    font-variant-numeric: tabular-nums;
+}
+.drama-library-status-item:hover {
+    color: var(--user-ink);
+}
+.drama-library-status-item[aria-checked="true"] {
+    background: var(--user-surface);
+    color: var(--user-ink);
+    box-shadow:
+        0 1px 2px color-mix(in srgb, black 8%, transparent),
+        0 0 0 1px var(--user-border);
+}
+.drama-library-status-item .drama-dot {
+    width: 6px;
+    height: 6px;
+}
+.drama-library-status-item.is-running .drama-dot {
+    color: var(--drama-run);
+}
+.drama-library-status-item.is-paused .drama-dot {
+    color: var(--drama-warn);
+}
+.drama-library-status-item.is-completed .drama-dot {
+    color: var(--drama-ok);
+}
+.drama-library-status-item.is-draft .drama-dot {
+    color: var(--user-ink-soft);
+}
+
+.drama-library-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+    gap: 24px 16px;
+    transition: opacity 160ms ease-out;
+}
+.drama-library-grid.is-stale {
+    opacity: 0.55;
+}
+.drama-library-card {
+    position: relative;
+    min-width: 0;
+    padding: 8px;
+    border-radius: var(--user-radius-card);
+    background: var(--user-surface);
+    transition: background-color var(--user-motion);
+}
+.drama-library-card:hover,
+.drama-library-card:focus-within {
+    background: color-mix(in srgb, var(--user-surface) 60%, var(--user-surface-muted));
+}
+.drama-library-open {
+    display: block;
+    color: inherit;
+    border-radius: inherit;
+}
+.drama-library-open:focus-visible {
+    outline: 2px solid var(--user-accent);
+    outline-offset: 4px;
+}
+.drama-library-cover {
+    position: relative;
+    display: grid;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    gap: 2px;
+    border-radius: var(--user-radius-control);
+    background: var(--user-surface-muted);
+}
+.drama-library-cover > span {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+.drama-library-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 250ms var(--product-ease, ease);
+}
+.drama-library-card:hover .drama-library-cover img {
+}
+.drama-library-cover.is-2 {
+    grid-template-columns: 1fr 1fr;
+}
+.drama-library-cover.is-3 {
+    grid-template-columns: 3fr 2fr;
+    grid-template-rows: 1fr 1fr;
+}
+.drama-library-cover.is-3 > span:first-child {
+    grid-row: span 2;
+}
+.drama-library-cover.is-4 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+}
+.drama-library-cover::after {
+    content: "";
+    position: absolute;
+    inset: 55% 0 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.38), transparent);
+    pointer-events: none;
+}
+.drama-library-cover.is-empty {
+    place-items: center;
+    background: radial-gradient(120% 80% at 20% 0%, color-mix(in srgb, var(--user-accent) 22%, transparent), transparent 60%), linear-gradient(160deg, var(--user-surface-muted), color-mix(in srgb, var(--user-surface-muted) 70%, var(--user-page-bg)));
+}
+.drama-library-cover.is-empty::after {
+    display: none;
+}
+.drama-library-glyph {
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 1;
+    color: color-mix(in srgb, var(--user-ink) 14%, transparent);
+}
+.drama-library-empty-icon {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    width: 18px;
+    height: 18px;
+    color: color-mix(in srgb, var(--user-ink) 30%, transparent);
+}
+.drama-library-badge {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    z-index: 1;
+    height: 24px;
+    backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--user-surface) 82%, transparent);
+    border-color: transparent;
+}
+.drama-library-body {
+    display: grid;
+    gap: 8px;
+    padding: 12px 8px 4px;
+}
+.drama-library-body h3 {
+    overflow: hidden;
+    color: var(--user-ink);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-library-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    color: var(--user-ink-soft);
+    font-size: 12px;
+}
+.drama-library-meta span + span::before {
+    content: "·";
+    margin-right: 8px;
+    color: var(--user-border-strong);
+}
+.drama-library-progress {
+    display: grid;
+    gap: 8px;
+}
+.drama-library-progress-bar {
+    height: 4px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--user-surface-muted);
+}
+.drama-library-progress-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--drama-run);
+    transition: transform 250ms var(--motion-ease-out);
+}
+.drama-library-card.is-completed .drama-library-progress-bar > span {
+    background: var(--drama-ok);
+}
+.drama-library-card.is-paused .drama-library-progress-bar > span {
+    background: var(--drama-warn);
+}
+.drama-library-progress-text {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+.drama-library-progress-text b {
+    color: var(--user-ink);
+    font-weight: 600;
+}
+.drama-library-alert {
+    overflow: hidden;
+    padding: 8px 8px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--drama-warn) 10%, transparent);
+    color: var(--drama-warn);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-library-menu {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+}
+.drama-library-menu .product-icon-button {
+    background: color-mix(in srgb, var(--user-surface) 86%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: inset 0 0 0 1px var(--user-border);
+}
+.drama-library-card:hover .drama-library-menu,
+.drama-library-card:focus-within .drama-library-menu {
+    opacity: 1;
+}
+@media (hover: none) {
+    .drama-library-menu {
+        opacity: 1;
+    }
+}
+.drama-library-hero {
+    min-height: 440px;
+    flex: none;
+    margin-top: 8px;
+}
+.drama-library-drop {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    border: 2px dashed var(--user-accent);
+    border-radius: var(--user-radius-card);
+    background: color-mix(in srgb, var(--user-page-bg) 80%, var(--user-accent-soft));
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+}
+.drama-library-drop > div {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    color: var(--user-ink);
+    text-align: center;
+}
+.drama-library-drop svg {
+    color: var(--user-accent);
+}
+.drama-library-drop strong {
+    font-size: 16px;
+    font-weight: 600;
+}
+.drama-library-drop span {
+    color: var(--user-ink-muted);
+    font-size: 13px;
+}
+@media (max-width: 720px) {
+    .drama-library-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+}
+
+/* ===== 参考图方案 ===== */
+.drama-assets {
+    display: grid;
+    gap: 12px;
+}
+.drama-assets.is-loading {
+    padding: 24px;
+    border-radius: var(--radius-lg);
+    background: var(--drama-sunken);
+    color: var(--drama-faint);
+    font-size: var(--fs-label);
+    text-align: center;
+}
+.drama-assets-schemes {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+.drama-assets.is-compact .drama-assets-schemes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 1100px) {
+    .drama-assets-schemes {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+.drama-assets-scheme {
+    position: relative;
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    padding: 12px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--drama-line);
+    background: var(--surface);
+    text-align: left;
+    transition:
+        border-color 0.15s,
+        background-color 0.15s,
+        box-shadow 0.15s;
+}
+.drama-assets-scheme:hover {
+    border-color: var(--drama-line-strong);
+}
+.drama-assets-scheme[aria-checked="true"] {
+    border-color: var(--workspace-accent);
+    background: color-mix(in oklab, var(--workspace-accent-soft) 60%, var(--surface));
+    box-shadow: 0 0 0 3px var(--workspace-accent-soft);
+}
+.drama-assets-scheme-copy {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+.drama-assets-scheme-copy strong {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+.drama-assets-scheme-copy em {
+    padding: 1px 8px;
+    border-radius: 4px;
+    background: var(--drama-sunken);
+    color: var(--drama-muted);
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.drama-assets-scheme-copy > span {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--drama-muted);
+    font-size: var(--fs-tiny);
+    line-height: 1.55;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+.drama-assets-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: grid;
+    width: 18px;
+    height: 18px;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--workspace-accent);
+    color: var(--background);
+}
+/* 方案版式示意：用色块表达定妆照 / 三视图 / 四格 + 声纹 */
+.drama-glyph {
+    display: grid;
+    width: 56px;
+    height: 56px;
+    gap: 2px;
+    padding: 8px;
+    border-radius: 12px;
+    background: var(--drama-sunken);
+}
+.drama-glyph i {
+    display: block;
+    border-radius: 4px;
+    background: color-mix(in oklab, var(--workspace-accent) 30%, var(--drama-line-strong));
+}
+.drama-glyph.is-portrait {
+    padding: 8px 12px;
+}
+.drama-glyph.is-portrait i {
+    border-radius: 8px 8px 4px 4px;
+}
+.drama-glyph.is-turnaround {
+    grid-template-columns: repeat(3, 1fr);
+    padding: 12px 8px;
+}
+.drama-glyph.is-turnaround i {
+    border-radius: 8px 8px 4px 4px;
+}
+.drama-glyph.is-fourview {
+    grid-template-columns: 1.2fr 1fr 1fr 1fr;
+    grid-template-rows: 1fr 6px;
+    padding: 12px 8px 8px;
+}
+.drama-glyph.is-fourview i.is-face {
+    background: var(--workspace-accent);
+    border-radius: 50% 50% 4px 4px;
+}
+.drama-glyph.is-fourview b {
+    grid-column: 1 / -1;
+    border-radius: 4px;
+    background: repeating-linear-gradient(90deg, color-mix(in oklab, var(--workspace-accent) 60%, transparent) 0 2px, transparent 2px 4px);
+}
+.drama-glyph.is-custom {
+    place-items: center;
+    color: var(--drama-muted);
+}
+.drama-assets-ratio {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+}
+.drama-assets-ratio small {
+    color: var(--drama-faint);
+}
+.drama-assets-editor {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--drama-line);
+    background: var(--drama-panel);
+}
+.drama-assets-editor-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.drama-assets-badge {
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 8px;
+    background: var(--workspace-accent-soft);
+    color: var(--workspace-accent);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 20px;
+}
+.drama-assets-badge.is-muted {
+    background: var(--drama-sunken);
+    color: var(--drama-faint);
+}
+.drama-assets-variables {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-micro);
+    color: var(--drama-faint);
+}
+.drama-assets-variables button {
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 8px;
+    border: 1px dashed var(--drama-line-strong);
+    color: var(--drama-muted);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+}
+.drama-assets-variables button:hover {
+    border-style: solid;
+    border-color: var(--workspace-accent);
+    color: var(--workspace-accent);
+}
+.drama-assets-warning,
+.drama-assets-source {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-tiny);
+}
+.drama-assets-warning {
+    color: var(--drama-err);
+}
+.drama-assets-source {
+    color: var(--workspace-accent);
+}
+.drama-assets-preview {
+    display: grid;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    background: var(--drama-sunken);
+}
+.drama-assets-preview-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    color: var(--drama-muted);
+}
+.drama-assets-preview-head span {
+    font-weight: 400;
+    color: var(--drama-faint);
+}
+.drama-assets-preview p {
+    max-height: 132px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-size: var(--fs-tiny);
+    line-height: 1.7;
+    color: color-mix(in oklab, var(--foreground) 74%, transparent);
+}
+.drama-assets-preview small {
+    font-size: var(--fs-micro);
+    color: var(--drama-faint);
+}
+
+/* 从技能导入 */
+.drama-skill-import {
+    display: flex;
+    flex-direction: column;
+    height: min(680px, calc(100vh - 80px));
+}
+.drama-skill-import-head {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--drama-line, var(--border));
+}
+.drama-skill-import-head strong {
+    display: block;
+    font-size: var(--fs-section);
+    font-weight: 600;
+}
+.drama-skill-import-head span {
+    display: block;
+    margin-top: 2px;
+    font-size: var(--fs-tiny);
+    color: color-mix(in oklab, var(--foreground) 55%, transparent);
+}
+.drama-skill-import-body {
+    display: grid;
+    flex: 1;
+    grid-template-columns: 240px 260px minmax(0, 1fr);
+    min-height: 0;
+}
+.drama-skill-import-body > aside {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    padding: 12px;
+    border-right: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.drama-skill-import-body > section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px;
+}
+.drama-skill-import-caption {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 4px 8px;
+    overflow: hidden;
+    color: color-mix(in oklab, var(--foreground) 55%, transparent);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-skill-import-list {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+    align-content: start;
+    min-height: 0;
+    overflow-y: auto;
+}
+.drama-skill-import-list button {
+    display: grid;
+    gap: 2px;
+    padding: 8px 8px;
+    border-radius: 8px;
+    text-align: left;
+    transition: background-color 150ms;
+}
+.drama-skill-import-list button:hover {
+    background: color-mix(in oklab, var(--foreground) 5%, transparent);
+}
+.drama-skill-import-list button[aria-pressed="true"] {
+    background: var(--workspace-accent-soft);
+}
+.drama-skill-import-list button strong {
+    overflow: hidden;
+    font-size: var(--fs-label);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-skill-import-list button > span {
+    display: -webkit-box;
+    overflow: hidden;
+    color: color-mix(in oklab, var(--foreground) 50%, transparent);
+    font-size: var(--fs-micro);
+    line-height: 1.5;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.drama-skill-import-list button.is-file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-tiny);
+}
+.drama-skill-import-list button.is-file span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -webkit-line-clamp: unset;
+    display: block;
+    color: inherit;
+    font-size: inherit;
+}
+.drama-skill-import-empty {
+    padding: 20px 8px;
+    color: color-mix(in oklab, var(--foreground) 42%, transparent);
+    font-size: var(--fs-tiny);
+    line-height: 1.6;
+    text-align: center;
+}
+.drama-skill-import-content {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    overflow: auto;
+    padding: 16px 16px;
+    border-radius: 12px;
+    background: color-mix(in oklab, var(--foreground) 3%, var(--background));
+    color: color-mix(in oklab, var(--foreground) 80%, transparent);
+    font-family: inherit;
+    font-size: var(--fs-tiny);
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-break: break-word;
+    user-select: text;
+}
+.drama-skill-import-content::selection,
+.drama-skill-import-content *::selection {
+    background: color-mix(in oklab, var(--workspace-accent) 30%, transparent);
+}
+.drama-skill-import-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.drama-skill-import-foot > span {
+    flex: 1;
+    color: color-mix(in oklab, var(--foreground) 45%, transparent);
+    font-size: var(--fs-micro);
+}
+
+.drama-settings-regen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    background: var(--drama-sunken);
+}
+.drama-settings-regen > div {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+    min-width: 220px;
+}
+.drama-settings-regen strong {
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+.drama-settings-regen span {
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+}
+
+/* ===== 底部队列 ===== */
+.drama-queue {
+    border-top: 1px solid var(--drama-line);
+    background: var(--drama-sunken);
+}
+.drama-queue-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 42px;
+    min-width: 0;
+    padding: 0 8px 0 16px;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
+    white-space: nowrap;
+}
+.drama-queue-bar b {
+    color: var(--foreground);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.drama-queue-stat {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+}
+.drama-queue-stat.is-run {
+    color: var(--drama-run);
+}
+.drama-queue-stat.is-err,
+.drama-queue-stat.is-err b {
+    color: var(--drama-err);
+}
+.drama-queue-budget {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin-left: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.drama-queue-meter {
+    width: 64px;
+    height: 4px;
+    flex: none;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--drama-line-strong);
+}
+.drama-queue-meter span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--drama-run);
+}
+.drama-queue-meter span.is-warn {
+    background: var(--drama-warn);
+}
+.drama-queue-toggle {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 8px;
+    color: var(--drama-muted);
+}
+.drama-queue-toggle:hover,
+.drama-queue-toggle[aria-expanded="true"] {
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+.drama-queue-panel {
+    border-top: 1px solid var(--drama-line);
+}
+.drama-queue-filters {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+}
+.drama-queue-hint {
+    font-size: var(--fs-micro);
+    color: var(--drama-faint);
+}
+.drama-queue-list {
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 0 8px 8px;
+}
+.drama-queue-empty {
+    padding: 16px;
+    color: var(--drama-faint);
+    font-size: var(--fs-tiny);
+    text-align: center;
+}
+/* 每列固定或可收缩，错误信息单行截断，完整内容在详情弹窗里看 */
+.drama-job {
+    display: grid;
+    grid-template-columns: 16px 72px minmax(120px, 1.1fr) minmax(0, 2fr) 64px 72px 14px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 34px;
+    padding: 0 8px;
+    border-radius: 8px;
+    font-size: var(--fs-tiny);
+    text-align: left;
+    transition: background-color 150ms;
+}
+.drama-job:hover {
+    background: var(--surface-hover);
+}
+.drama-job:focus-visible {
+    outline-offset: -2px;
+}
+.drama-job-kind {
+    overflow: hidden;
+    color: var(--drama-faint);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-job-label {
+    overflow: hidden;
+    color: var(--foreground);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-job-error {
+    overflow: hidden;
+    color: var(--drama-err);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-job-time {
+    color: var(--drama-faint);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.drama-job-cost {
+    overflow: hidden;
+    color: var(--drama-faint);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.drama-job-chevron {
+    color: var(--drama-faint);
+    opacity: 0;
+    transition: opacity 150ms;
+}
+.drama-job:hover .drama-job-chevron {
+    opacity: 1;
+}
+.drama-job.is-canceled .drama-job-label {
+    color: var(--drama-faint);
+    text-decoration: line-through;
+}
+@media (max-width: 900px) {
+    .drama-job {
+        grid-template-columns: 16px minmax(0, 1fr) minmax(0, 1fr) 14px;
+    }
+    .drama-job-kind,
+    .drama-job-time,
+    .drama-job-cost {
+        display: none;
+    }
+    .drama-queue-budget .drama-queue-meter {
+        display: none;
+    }
+}
+
+/* 队列详情弹窗 */
+.drama-jobd {
+    display: flex;
+    flex-direction: column;
+    max-height: min(760px, calc(100vh - 64px));
+}
+.drama-jobd-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 48px 12px 20px;
+}
+.drama-jobd-head h3 {
+    overflow: hidden;
+    font-size: var(--fs-section);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-jobd-head p {
+    margin-top: 2px;
+    color: color-mix(in oklab, var(--foreground) 52%, transparent);
+    font-size: var(--fs-tiny);
+}
+.drama-jobd-status {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--foreground) 5%, transparent);
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+}
+.drama-jobd-status.is-failed {
+    background: color-mix(in oklab, var(--status-error) 10%, transparent);
+    color: var(--status-error);
+}
+.drama-jobd-status.is-succeeded {
+    background: color-mix(in oklab, var(--status-success) 10%, transparent);
+    color: var(--status-success);
+}
+.drama-jobd-status.is-running {
+    background: var(--workspace-accent-soft);
+    color: var(--workspace-accent);
+}
+.drama-jobd-facts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0 20px;
+    border-radius: 12px;
+    background: color-mix(in oklab, var(--foreground) 3%, var(--background));
+}
+.drama-jobd-facts > div {
+    padding: 8px 12px;
+    min-width: 0;
+}
+.drama-jobd-facts > div + div {
+    border-left: 1px solid color-mix(in oklab, var(--foreground) 7%, transparent);
+}
+.drama-jobd-facts dt {
+    color: color-mix(in oklab, var(--foreground) 45%, transparent);
+    font-size: var(--fs-micro);
+}
+.drama-jobd-facts dd {
+    margin-top: 2px;
+    font-size: var(--fs-label);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.drama-jobd-facts small {
+    display: block;
+    margin-top: 1px;
+    color: color-mix(in oklab, var(--foreground) 45%, transparent);
+    font-size: var(--fs-micro);
+    font-weight: 400;
+}
+.drama-jobd-body {
+    display: grid;
+    flex: 1;
+    gap: 8px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 20px 20px;
+}
+.drama-jobd-empty {
+    padding: 32px;
+    color: color-mix(in oklab, var(--foreground) 45%, transparent);
+    font-size: var(--fs-label);
+    text-align: center;
+}
+.drama-jobd-attempt {
+    display: grid;
+    gap: 8px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.drama-jobd-attempt.is-latest {
+    border-color: color-mix(in oklab, var(--foreground) 14%, transparent);
+}
+.drama-jobd-attempt > header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: var(--fs-label);
+}
+.drama-jobd-attempt > header strong {
+    font-weight: 600;
+}
+.drama-jobd-attempt-index {
+    padding: 1px 8px;
+    border-radius: 8px;
+    background: color-mix(in oklab, var(--foreground) 6%, transparent);
+    color: color-mix(in oklab, var(--foreground) 60%, transparent);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+}
+.drama-jobd-muted {
+    color: color-mix(in oklab, var(--foreground) 45%, transparent);
+    font-size: var(--fs-tiny);
+    font-weight: 400;
+}
+.drama-jobd-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px 16px;
+}
+.drama-jobd-grid > div {
+    min-width: 0;
+}
+.drama-jobd-grid dt {
+    color: color-mix(in oklab, var(--foreground) 45%, transparent);
+    font-size: var(--fs-micro);
+}
+.drama-jobd-grid dd {
+    overflow: hidden;
+    font-size: var(--fs-tiny);
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-jobd-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 8px 8px 12px;
+    border-radius: 8px;
+    background: color-mix(in oklab, var(--status-error) 8%, transparent);
+    color: var(--status-error);
+}
+.drama-jobd-error p {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--fs-tiny);
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.drama-jobd-pre {
+    max-height: 220px;
+    margin: 0;
+    overflow: auto;
+    padding: 0 12px 12px;
+    font-family: inherit;
+    font-size: var(--fs-tiny);
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: color-mix(in oklab, var(--foreground) 75%, transparent);
+}
+.drama-jobd-results {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.drama-jobd-thumb {
+    width: 120px;
+    overflow: hidden;
+    border-radius: 8px;
+    background: color-mix(in oklab, var(--foreground) 5%, transparent);
+}
+.drama-jobd-thumb img,
+.drama-jobd-thumb video {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+.drama-jobd-thumb.is-video {
+    width: 220px;
+}
+
+/* ===== 剧本视图：剧本 + 原文对照 ===== */
+.drama-scriptv {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 42%);
+    height: 100%;
+    min-height: 0;
+}
+.drama-scriptv.is-source-hidden {
+    grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 1100px) {
+    .drama-scriptv {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .drama-source {
+        display: none;
+    }
+}
+.drama-scriptv-main {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 24px 40px;
+}
+.drama-scriptv.is-source-hidden .drama-scriptv-main > * {
+    max-width: 920px;
+    margin-inline: auto;
+}
+.drama-scriptv-brief {
+    display: grid;
+    gap: 8px;
+    padding: 16px 16px;
+    border-radius: var(--radius-xl);
+    background: var(--drama-panel);
+    border: 1px solid var(--drama-line);
+}
+.drama-scriptv-brief-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.drama-scriptv-synopsis {
+    font-size: var(--fs-body);
+    line-height: 1.75;
+}
+.drama-scriptv-beats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.drama-scriptv-beats > div {
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    background: var(--drama-sunken);
+}
+.drama-scriptv-beats span {
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    color: var(--drama-faint);
+}
+.drama-scriptv-beats p {
+    margin-top: 4px;
+    font-size: var(--fs-label);
+    line-height: 1.6;
+}
+.drama-scriptv-pending {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 56px 16px;
+    border-radius: var(--radius-xl);
+    border: 1px dashed var(--drama-line-strong);
+    color: var(--drama-faint);
+    text-align: center;
+    font-size: var(--fs-label);
+}
+.drama-scriptv-pending strong {
+    color: var(--foreground);
+    font-size: var(--fs-section);
+    font-weight: 600;
+}
+.drama-screenplay {
+    display: grid;
+    gap: 16px;
+    margin-top: 16px;
+}
+.drama-screenplay-scene > header {
+    position: sticky;
+    top: -18px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 4px;
+    background: var(--background);
+}
+.drama-screenplay-scene-no {
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: var(--workspace-accent-soft);
+    color: var(--workspace-accent);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+}
+.drama-screenplay-scene > header strong {
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+.drama-screenplay-scene-meta {
+    margin-left: auto;
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    font-variant-numeric: tabular-nums;
+}
+.drama-screenplay-shot {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px 8px 12px;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: background-color 150ms;
+}
+.drama-screenplay-shot + .drama-screenplay-shot {
+    margin-top: 2px;
+}
+.drama-screenplay-shot:hover {
+    background: var(--surface-hover);
+}
+.drama-screenplay-shot[aria-current="true"] {
+    background: var(--workspace-accent-soft);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--workspace-accent) 40%, transparent);
+}
+.drama-screenplay-index {
+    padding-top: 2px;
+    color: var(--drama-faint);
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.drama-screenplay-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.drama-screenplay-tags span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 8px;
+    background: var(--drama-sunken);
+    color: var(--drama-muted);
+    font-size: var(--fs-micro);
+    font-variant-numeric: tabular-nums;
+}
+.drama-screenplay-tags span.is-source {
+    color: var(--workspace-accent);
+    background: transparent;
+}
+.drama-screenplay-action {
+    margin-top: 8px;
+    color: var(--drama-muted);
+    font-size: var(--fs-label);
+    line-height: 1.7;
+}
+.drama-screenplay-line {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    border: 1px solid var(--drama-line);
+}
+.drama-screenplay-line b {
+    color: var(--workspace-accent);
+    font-size: var(--fs-label);
+    font-weight: 600;
+    white-space: nowrap;
+}
+.drama-screenplay-line p {
+    font-size: var(--fs-body);
+    line-height: 1.65;
+}
+.drama-source {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-left: 1px solid var(--drama-line);
+    background: var(--drama-sunken);
+}
+.drama-source-head {
+    display: grid;
+    gap: 8px;
+    padding: 16px 16px 8px;
+    border-bottom: 1px solid var(--drama-line);
+}
+.drama-source-head .drama-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.drama-source-tabs {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+}
+.drama-source-tabs button {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 8px;
+    color: var(--drama-muted);
+    font-size: var(--fs-tiny);
+    white-space: nowrap;
+}
+.drama-source-tabs button span {
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+}
+.drama-source-tabs button:hover {
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+.drama-source-tabs button[aria-selected="true"] {
+    background: var(--surface);
+    color: var(--foreground);
+    box-shadow: var(--shadow-xs);
+}
+.drama-source-text {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 24px 28px;
+    color: color-mix(in oklab, var(--foreground) 80%, transparent);
+    font-size: var(--fs-body);
+    line-height: 2;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.drama-source-text mark {
+    padding: 2px 0;
+    border-radius: 4px;
+    background: color-mix(in oklab, var(--workspace-accent) 22%, transparent);
+    color: var(--foreground);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--workspace-accent) 22%, transparent);
+}
+.drama-source-empty {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 48px 16px;
+    color: var(--drama-faint);
+    font-size: var(--fs-label);
+    text-align: center;
+}
+.drama-source-foot {
+    padding: 8px 16px;
+    border-top: 1px solid var(--drama-line);
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+}
+.drama-source-foot.is-hit {
+    color: var(--workspace-accent);
+}
+
+/* ===== 成片视图 ===== */
+.drama-finalv {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 20px;
+    min-height: 100%;
+    padding: 20px 24px 28px;
+    align-items: start;
+}
+@media (max-width: 1180px) {
+    .drama-finalv {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+.drama-finalv-stage {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+    justify-items: center;
+}
+.drama-finalv-player {
+    position: relative;
+    width: min(100%, calc((100vh - 330px) * 9 / 16));
+    min-width: 260px;
+    overflow: hidden;
+    border-radius: var(--radius-2xl);
+    background: #0b0b0d;
+    box-shadow: var(--shadow-xl);
+}
+.drama-finalv.is-landscape .drama-finalv-player {
+    width: min(100%, 980px);
+}
+.drama-finalv-player video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.drama-finalv-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 8px;
+    padding: 24px;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: var(--fs-tiny);
+    text-align: center;
+}
+.drama-finalv-empty strong {
+    color: #fff;
+    font-size: var(--fs-section);
+    font-weight: 600;
+}
+
+.drama-filmstrip {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    overflow-x: auto;
+    padding: 4px 2px 8px;
+}
+.drama-filmstrip-item {
+    position: relative;
+    flex: none;
+    width: 64px;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--drama-sunken);
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+    opacity: 0.7;
+    transition:
+        opacity 150ms,
+        outline-color 150ms;
+}
+.drama-finalv.is-landscape .drama-filmstrip-item {
+    width: 112px;
+}
+.drama-filmstrip-item:hover {
+    opacity: 1;
+}
+.drama-filmstrip-item[aria-current="true"] {
+    opacity: 1;
+    outline-color: var(--workspace-accent);
+}
+.drama-filmstrip-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.drama-finalv-side {
+    position: sticky;
+    top: 0;
+    display: grid;
+    gap: 12px;
+}
+
+/* ===== 分镜工具条与剧情段打磨 ===== */
+.drama-board-stat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    color: var(--drama-faint);
+}
+.drama-board-stat b {
+    color: var(--foreground);
+    font-size: var(--fs-label);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.drama-board-meter {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--drama-muted);
+}
+.drama-board-meter i {
+    width: 72px;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--drama-line-strong);
+}
+.drama-board-meter em {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: color-mix(in oklab, var(--drama-run) 70%, transparent);
+    transition: transform 250ms var(--motion-ease-out);
+}
+.drama-board-meter.is-video em {
+    background: var(--drama-ok);
+}
+.drama-board-meter b {
+    color: var(--foreground);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.drama-board-hint {
+    color: var(--drama-faint);
+}
+@media (max-width: 1280px) {
+    .drama-board-hint {
+        display: none;
+    }
+}
+
+/* ===== 手动生图：剧本就绪、等待用户放行 ===== */
+.drama-banner.is-ready {
+    border-color: color-mix(in oklab, var(--drama-run) 30%, transparent);
+    background: var(--workspace-accent-soft);
+}
+.drama-chip.is-ready {
+    color: var(--drama-run);
+    background: var(--workspace-accent-soft);
+    border-color: transparent;
+}
+.drama-pips.is-ready .drama-pip-fill {
+    background: var(--drama-run);
+}
+.drama-ep.is-ready .drama-ep-num {
+    color: var(--drama-run);
+    background: var(--workspace-accent-soft);
+}
+.drama-ep.is-ready .drama-ep-meta span {
+    color: var(--drama-run);
+}
+.drama-cell.is-ready,
+.drama-matrix-legend i.is-ready {
+    background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--drama-run) 55%, transparent) 0 3px, color-mix(in oklab, var(--drama-run) 22%, transparent) 3px 6px);
+}
+.drama-review-modes.is-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+    .drama-review-modes.is-two {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 新建页右栏：生图节奏 */
+.drama-media-modes {
+    display: grid;
+    gap: 8px;
+}
+.drama-media-mode {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--drama-line);
+    background: var(--surface);
+    text-align: left;
+    transition:
+        border-color 0.15s,
+        background-color 0.15s;
+}
+.drama-media-mode:hover {
+    border-color: var(--drama-line-strong);
+}
+.drama-media-mode[aria-checked="true"] {
+    border-color: var(--workspace-accent);
+    background: var(--workspace-accent-soft);
+}
+.drama-media-mode[aria-checked="true"] .drama-radio {
+    border-color: var(--workspace-accent);
+}
+.drama-media-mode[aria-checked="true"] .drama-radio::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--workspace-accent);
+}
+.drama-media-mode strong {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+.drama-media-mode em {
+    flex: none;
+    padding: 0 8px;
+    border-radius: var(--radius-sm);
+    background: var(--workspace-accent);
+    color: var(--background);
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 17px;
+}
+.drama-media-mode > span > span {
+    display: block;
+    margin-top: 4px;
+    color: var(--drama-muted);
+    font-size: var(--fs-tiny);
+    line-height: 1.55;
+}
+
+/* 作品卡片压矮：横版拼图封面 + 紧凑信息区 */
+.drama-library-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 20px 16px;
+}
+.drama-library-cover {
+    aspect-ratio: 16 / 10;
+}
+.drama-library-cover img {
+    object-position: center 22%;
+}
+.drama-library-cover.is-3 {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: 1fr;
+}
+.drama-library-cover.is-3 > span:first-child {
+    grid-row: auto;
+}
+.drama-library-cover.is-4 {
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: 1fr;
+}
+.drama-library-glyph {
+    font-size: 32px;
+}
+.drama-library-badge {
+    top: 16px;
+    left: 16px;
+    height: 22px;
+    padding: 0 8px;
+    font-size: 11px;
+}
+.drama-library-menu {
+    top: 14px;
+    right: 14px;
+}
+.drama-library-menu .product-icon-button {
+    width: 28px;
+    height: 28px;
+}
+.drama-library-body {
+    gap: 8px;
+    padding: 8px 8px 2px;
+}
+.drama-library-body h3 {
+    font-size: 14px;
+    line-height: 1.4;
+}
+.drama-library-progress {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+.drama-library-progress-text {
+    gap: 8px;
+    font-size: 11px;
+}
+.drama-library-progress-text > span {
+    color: var(--user-ink-soft);
+}
+
+/* ===== 分镜规则 ===== */
+.drama-field-error {
+    color: var(--drama-err);
+    font-size: var(--fs-micro);
+}
+.drama-sbrules {
+    display: grid;
+    gap: 8px;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--drama-line);
+    background: var(--drama-panel);
+}
+.drama-sbrules-row {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+}
+.drama-sbrules-row:has(.drama-sbrules-number) {
+    display: flex;
+    flex-wrap: wrap;
+}
+.drama-sbrules-row:has(.drama-sbrules-number) .drama-sbrules-label {
+    width: 64px;
+    flex: none;
+}
+.drama-sbrules-label {
+    color: var(--drama-muted);
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+}
+.drama-sbrules-number {
+    width: 96px !important;
+}
+.drama-sbrules-segment {
+    display: flex;
+    flex: 1 1 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.drama-sbrules-dash,
+.drama-sbrules-hint {
+    color: var(--drama-faint);
+    font-size: var(--fs-tiny);
+}
+.drama-sbrules .drama-tabs.is-block .drama-tab {
+    height: 30px;
+    font-size: var(--fs-tiny);
+}
+.drama-sbrules-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--drama-line);
+    color: var(--drama-muted);
+    font-size: var(--fs-tiny);
+}
+.drama-sbrules-summary b {
+    color: var(--foreground);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.drama-sbrules-warn {
+    display: flex;
+    gap: 8px;
+    padding: 8px 8px;
+    border-radius: var(--radius-md);
+    background: color-mix(in oklab, var(--drama-warn) 10%, transparent);
+    color: color-mix(in oklab, var(--drama-warn) 80%, var(--foreground));
+    font-size: var(--fs-tiny);
+    line-height: 1.6;
+}
+.drama-sbrules-warn svg {
+    margin-top: 4px;
+}
+
+/* 剧本视图：分镜规则与转场标签 */
+.drama-scriptv-rules {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+    color: var(--drama-faint);
+    font-size: var(--fs-tiny);
+}
+.drama-scriptv-rules > span:first-child {
+    font-weight: 600;
+}
+.drama-scriptv-rules b {
+    color: var(--drama-muted);
+    font-weight: 600;
+}
+.drama-screenplay-tags span.is-transition {
+    background: color-mix(in oklab, var(--workspace-accent) 10%, transparent);
+    color: var(--workspace-accent);
+}
+
+/* 制作设置：主列放需要思考的规则与方案，侧栏放一眼能定的开关；卡片统一 12px 内边距。 */
+.drama-cfg {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 12px;
+    align-items: start;
+}
+@media (max-width: 1100px) {
+    .drama-cfg {
+        grid-template-columns: 1fr;
+    }
+}
+.drama-cfg-main,
+.drama-cfg-side {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    min-width: 0;
+}
+@media (min-width: 1101px) {
+    .drama-cfg-side {
+        position: sticky;
+        top: 0;
+    }
+}
+.drama-cfg-card {
+    display: grid;
+    gap: 8px;
+    align-content: start;
+    min-width: 0;
+    padding: 12px 16px 16px;
+    border: 1px solid var(--drama-line);
+    border-radius: var(--radius-lg);
+    background: var(--drama-panel);
+}
+.drama-cfg-card .drama-settings-title {
+    flex-wrap: wrap;
+    row-gap: 2px;
+}
+.drama-cfg-kv {
+    display: grid;
+    margin: 0;
+}
+.drama-cfg-kv > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 28px;
+    padding: 4px 0;
+    border-top: 1px solid var(--drama-line);
+}
+.drama-cfg-kv > div:first-child {
+    border-top: 0;
+}
+.drama-cfg-kv dt {
+    flex: none;
+    color: var(--drama-faint);
+    font-size: var(--fs-tiny);
+}
+.drama-cfg-kv dd {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-cfg-radios {
+    display: grid;
+    gap: 4px;
+}
+.drama-cfg-radio {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    text-align: left;
+}
+.drama-cfg-radio:hover {
+    background: var(--drama-sunken);
+}
+.drama-cfg-radio:focus-visible {
+    outline: 2px solid var(--workspace-accent);
+    outline-offset: 1px;
+}
+.drama-cfg-radio[aria-checked="true"] {
+    border-color: color-mix(in oklab, var(--workspace-accent) 45%, transparent);
+    background: var(--workspace-accent-soft);
+}
+.drama-cfg-radio .drama-radio {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    margin-top: 2px;
+}
+.drama-cfg-radio[aria-checked="true"] .drama-radio {
+    border-color: var(--workspace-accent);
+}
+.drama-cfg-radio[aria-checked="true"] .drama-radio::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--workspace-accent);
+}
+.drama-cfg-radio strong {
+    display: block;
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    line-height: 18px;
+}
+.drama-cfg-radio small {
+    display: block;
+    color: var(--drama-muted);
+    font-size: var(--fs-micro);
+    line-height: 1.5;
+}
+.drama-cfg-note {
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    line-height: 1.5;
+}
+.drama-cfg-seg {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    width: 100%;
+}
+.drama-cfg-seg .drama-tab {
+    justify-content: center;
+    height: 26px;
+    padding: 0;
+    font-size: var(--fs-tiny);
+    font-variant-numeric: tabular-nums;
+}
+.drama-cfg-models {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+}
+@media (max-width: 720px) {
+    .drama-cfg-models {
+        grid-template-columns: 1fr;
+    }
+}
+.drama-cfg-model {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+.drama-cfg-model-label {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+.drama-cfg-model-label strong {
+    flex: none;
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+}
+.drama-cfg-model-label small {
+    overflow: hidden;
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 分镜规则：分段只占内容宽度，不再拉满整行。 */
+.drama-sbrules.is-bare {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+.drama-sbrules .drama-tabs.is-block {
+    display: inline-flex;
+    width: auto;
+    justify-self: start;
+    max-width: 100%;
+    overflow-x: auto;
+}
+.drama-sbrules .drama-tabs.is-block .drama-tab {
+    height: 26px;
+    padding: 0 12px;
+    white-space: nowrap;
+}
+.drama-sbrules-duration .drama-field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+}
+.drama-sbrules-duration .ant-input-affix-wrapper {
+    width: 150px;
+}
+.drama-field-hint {
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+}
+.drama-duration-option {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    min-width: 120px;
+}
+.drama-duration-option small {
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 剧情段：段提示词入口与段内镜头列表。 */
+
+.drama-chip.is-failed {
+    color: var(--drama-err);
+    background: color-mix(in oklab, var(--drama-err) 12%, transparent);
+    border-color: transparent;
+}
+
+/* ===== 镜头弹窗：左侧画面与镜头设置，右侧整块提示词全文 ===== */
+.drama-sd-root .ant-modal-container {
+    border: 1px solid var(--drama-line);
+    background: var(--surface);
+}
+.drama-sd {
+    display: flex;
+    flex-direction: column;
+    color: var(--foreground);
+    height: min(860px, calc(100vh - 64px));
+    min-height: 0;
+}
+.drama-sd.is-segment {
+    height: min(820px, calc(100vh - 64px));
+}
+.drama-sd-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 16px 12px 20px;
+    border-bottom: 1px solid var(--drama-line);
+}
+.drama-sd-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 8px;
+    margin-top: 4px;
+    min-width: 0;
+}
+.drama-sd-title h2 {
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--fs-section);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.drama-sd-nav {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+}
+.drama-sd-body {
+    display: grid;
+    flex: 1;
+    grid-template-columns: 340px minmax(0, 1fr);
+    min-height: 0;
+}
+@media (max-width: 860px) {
+    .drama-sd-body {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+    }
+}
+.drama-sd-side {
+    display: grid;
+    align-content: start;
+    gap: 16px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 16px 20px 20px;
+    border-right: 1px solid var(--drama-line);
+    background: var(--drama-sunken);
+}
+
+.drama-sd-error {
+    display: grid;
+    gap: 2px;
+    padding: 8px 8px;
+    border-radius: var(--radius-md);
+    background: color-mix(in oklab, var(--drama-err) 10%, transparent);
+    color: var(--drama-err);
+    font-size: var(--fs-tiny);
+    line-height: 1.55;
+}
+.drama-sd-error > span {
+    color: color-mix(in oklab, var(--drama-err) 75%, var(--foreground));
+    word-break: break-word;
+}
+.drama-sd-error-actions {
+    display: flex;
+    margin-top: 6px;
+}
+.drama-sd-error.is-wait {
+    background: color-mix(in oklab, var(--drama-warn) 10%, transparent);
+    color: var(--drama-warn);
+}
+.drama-sd-error.is-wait > span {
+    color: color-mix(in oklab, var(--drama-warn) 70%, var(--foreground));
+}
+
+.drama-sd-form {
+    display: grid;
+    gap: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--drama-line);
+}
+.drama-sd-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+.drama-sd-row.is-three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.drama-sd-field {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+.drama-sd-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--drama-muted);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+}
+.drama-sd-label small {
+    color: var(--drama-faint);
+    font-weight: 400;
+}
+.drama-sd-label small.is-dirty {
+    color: var(--workspace-accent);
+}
+.drama-sd-quote p {
+    margin-top: 4px;
+    color: var(--drama-muted);
+    font-size: var(--fs-tiny);
+    line-height: 1.7;
+}
+.drama-sd-main {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    min-height: 0;
+    padding: 12px 20px 16px;
+}
+.drama-sd-main.is-solo {
+    flex: 1;
+    padding-top: 16px;
+}
+
+.drama-sd-pane {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+}
+.drama-sd-pane-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 28px;
+}
+.drama-sd-pane-caption {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--drama-faint);
+    font-size: var(--fs-tiny);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.drama-sd-pane-caption em {
+    flex: none;
+    padding: 0 8px;
+    border-radius: var(--radius-sm);
+    background: var(--workspace-accent-soft);
+    color: var(--workspace-accent);
+    font-style: normal;
+    font-weight: 600;
+    line-height: 18px;
+}
+.drama-sd-pane-tools {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+}
+.drama-sd-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 8px;
+    border-radius: var(--radius-md);
+    background: var(--drama-sunken);
+    color: var(--drama-muted);
+    font-size: var(--fs-tiny);
+}
+.drama-sd-notice.is-running,
+.drama-sd-notice.is-queued {
+    color: var(--drama-run);
+}
+.drama-sd-notice.is-failed {
+    background: color-mix(in oklab, var(--drama-err) 10%, transparent);
+    color: var(--drama-err);
+}
+.drama-sd-notice.is-stale {
+    background: color-mix(in oklab, var(--drama-warn) 12%, transparent);
+    color: color-mix(in oklab, var(--drama-warn) 80%, var(--foreground));
+}
+.drama-sd-text {
+    flex: 1;
+    min-height: 0 !important;
+    resize: none !important;
+    padding: 16px 16px !important;
+    border-radius: var(--radius-lg) !important;
+    color: var(--foreground) !important;
+    font-size: var(--fs-body) !important;
+    line-height: 1.85 !important;
+    white-space: pre-wrap;
+}
+.drama-sd-empty {
+    display: grid;
+    flex: 1;
+    place-content: center;
+    justify-items: center;
+    gap: 8px;
+    padding: 24px;
+    border: 1px dashed var(--drama-line-strong);
+    border-radius: var(--radius-lg);
+    color: var(--drama-muted);
+    font-size: var(--fs-label);
+    text-align: center;
+}
+.drama-sd-empty small {
+    color: var(--drama-faint);
+    font-size: var(--fs-tiny);
+}
+.drama-sd-pane-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    font-variant-numeric: tabular-nums;
+}
+.drama-sd-pane-foot .is-dirty {
+    color: var(--workspace-accent);
+    font-weight: 500;
+}
+/* ===== 剧情段：分镜页卡片与弹窗共用的状态、视频与生成依据 ===== */
+.drama-sg-status {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--drama-sunken);
+    color: var(--drama-muted);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+}
+.drama-sg-status i {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: 0.6;
+}
+.drama-sg-status.is-busy {
+    background: var(--workspace-accent-soft);
+    color: var(--drama-run);
+}
+.drama-sg-status.is-ready {
+    background: color-mix(in oklab, var(--drama-ok) 14%, transparent);
+    color: var(--drama-ok);
+}
+.drama-sg-status.is-stale,
+.drama-sg-status.is-blocked {
+    background: color-mix(in oklab, var(--drama-warn) 14%, transparent);
+    color: color-mix(in oklab, var(--drama-warn) 80%, var(--foreground));
+}
+.drama-sg-status.is-failed {
+    background: color-mix(in oklab, var(--drama-err) 12%, transparent);
+    color: var(--drama-err);
+}
+.drama-sg-video {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--drama-line);
+    border-radius: var(--radius-lg);
+    background: var(--background);
+}
+.drama-sg-video video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+}
+.drama-sg-video-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 8px;
+    padding: 12px;
+    color: var(--drama-muted);
+    font-size: var(--fs-tiny);
+    text-align: center;
+}
+.drama-sg-video-empty small {
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    line-height: 1.5;
+}
+.drama-sg-video-empty.is-busy {
+    background: linear-gradient(110deg, transparent 30%, color-mix(in oklab, var(--foreground) 6%, transparent) 50%, transparent 70%) var(--drama-sunken);
+    background-size: 200% 100%;
+    animation: drama-shimmer 1.8s linear infinite;
+}
+.drama-sg-inputs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.drama-sg-inputs:not(.is-compact) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+.drama-sg-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    text-align: left;
+}
+.drama-sg-inputs:not(.is-compact) .drama-sg-input {
+    padding: 8px;
+    border: 1px solid var(--drama-line);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+}
+.drama-sg-inputs:not(.is-compact) button.drama-sg-input:hover {
+    border-color: var(--drama-line-strong);
+}
+.drama-sg-input.is-missing .drama-sg-input-text small {
+    color: color-mix(in oklab, var(--drama-warn) 80%, var(--foreground));
+}
+.drama-sg-input-text {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+}
+.drama-sg-input-text b {
+    overflow: hidden;
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-sg-input-text small {
+    overflow: hidden;
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-sg-thumb {
+    position: relative;
+    flex: none;
+    width: 36px;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--drama-sunken);
+    outline: 1px solid var(--drama-line);
+    outline-offset: -1px;
+}
+.drama-sg-thumb.is-frame {
+    width: 48px;
+    aspect-ratio: 4 / 3;
+}
+/* 参考图（角色、道具、场景）统一按 16:9 展示 */
+.drama-sg-thumb.is-wide {
+    width: 56px;
+    aspect-ratio: 16 / 9;
+}
+.drama-sg-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.drama-sg-thumb.is-missing img {
+    opacity: 0.45;
+}
+.drama-sg-thumb.is-missing {
+    outline: 1px dashed color-mix(in oklab, var(--drama-warn) 60%, transparent);
+}
+.drama-sg-thumb-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--drama-faint);
+    font-size: 11px;
+}
+.drama-sg-thumb em {
+    position: absolute;
+    left: 2px;
+    bottom: 2px;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 14px;
+}
+.drama-sg-note {
+    padding: 8px 8px;
+    border-radius: var(--radius-md);
+    font-size: var(--fs-tiny);
+    line-height: 1.55;
+    word-break: break-word;
+}
+.drama-sg-note.is-error {
+    background: color-mix(in oklab, var(--drama-err) 10%, transparent);
+    color: var(--drama-err);
+}
+.drama-sg-note.is-warn {
+    background: color-mix(in oklab, var(--drama-warn) 12%, transparent);
+    color: color-mix(in oklab, var(--drama-warn) 80%, var(--foreground));
+}
+.drama-sd-block {
+    display: grid;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--drama-line);
+}
+.drama-sd-side .drama-sg-video {
+    justify-self: center;
+    width: auto;
+    max-width: 100%;
+    height: min(40vh, 400px);
+}
+.drama-sd-shots {
+    display: grid;
+    gap: 4px;
+}
+.drama-sd-shot {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    text-align: left;
+    font-size: var(--fs-tiny);
+}
+.drama-sd-shot:hover {
+    border-color: var(--drama-line-strong);
+}
+.drama-sd-shot[aria-pressed="true"] {
+    border-color: var(--workspace-accent);
+    background: var(--workspace-accent-soft);
+}
+.drama-sd-shot b {
+    font-variant-numeric: tabular-nums;
+}
+.drama-sd-shot span {
+    overflow: hidden;
+    color: var(--drama-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-sd-shot em {
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+}
+.drama-sd-header {
+    display: grid;
+    gap: 4px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    background: var(--drama-sunken);
+}
+.drama-sd-header span {
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+}
+.drama-sd-header pre {
+    max-height: 120px;
+    overflow-y: auto;
+    margin: 0;
+    color: var(--drama-muted);
+    font-family: inherit;
+    font-size: var(--fs-tiny);
+    line-height: 1.7;
+    white-space: pre-wrap;
+}
+.drama-finalv-empty {
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 8px;
+    height: 100%;
+    color: var(--drama-muted);
+    font-size: var(--fs-tiny);
+}
+.drama-finalv-stale {
+    color: color-mix(in oklab, var(--drama-warn) 80%, var(--foreground));
+    font-size: var(--fs-tiny);
+    line-height: 1.6;
+}
+.drama-filmstrip-empty {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: var(--drama-sunken);
+}
+@media (prefers-reduced-motion: reduce) {
+    .drama-sg-video-empty.is-busy {
+        animation: none;
+    }
+}
+
+/* 剧情段卡片网格：竖屏一行 3–4 张、横屏 2–3 张，卡片只放判断所需的信息，完整内容在弹窗里。 */
+.drama-sg-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 8px;
+    padding: 12px 20px 4px;
+}
+.drama-sg-grid.is-landscape {
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+}
+.drama-sg {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid var(--drama-line);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    cursor: default;
+    user-select: none;
+}
+.drama-sg:hover {
+    border-color: var(--drama-line-strong);
+}
+.drama-sg.is-focused {
+    border-color: color-mix(in oklab, var(--workspace-accent) 55%, var(--drama-line));
+}
+.drama-sg.is-selected {
+    border-color: var(--workspace-accent);
+    background: color-mix(in oklab, var(--workspace-accent-soft) 60%, var(--surface));
+}
+.drama-sg.is-failed:not(.is-selected) {
+    border-color: color-mix(in oklab, var(--drama-err) 45%, var(--drama-line));
+}
+.drama-sg-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.drama-sg-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-sg-title:hover {
+    color: var(--workspace-accent);
+}
+.drama-sg-body {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+}
+.drama-sg-grid.is-landscape .drama-sg-body {
+    grid-template-columns: 136px minmax(0, 1fr);
+}
+.drama-sg-cover {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border-radius: var(--radius-md);
+    background: var(--drama-sunken);
+    outline: 1px solid var(--drama-line);
+    outline-offset: -1px;
+}
+.drama-sg-cover:hover {
+    outline-color: var(--drama-line-strong);
+}
+.drama-sg-cover img,
+.drama-sg-cover-media {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.drama-sg-cover-media {
+    display: block;
+    pointer-events: none;
+}
+.drama-sg-cover-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--drama-faint);
+}
+.drama-sg-cover-empty.is-busy {
+    background: linear-gradient(110deg, transparent 30%, color-mix(in oklab, var(--foreground) 6%, transparent) 50%, transparent 70%) var(--drama-sunken);
+    background-size: 200% 100%;
+    animation: drama-shimmer 1.8s linear infinite;
+}
+.drama-sg-cover-dur {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 15px;
+    font-variant-numeric: tabular-nums;
+}
+.drama-sg-cover-play {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+}
+.drama-sg-main {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    min-width: 0;
+}
+.drama-sg-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    font-variant-numeric: tabular-nums;
+}
+.drama-sg-inputs.is-compact {
+    gap: 4px;
+}
+.drama-sg-inputs.is-compact .drama-sg-thumb {
+    width: 26px;
+}
+.drama-sg-inputs.is-compact .drama-sg-thumb.is-frame {
+    width: 34px;
+}
+.drama-sg-inputs.is-compact .drama-sg-thumb.is-wide {
+    width: 40px;
+}
+.drama-sg-inputs.is-compact .drama-sg-input.is-frame {
+    padding-right: 4px;
+    margin-right: 1px;
+    border-right: 1px solid var(--drama-line);
+}
+.drama-sg-inputs.is-compact .drama-sg-thumb em {
+    font-size: 11px;
+    line-height: 12px;
+}
+.drama-sg-shots {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    list-style: none;
+}
+.drama-sg-shots li {
+    min-width: 0;
+}
+.drama-sg-shots button {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    color: color-mix(in oklab, var(--foreground) 78%, transparent);
+    font-size: var(--fs-micro);
+    line-height: 1.55;
+    text-align: left;
+}
+.drama-sg-shots button:hover {
+    background: var(--drama-sunken);
+    color: var(--foreground);
+}
+.drama-sg-shots b {
+    flex: none;
+    min-width: 14px;
+    color: var(--drama-faint);
+    font-variant-numeric: tabular-nums;
+}
+.drama-sg-shots span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-sg-shots em {
+    margin-right: 4px;
+    color: var(--foreground);
+    font-style: normal;
+    font-weight: 600;
+}
+.drama-sg-more {
+    padding: 0 4px 0 24px;
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+}
+.drama-sg-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--drama-line);
+}
+.drama-sg-model {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-sg-actions {
+    display: flex;
+    flex: none;
+    gap: 6px;
+}
+.drama-sd-generate {
+    display: grid;
+    gap: 8px;
+}
+.drama-kbd-hint {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 12px 20px 0;
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+}
+.drama-kbd-hint span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.drama-kbd-hint kbd {
+    min-width: 18px;
+    padding: 0 4px;
+    border: 1px solid var(--drama-line-strong);
+    border-radius: 4px;
+    background: var(--drama-sunken);
+    color: var(--drama-muted);
+    font-family: inherit;
+    font-size: 11px;
+    line-height: 16px;
+    text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+    .drama-sg-cover-empty.is-busy {
+        animation: none;
+    }
+}
+
+/* 横幅：统一由容器控制间距，横幅之间 8px，与下方内容至少 12px，不贴边。 */
+.drama-banners {
+    display: grid;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--drama-line);
+}
+.drama-banners:empty {
+    display: none;
+}
+.drama-banner.is-flush {
+    margin-bottom: 16px;
+}
+.drama-board-model {
+    width: min(380px, 40vw);
+    min-width: 280px;
+}
+.drama-sg-single {
+    display: grid;
+    gap: 4px;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    text-align: left;
+}
+.drama-sg-single:hover {
+    background: var(--drama-sunken);
+}
+.drama-sg-single-action {
+    display: -webkit-box;
+    overflow: hidden;
+    color: color-mix(in oklab, var(--foreground) 80%, transparent);
+    font-size: var(--fs-micro);
+    line-height: 1.55;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+.drama-sg-single-line {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--drama-muted);
+    font-size: var(--fs-micro);
+    line-height: 1.55;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+.drama-sg-single-line em {
+    margin-right: 4px;
+    color: var(--foreground);
+    font-style: normal;
+    font-weight: 600;
+}
+.drama-pskill-current {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--drama-line);
+    border-radius: var(--radius-md);
+    background: var(--drama-sunken);
+}
+/* 只作用于说明文字；按钮内部的 span 不受影响，避免按钮被压窄后文字竖排。 */
+.drama-pskill-current > div {
+    display: grid;
+    flex: 1;
+    gap: 1px;
+}
+.drama-pskill-current > .ant-btn {
+    flex: none;
+}
+.drama-pskill-current > div > strong {
+    overflow: hidden;
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-pskill-current > div > span {
+    overflow: hidden;
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drama-pskill-current.is-empty > span {
+    flex: 1;
+    min-width: 0;
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    line-height: 1.55;
+}

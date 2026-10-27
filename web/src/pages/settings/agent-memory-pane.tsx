@@ -197,7 +197,7 @@ function AgentMemoryCompactCard({ compact = false, onApplied }: { compact?: bool
     const failed = settings?.lastStatus === "failed";
 
     return (
-        <section className={compact ? "space-y-2.5" : "space-y-3 rounded-2xl bg-surface-secondary/80 px-4 py-3.5"}>
+        <section className={compact ? "space-y-2" : "space-y-3 rounded-2xl bg-surface-secondary/80 px-4 py-4"}>
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <h3 className="text-sm font-medium text-foreground">压缩优化</h3>
@@ -433,13 +433,13 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
                 {!loading && items.length ? (
                     <div className="space-y-2">
                         {items.map((record) => (
-                            <article key={record.id} className="group rounded-2xl bg-surface-secondary/80 px-3.5 py-3 transition-[background,transform] duration-[var(--motion-state)] hover:bg-surface-hover motion-reduce:transition-none">
+                            <article key={record.id} className="group rounded-2xl bg-surface-secondary/80 px-4 py-3 transition-[background,transform] duration-[var(--motion-state)] hover:bg-surface-hover motion-reduce:transition-none">
                                 <div className="flex items-start gap-3">
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-2">
                                             <h3 className="text-sm font-medium text-foreground">{record.topic}</h3>
                                             <StatusBadge size="sm" tone={memoryStatusTone(record.status)} label={memoryStatusLabel(record.status)} />
-                                            <span className="text-[11px] text-muted-foreground">{agentMemoryCategoryLabel(record.category)}</span>
+                                            <span className="text-[var(--fs-label)] text-muted-foreground">{agentMemoryCategoryLabel(record.category)}</span>
                                         </div>
                                         <p className="mt-1 text-caption leading-5 text-muted-foreground">{record.situation}</p>
                                         {record.lesson ? <p className="mt-1 text-caption leading-5 text-foreground/80">{record.lesson}</p> : null}
@@ -463,7 +463,7 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
                                             </details>
                                         ) : null}
                                         {record.steps?.length ? (
-                                            <ol className="mt-1.5 ml-4 list-decimal space-y-0.5 text-[11px] leading-5 text-muted-foreground">
+                                            <ol className="mt-2 ml-4 list-decimal space-y-0.5 text-[var(--fs-label)] leading-5 text-muted-foreground">
                                                 {record.steps.map((step, index) => (
                                                     <li key={`${record.id}-${index}`}>
                                                         <span className="font-medium text-foreground/80">{step.tool}</span>

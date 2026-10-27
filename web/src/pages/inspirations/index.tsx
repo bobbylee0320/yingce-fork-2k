@@ -211,7 +211,7 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                 label: (
                     <>
                         <span>{option.label}</span>
-                        {catalog ? <span className="inspiration-mode-count">{modeCounts[option.value].toLocaleString("zh-CN")}</span> : null}
+                        {catalog ? <span className="inspiration-mode-count app-segmented-count">{modeCounts[option.value].toLocaleString("zh-CN")}</span> : null}
                     </>
                 ),
                 title: catalog ? `${option.label} ${modeCounts[option.value]} 条` : option.label,
@@ -480,9 +480,10 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                 ) : (
                     <WorkspaceState
                         icon="empty"
-                        title={view === "favorites" ? "还没有收藏" : view === "hidden" ? "没有隐藏的条目" : "没有符合条件的灵感"}
+                        kind={hasFilters ? "no-results" : "first-use"}
+                        title={hasFilters && search.trim() ? `没有找到与“${search.trim()}”相关的灵感` : view === "favorites" ? "还没有收藏" : view === "hidden" ? "没有隐藏的条目" : "没有符合条件的灵感"}
                         description={view === "favorites" ? "点卡片右上角的爱心，把喜欢的创意留在这里。" : "试试其他类型、分类或关键词。"}
-                        action={hasFilters ? <Button onClick={resetFilters}>重置筛选</Button> : undefined}
+                        action={hasFilters ? <Button onClick={resetFilters}>清除筛选</Button> : undefined}
                     />
                 )}
             </div>

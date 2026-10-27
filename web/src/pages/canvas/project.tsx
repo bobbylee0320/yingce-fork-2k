@@ -49,6 +49,7 @@ import { WorkspaceState } from "@/components/layout/workspace-state";
 import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
 import { createStyleProfileSnapshot, resolveStyleProfile, serializeStyleProfile } from "@/lib/canvas/style-profile";
 import { CanvasNodeToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-toolbar";
+import { CanvasMediaVersionModal } from "@/components/canvas/canvas-media-version-modal";
 import { CanvasSubtitleDialog } from "@/components/canvas/canvas-subtitle-dialog";
 import { CanvasVideoFrameDialog } from "@/components/canvas/canvas-video-frame-dialog";
 import { CanvasVideoSegmentDialog } from "@/components/canvas/canvas-video-segment-dialog";
@@ -121,7 +122,10 @@ import { deriveStoryboardPipelineProgress } from "@/lib/canvas/canvas-storyboard
 import { CanvasOperationChangeToast, CanvasMergeStatusToast, CanvasUploadStatusToast } from "./canvas-project-feedback";
 import { getGenerationCount } from "@/lib/canvas/canvas-project-generation";
 import { cancelGenerationTask } from "@/services/api/task-center";
-import { CanvasTopBar } from "./canvas-project-top-bar";
+import { CanvasTopBar, type CanvasProjectView } from "./canvas-project-top-bar";
+import { CanvasAssetView } from "@/components/canvas/canvas-asset-view";
+import type { CanvasAssetVersion } from "@/lib/canvas/canvas-asset-catalog";
+import { canDownloadCanvasNodeMedia } from "@/lib/canvas/canvas-media-download";
 import { CanvasSyncStatus } from "./canvas-sync-status";
 import { LibTVImportDialog } from "./components/libtv-import-dialog";
 import { TapNowImportDialog } from "./components/tapnow-import-dialog";
@@ -165,6 +169,7 @@ import { useCanvasStoryboard } from "./use-canvas-storyboard";
 import { useCanvasUpload } from "./use-canvas-upload";
 import { useCanvasTimelineAssetInsert } from "./use-canvas-timeline-asset-insert";
 import { useCanvasViewportController } from "./use-canvas-viewport-controller";
+import "./canvas-agent-focus.css";
 import {
     CanvasNodeType,
     type CanvasAssistantSession,
@@ -289,6 +294,7 @@ function CanvasViewportPage() {
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
     const [subtitleNodeId, setSubtitleNodeId] = useState<string | null>(null);
     const [timelineNodeId, setTimelineNodeId] = useState<string | null>(null);
+    const [mediaVersionNodeId, setMediaVersionNodeId] = useState<string | null>(null);
     const [superResolveNodeId, setSuperResolveNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
     const [scriptEditorNodeId, setScriptEditorNodeId] = useState<string | null>(null);
@@ -309,6 +315,8 @@ function CanvasViewportPage() {
     const { tasks: activeTasks } = useCanvasActiveTasks(projectId, projectLoaded);
     const { focusMode, enterFocusMode, exitFocusMode, toggleFocusMode } = useFocusMode();
     const [focusDockRevealed, setFocusDockRevealed] = useState(false);
+    // 画布 / 资产视图写在 URL 上，刷新和分享链接都能回到同一视图；专注模式只服务画布编辑。
+    const canvasView: CanvasProjectView = searchParams.get("view") === "assets" && !focusMode ? "assets" : "canvas";
 
     useEffect(() => {
         persistCanvasHideNodeConnections(hideNodeConnections);
@@ -390,7 +398,7 @@ function CanvasViewportPage() {
         [cleanupAssetImages, getHistoryCleanupContext],
     );
 
-    const { loadError, retryLoad, addedSkills, agentCreatedNodes, clearCanvasFiles, createAndOpenProject, currentProject, deleteCurrentProject, renameCurrentProject, saveCanvasProject, updateProject } = useCanvasProjectLifecycle({
+    const { loadError, retryLoad, addedSkills, agentFocus, clearCanvasFiles, createAndOpenProject, currentProject, deleteCurrentProject, renameCurrentProject, saveCanvasProject, updateProject } = useCanvasProjectLifecycle({
         projectId,
         projectLoaded,
         nodes,
@@ -689,7 +697,7 @@ function CanvasViewportPage() {
         zoomCanvasOut,
         zoomToActualSize,
     } = useCanvasViewportController({
-        agentCreatedNodes,
+        agentFocus,
         containerRef,
         size,
         viewportRef,
@@ -873,8 +881,8 @@ function CanvasViewportPage() {
         setPanoramaConfigNodeId,
         generateEmotionNode,
         handleSegmentConfirm,
-        maskEditImageNode,
-        maskEditNodeId,
+        regionEditImageNode,
+        regionEditNodeId,
         imageEditNodeId,
         imageEditPreset,
         layerDecompositionNodeId,
@@ -894,7 +902,7 @@ function CanvasViewportPage() {
         setAnnotationNodeId,
         setAnnotationEditNodeId,
         setCropNodeId,
-        setMaskEditNodeId,
+        setRegionEditNodeId,
         setImageEditNodeId,
         setImageEditPreset,
         openBackgroundRemoval,
@@ -959,7 +967,7 @@ function CanvasViewportPage() {
             setSegmentDialogNodeId(clearDeletedId);
             setEnhanceDialogNodeId(clearDeletedId);
             setCropNodeId(clearDeletedId);
-            setMaskEditNodeId(clearDeletedId);
+            setRegionEditNodeId(clearDeletedId);
             setAnnotationNodeId(clearDeletedId);
             setUpscaleNodeId(clearDeletedId);
             setAngleNodeId(clearDeletedId);
@@ -991,7 +999,7 @@ function CanvasViewportPage() {
             setEmotionNodeId,
             setFrameDialogNodeId,
             setLightingNodeId,
-            setMaskEditNodeId,
+            setRegionEditNodeId,
             setSegmentDialogNodeId,
             setEnhanceDialogNodeId,
             setUpscaleNodeId,
@@ -1019,6 +1027,10 @@ function CanvasViewportPage() {
         releaseCopiedNodesPastePriority,
         shouldPreferCopiedNodes,
         toggleNodeLocked,
+        setPrimaryVersion,
+        adoptNodeMediaVersion,
+        deleteNodeMediaVersion,
+        extractNodeMediaVersion,
     } = useCanvasNodeOperations({
         projectId,
         defaultDrawingEngine,
@@ -1266,6 +1278,7 @@ function CanvasViewportPage() {
     const {
         collapsingBatchIds,
         downloadNodeImage,
+        downloadNodesMedia,
         handleConfigNodeChange,
         handleFolderStyleChange,
         handleFolderThemeChange,
@@ -1427,7 +1440,7 @@ function CanvasViewportPage() {
         displayConnections,
         frameChildrenById,
         infoNode,
-        maskEditNode,
+        regionEditNode,
         imageEditNode,
         mentionReferencesByNodeId,
         nodeById,
@@ -1441,7 +1454,9 @@ function CanvasViewportPage() {
         superResolveNode,
         toolbarNode,
         upscaleNode,
-        visibleNodes,
+        candidateNodes,
+        immediateRenderNodeIds,
+        renderViewBounds,
     } = useCanvasRenderModel({
         nodes,
         connections,
@@ -1456,7 +1471,7 @@ function CanvasViewportPage() {
         previsScenes: currentProject?.previsScenes,
         infoNodeId,
         cropNodeId,
-        maskEditNodeId,
+        regionEditNodeId,
         imageEditNodeId,
         annotationNodeId,
         splitNodeId: null,
@@ -1513,6 +1528,7 @@ function CanvasViewportPage() {
     const isCanvasNodeMoving = isNodeDragging || Boolean(dragPreview?.nodeIds.size);
     const subtitleNode = subtitleNodeId ? nodeById.get(subtitleNodeId) || null : null;
     const timelineNode = timelineNodeId ? nodeById.get(timelineNodeId) || null : null;
+    const mediaVersionNode = mediaVersionNodeId ? nodeById.get(mediaVersionNodeId) || null : null;
     const frameNode = frameDialogNodeId ? nodeById.get(frameDialogNodeId) || null : null;
     const segmentNode = segmentDialogNodeId ? nodeById.get(segmentDialogNodeId) || null : null;
     const enhanceNode = enhanceDialogNodeId ? nodeById.get(enhanceDialogNodeId) || null : null;
@@ -1609,6 +1625,7 @@ function CanvasViewportPage() {
             openArtCritique,
             addPanoramaCaptureNode,
             extractLayerMaterials,
+            openMediaVersions: (node: CanvasNodeData) => setMediaVersionNodeId(node.id),
         }),
         [addPanoramaCaptureNode, deleteNodeFromContent, downloadNodeImage, duplicateNodeFromContent, extractLayerMaterials, openArtCritique, replaceCanvasNodeMedia, updateMediaNodeFromContent, updateNodeFromContent, updateNodeMetadataFromContent],
     );
@@ -1702,7 +1719,7 @@ function CanvasViewportPage() {
         setInfoNodeId(null);
         setSubtitleNodeId(null);
         setCropNodeId(null);
-        setMaskEditNodeId(null);
+        setRegionEditNodeId(null);
         setAnnotationNodeId(null);
         setAngleNodeId(null);
         setLightingNodeId(null);
@@ -1716,7 +1733,8 @@ function CanvasViewportPage() {
     }, [clearCanvasFiles, deselectCanvas, message, nodesRef, projectId, setEmotionNodeId]);
 
     useCanvasKeyboard({
-        enabled: projectLoaded,
+        // 资产视图覆盖画布时，删除、粘贴、撤销等画布快捷键不能作用到看不见的节点上。
+        enabled: projectLoaded && canvasView === "canvas",
         nodesRef,
         selectedNodeIdsRef,
         selectedConnectionId,
@@ -1726,7 +1744,7 @@ function CanvasViewportPage() {
         setShortcutRequestNonce,
         setInfoNodeId,
         setCropNodeId,
-        setMaskEditNodeId,
+        setRegionEditNodeId,
         setAnnotationNodeId,
         saveCanvasProject,
         zoomToActualSize,
@@ -2438,6 +2456,21 @@ function CanvasViewportPage() {
         ],
     );
 
+    // 世界层是 memo 组件；连线回调保持稳定，悬停等页面状态变化时不必重排整层节点和连线。
+    const handleConnectionSelect = useCallback((connectionId: string) => {
+        setSelectedConnectionId(connectionId);
+        setSelectedNodeIds(new Set());
+        setContextMenu(null);
+    }, []);
+    const handleConnectionContextMenu = useCallback(
+        (event: ReactMouseEvent<SVGPathElement>, connectionId: string) => {
+            setSelectedConnectionId(connectionId);
+            setSelectedNodeIds(new Set());
+            closeConnectionCreateMenu();
+            setContextMenu({ type: "connection", x: event.clientX, y: event.clientY, connectionId });
+        },
+        [closeConnectionCreateMenu],
+    );
     const handleCanvasNodeHoverStart = useCallback(
         (nodeId: string) => {
             if (nodeDraggingRef.current) return;
@@ -2597,6 +2630,46 @@ function CanvasViewportPage() {
         focusCanvasNode(nodeId);
     };
     const handleAgentFocusNode = useCallback((nodeId: string) => agentFocusNodeRef.current(nodeId), []);
+    const changeCanvasView = useCallback((view: CanvasProjectView) => {
+        setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            if (view === "assets") next.set("view", "assets");
+            else next.delete("view");
+            return next;
+        }, { replace: true });
+        if (view !== "assets") return;
+        // 资产视图覆盖画布，节点浮层和菜单不能悬在它上面。
+        setContextMenu(null);
+        setDialogNodeId(null);
+        setToolbarNodeId(null);
+        setHoveredNodeId(null);
+    }, [setDialogNodeId, setSearchParams]);
+    const locateAssetNode = useCallback((nodeId: string) => {
+        changeCanvasView("canvas");
+        const selection = new Set([nodeId]);
+        selectedNodeIdsRef.current = selection;
+        setSelectedNodeIds(selection);
+        setSelectedConnectionId(null);
+        agentFocusNodeRef.current(nodeId);
+    }, [changeCanvasView]);
+    const renameAssetNodes = useCallback((updates: Array<{ nodeId: string; title: string }>) => {
+        updates.forEach(({ nodeId, title }) => handleNodeTitleChange(nodeId, title));
+    }, [handleNodeTitleChange]);
+    const promoteAssetVersion = useCallback((version: CanvasAssetVersion) => {
+        const node = nodesRef.current.find((item) => item.id === version.nodeId);
+        if (!node) {
+            message.info("该节点已删除或尚未同步到画布");
+            return;
+        }
+        if (version.source === "batch") {
+            setBatchPrimary(node);
+            message.success(`已将${version.label}设为主图`);
+            return;
+        }
+        if (version.mediaVersionId && !adoptNodeMediaVersion(node.id, version.mediaVersionId)) return;
+        // 跨节点版本组里，节点内历史版本成为主版本时，承载节点也要成为组内主版本。
+        if (node.metadata?.versionOfNodeId && !node.metadata.versionPrimary) setPrimaryVersion(node.id);
+    }, [adoptNodeMediaVersion, message, nodesRef, setBatchPrimary, setPrimaryVersion]);
     // 平台唯一的 Agent 面板挂在布局上；画布只发布自己的上下文。画布加载完成前不发布，避免以未保存画布绑定运行。
     const publishAgentCanvas = useGlobalAgentStore((state) => state.setCanvas);
     useEffect(() => {
@@ -2631,7 +2704,7 @@ function CanvasViewportPage() {
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (
-        <CanvasNodeResizeMotionProvider key={projectId} nodes={visibleNodes}>
+        <CanvasNodeResizeMotionProvider key={projectId} nodes={candidateNodes}>
             <a
                 href="#canvas-main"
                 className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[var(--z-toast)] focus:rounded-md focus:border focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg"
@@ -2658,6 +2731,7 @@ function CanvasViewportPage() {
                         onProjectAssets={currentProject?.projectId ? () => openProjectAssets() : undefined}
                         onCancelTask={cancelCanvasTask}
                         onFocus={(nodeId) => {
+                            if (canvasView === "assets") changeCanvasView("canvas");
                             const target = nodeById.get(nodeId);
                             const parent = target?.parentId ? nodeById.get(target.parentId) : null;
                             if (parent?.metadata?.frame?.collapsed) toggleFrameCollapsed(parent.id);
@@ -2679,6 +2753,8 @@ function CanvasViewportPage() {
                         <section data-canvas-editor className="relative min-w-0 flex-1 flex flex-col min-h-0 overflow-clip">
                             {!focusMode ? (
                                 <CanvasTopBar
+                                    view={canvasView}
+                                    onViewChange={changeCanvasView}
                                     title={currentProject?.title || "未命名画布"}
                                     titleDraft={titleDraft}
                                     isTitleEditing={titleEditing}
@@ -2798,7 +2874,9 @@ function CanvasViewportPage() {
                                                     batchScrollById={batchScrollById}
                                                     connectionTargetNodeId={connectionTargetNodeId}
                                                     nodeById={nodeById}
-                                                    visibleNodes={visibleNodes}
+                                                    candidateNodes={candidateNodes}
+                                                    immediateRenderNodeIds={immediateRenderNodeIds}
+                                                    renderViewBounds={renderViewBounds}
                                                     nodeRenderLODById={nodeRenderLODById}
                                                     nodeStackOrder={nodeStackOrder}
                                                     frameChildrenById={frameChildrenById}
@@ -2823,17 +2901,8 @@ function CanvasViewportPage() {
                                                     isNodeDragging={isNodeDragging}
                                                     selectionBoundsElementRef={selectionBoundsElementRef}
                                                     renderCanvasNodeContent={renderCanvasNodeContent}
-                                                    onConnectionSelect={(connectionId) => {
-                                                        setSelectedConnectionId(connectionId);
-                                                        setSelectedNodeIds(new Set());
-                                                        setContextMenu(null);
-                                                    }}
-                                                    onConnectionContextMenu={(event, connectionId) => {
-                                                        setSelectedConnectionId(connectionId);
-                                                        setSelectedNodeIds(new Set());
-                                                        closeConnectionCreateMenu();
-                                                        setContextMenu({ type: "connection", x: event.clientX, y: event.clientY, connectionId });
-                                                    }}
+                                                    onConnectionSelect={handleConnectionSelect}
+                                                    onConnectionContextMenu={handleConnectionContextMenu}
                                                     onNodeMouseDown={handleNodeMouseDown}
                                                     onNodeHoverStart={handleCanvasNodeHoverStart}
                                                     onNodeHoverEnd={handleCanvasNodeHoverEnd}
@@ -3012,7 +3081,7 @@ function CanvasViewportPage() {
 
                             {connectionReplaceHover ? (
                                 <div
-                                    className="pointer-events-none fixed z-[var(--z-dialog-popover)] flex select-none items-center gap-1.5 rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white/90 shadow-[0_8px_24px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all"
+                                    className="pointer-events-none fixed z-[var(--z-dialog-popover)] flex select-none items-center gap-2 rounded-full border border-white/15 bg-black/60 px-2 py-1 text-[var(--fs-label)] font-medium text-white/90 shadow-[0_8px_24px_rgba(0,0,0,0.4)] backdrop-blur-md transition-opacity duration-150"
                                     style={{
                                         left: connectionReplaceHover.clientX + 14,
                                         top: connectionReplaceHover.clientY + 14,
@@ -3021,7 +3090,7 @@ function CanvasViewportPage() {
                                 >
                                     <ArrowLeftRight className="size-3 text-blue-400" />
                                     <span>松开替换</span>
-                                    <span className="rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold text-blue-200">@{connectionReplaceHover.referenceLabel}</span>
+                                    <span className="rounded bg-white/15 px-2 py-0.5 text-[var(--fs-label)] font-semibold text-blue-200">@{connectionReplaceHover.referenceLabel}</span>
                                 </div>
                             ) : null}
 
@@ -3077,7 +3146,7 @@ function CanvasViewportPage() {
                                 onSaveAsset={(node) => void saveNodeAsset(node)}
                                 onAnnotate={(node) => setAnnotationNodeId(node.id)}
                                 onAnnotationEdit={openAnnotationEditNode}
-                                onMaskEdit={(node) => setMaskEditNodeId(node.id)}
+                                onRegionEdit={(node) => setRegionEditNodeId(node.id)}
                                 onRemoveBackground={openBackgroundRemoval}
                                 onLayerDecomposition={openLayerDecomposition}
                                 onTextEdit={openTextEditNode}
@@ -3107,6 +3176,7 @@ function CanvasViewportPage() {
                                 onEnhanceVideo={hasVideoEnhanceModels ? openVideoEnhance : undefined}
                                 onSubtitles={(node) => setSubtitleNodeId(node.id)}
                                 onTimeline={(node) => setTimelineNodeId(node.id)}
+                                onVersions={(node) => setMediaVersionNodeId(node.id)}
                                 extractingVideoFrames={toolbarNode?.id === extractingVideoFramesNodeId}
                                 extractingAudio={segmentRunningMode === "audio"}
                                 trimmingVideo={segmentRunningMode === "video"}
@@ -3174,6 +3244,7 @@ function CanvasViewportPage() {
                                     void saveNodeAsset(node);
                                 }}
                                 onViewMedia={(node) => setPreviewNodeId(node.id)}
+                                onOpenVersions={(node) => setMediaVersionNodeId(node.id)}
                                 onEditText={openTextNodeEditor}
                                 onOpenDrawing={openDrawingNode}
                                 onGenerateImage={generateImageFromTextNode}
@@ -3190,6 +3261,8 @@ function CanvasViewportPage() {
                                 onCopySelection={copySelectedNodes}
                                 onDeleteSelection={() => deleteNodes(selectedNodeIds)}
                                 onSendToAgent={() => sendSelectionToAgent(contextMenu?.type === "node" && selectedNodeIds.size <= 1 ? contextMenu.nodeId : undefined)}
+                                downloadableSelectionCount={contextMenu && selectedNodeIds.size > 1 ? nodes.filter((node) => selectedNodeIds.has(node.id) && canDownloadCanvasNodeMedia(node)).length : 0}
+                                onDownloadSelection={() => void downloadNodesMedia(nodesRef.current.filter((node) => selectedNodeIds.has(node.id)))}
                             />
 
                             <CanvasUploadModal open={uploadModalOpen} onClose={closeUploadModal} onUpload={handleUploadFiles} />
@@ -3197,6 +3270,16 @@ function CanvasViewportPage() {
                             <input ref={imageInputRef} type="file" accept="image/*,video/*,audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav" className="hidden" onChange={handleImageInputChange} />
 
                             <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => setInfoNodeId(null)} onMetadataChange={handleConfigNodeChange} />
+
+                            <CanvasMediaVersionModal
+                                node={mediaVersionNode}
+                                onClose={() => setMediaVersionNodeId(null)}
+                                onAdopt={adoptNodeMediaVersion}
+                                onDelete={deleteNodeMediaVersion}
+                                onExtract={(nodeId, versionId) => {
+                                    if (extractNodeMediaVersion(nodeId, versionId)) setMediaVersionNodeId(null);
+                                }}
+                            />
 
                             {subtitleNode ? (
                                 <CanvasSubtitleDialog
@@ -3463,7 +3546,7 @@ function CanvasViewportPage() {
                                 cropNode={cropNode}
                                 annotationNode={annotationNode}
                                 annotationEditNode={annotationEditNodeId ? nodeById.get(annotationEditNodeId) || null : null}
-                                maskEditNode={maskEditNode}
+                                regionEditNode={regionEditNode}
                                 imageEditNode={imageEditNode}
                                 layerDecompositionNode={layerDecompositionNodeId ? nodeById.get(layerDecompositionNodeId) || null : null}
                                 textEditNode={textEditNodeId ? nodeById.get(textEditNodeId) || null : null}
@@ -3472,7 +3555,7 @@ function CanvasViewportPage() {
                                 onCloseCrop={() => setCropNodeId(null)}
                                 onCloseAnnotation={() => setAnnotationNodeId(null)}
                                 onCloseAnnotationEdit={() => setAnnotationEditNodeId(null)}
-                                onCloseMaskEdit={() => setMaskEditNodeId(null)}
+                                onCloseRegionEdit={() => setRegionEditNodeId(null)}
                                 onCloseImageEdit={() => {
                                     setImageEditNodeId(null);
                                     setImageEditPreset(null);
@@ -3483,7 +3566,7 @@ function CanvasViewportPage() {
                                 onCrop={(node, crop) => void cropImageNode(node, crop)}
                                 onAnnotate={(node, dataUrl) => void saveAnnotatedImageNode(node, dataUrl)}
                                 onAnnotationEdit={(node, payload) => void editAnnotatedImageNode(node, payload)}
-                                onMaskEdit={(node, payload) => void maskEditImageNode(node, payload)}
+                                onRegionEdit={(node, payload) => void regionEditImageNode(node, payload)}
                                 onImageOperation={(node, payload) => void editImageNode(node, payload)}
                                 onLayerDecomposition={(node, payload) => void decomposeImageLayers(node, payload)}
                                 onDetectText={() => {
@@ -3534,6 +3617,12 @@ function CanvasViewportPage() {
                                 onInsert={handleTimelineProjectAssetsInsert}
                                 onInsertFolder={projectAssetScope === "canvas" ? handleProjectFolderInsert : undefined}
                             />
+
+                            {canvasView === "assets" ? (
+                                <div className="canvas-asset-view-layer absolute bottom-0 left-0 right-0 top-[var(--canvas-topbar-h)] z-[var(--z-panel-floating)] flex min-h-0">
+                                    <CanvasAssetView nodes={nodes} onLocate={locateAssetNode} onRename={renameAssetNodes} onPromoteVersion={promoteAssetVersion} onDownloadMedia={downloadNodeImage} onUpload={() => handleUploadRequest()} />
+                                </div>
+                            ) : null}
                         </section>
                     </div>
                 </CanvasOverlayLayerProvider>

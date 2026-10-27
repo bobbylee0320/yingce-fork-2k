@@ -11,6 +11,8 @@ import { createCanvasNode, isHiddenBatchChild, removeCanvasNodes } from "@/lib/c
 import { isolateCopiedNodeMetadata, nextCopiedNodeTitle } from "@/lib/canvas/canvas-node-copy";
 import { createCanvasImageEditCopy } from "@/lib/canvas/canvas-image-edit-copy";
 import { copyImageLayerSources } from "@/lib/canvas/canvas-image-layers";
+import { adoptMediaVersion, createNodeFromMediaVersion, mediaVersionAdoptBlock, removeMediaVersion } from "@/lib/canvas/canvas-media-versions";
+import { canvasEditLeases } from "@/services/canvas-edit-leases";
 import { CanvasNodeType, type CanvasConnection, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ContextMenuState, type Position } from "@/types/canvas";
 import { cloneCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { isDrawingEngineAvailable, type CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
@@ -443,6 +445,57 @@ export function useCanvasNodeOperations({
         message.success(`已将 ${target.metadata?.versionLabel || target.title} 设为主版本`);
     }, [commitNodes, message, nodesRef]);
 
+    // 版本切换改写节点媒体，与正文编辑一样受锁定和编辑租约约束。
+    const canEditMediaVersions = useCallback((node: CanvasNodeData | undefined): node is CanvasNodeData => {
+        const block = mediaVersionAdoptBlock(node);
+        if (block === "locked") message.warning("节点已锁定，解锁后再切换版本");
+        else if (block === "loading") message.warning("节点正在生成或上传，完成后再切换版本");
+        else if (block === "missing") message.error("节点不存在");
+        else if (!canvasEditLeases.input(projectId, node!.id)) message.warning("画布尚未就绪，请稍后再试");
+        else return true;
+        return false;
+    }, [message, projectId]);
+
+    const adoptNodeMediaVersion = useCallback((nodeId: string, versionId: string) => {
+        const target = nodesRef.current.find((node) => node.id === nodeId);
+        if (!canEditMediaVersions(target)) return false;
+        const adopted = adoptMediaVersion(target, versionId);
+        if (!adopted) {
+            message.error("该版本的媒体已不可用");
+            return false;
+        }
+        commitNodes(nodesRef.current.map((node) => (node.id === nodeId ? adopted : node)));
+        const version = adopted.metadata?.mediaVersions?.find((item) => item.id === versionId);
+        message.success(`已切换到 V${version?.number ?? ""}`);
+        return true;
+    }, [canEditMediaVersions, commitNodes, message, nodesRef]);
+
+    const deleteNodeMediaVersion = useCallback((nodeId: string, versionId: string) => {
+        const target = nodesRef.current.find((node) => node.id === nodeId);
+        if (!canEditMediaVersions(target)) return false;
+        const next = removeMediaVersion(target, versionId);
+        if (!next) {
+            message.warning("当前版本不能删除");
+            return false;
+        }
+        commitNodes(nodesRef.current.map((node) => (node.id === nodeId ? next : node)));
+        return true;
+    }, [canEditMediaVersions, commitNodes, message, nodesRef]);
+
+    const extractNodeMediaVersion = useCallback((nodeId: string, versionId: string) => {
+        const target = nodesRef.current.find((node) => node.id === nodeId);
+        if (!target) return null;
+        const extracted = createNodeFromMediaVersion(target, versionId, `${target.type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+        if (!extracted) {
+            message.error("该版本的媒体已不可用");
+            return null;
+        }
+        commitNodes([...nodesRef.current, extracted]);
+        selectNodes(new Set([extracted.id]));
+        message.success(`已另存为新节点「${extracted.title}」`);
+        return extracted.id;
+    }, [commitNodes, message, nodesRef, selectNodes]);
+
     const copyNodesToClipboard = useCallback((targetIds: Set<string>) => {
         if (!targetIds.size) return;
         const copyIds = new Set(targetIds);
@@ -589,6 +642,9 @@ export function useCanvasNodeOperations({
         restoreCopiedNodesFromText,
         releaseCopiedNodesPastePriority,
         setPrimaryVersion,
+        adoptNodeMediaVersion,
+        deleteNodeMediaVersion,
+        extractNodeMediaVersion,
         shouldPreferCopiedNodes,
         toggleNodeLocked,
     };

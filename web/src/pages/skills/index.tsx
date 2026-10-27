@@ -3,29 +3,32 @@ import { AppModal } from "@/components/ui/product/app-modal";
 import { App, Button, Dropdown, Input } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 
-import { Boxes, Check, Clapperboard, FolderInput, FolderPlus, Globe2, Heart, Library, LoaderCircle, Megaphone, MoreHorizontal, Palette, Plus, Puzzle, Search, ShoppingBag, Sparkles, Trash2, UserRound } from "lucide-react";
+import { Boxes, Check, ChevronDown, ChevronRight, Clapperboard, FolderInput, FolderPlus, Globe2, Heart, Library, LoaderCircle, Lock, Megaphone, MoreHorizontal, Palette, Pencil, Plus, Puzzle, Search, ShoppingBag, Sparkles, Trash2, UserRound, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 
 import { PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { fallbackSkillCategories, formatSkillCount, groupSkills, skillCategoryLabel } from "@/pages/skills/skill-catalog";
+import { cn } from "@/lib/utils";
+import { fallbackSkillCategories, formatSkillCount, skillAccent, skillCategoryLabel, skillGlyph } from "@/pages/skills/skill-catalog";
 import { SkillDetailModal } from "@/pages/skills/skill-detail-drawer";
 import { SkillEditorDrawer } from "@/pages/skills/skill-editor-drawer";
 import { SkillInstallModal } from "@/pages/skills/skill-install-modal";
 import { addSkill, createSkillLibraryCategory, deleteSkill, deleteSkillLibraryCategory, getSkill, likeSkill, listSkillLibraryCategories, listSkills, removeSkill, setSkillLibraryCategory, syncSkill, unlikeSkill, type Skill, type SkillCategory, type SkillLibraryCategory, type SkillLibraryCategoryList, type SkillScope, type SkillSort } from "@/services/api/skills";
 import { useUserStore } from "@/stores/use-user-store";
 import { Select } from "@/components/ui/base/select";
+import { useSkillCuration, curationQuery, curationIcon, effectiveCurationRoot } from "@/components/skills/skill-curation-browser";
 
-const scopeOptions = [
+const scopeOptions: { label: string; value: SkillScope; icon: LucideIcon }[] = [
     { label: "技能广场", value: "public", icon: Sparkles },
     { label: "我的技能", value: "mine", icon: Library },
     { label: "我创建的", value: "created", icon: UserRound },
     { label: "我的收藏", value: "favorites", icon: Heart },
 ];
 
-/* 分类图标映射：画廊卡片顶部的图标块，未知分类回退 Boxes。 */
+/* 分类图标映射：左侧导航里的分类图标，未知分类回退 Boxes。 */
 const categoryIcons: Record<string, LucideIcon> = {
     drama: Clapperboard,
     ecommerce: ShoppingBag,
@@ -41,12 +44,15 @@ const sortOptions: { label: string; value: SkillSort }[] = [
     { label: "最近更新", value: "updated" },
 ];
 
-import { SkillCurationBrowser, useSkillCuration, curationQuery, groupCuratedSkills, curationIcon, effectiveCurationRoot } from "@/components/skills/skill-curation-browser";
-
+/**
+ * 技能库：左侧一条导航（范围 → 当前范围下的分类），右侧是结果标题、搜索排序和卡片网格。
+ * 范围切换会清空分类筛选，避免切到「我的技能」后仍带着广场分类这类看不见的过滤条件。
+ */
 export default function SkillsPage() {
     const { curation, error: curationError, retry: retryCuration } = useSkillCuration();
     const [platformCategory, setPlatformCategory] = useState("");
     const { message, modal } = App.useApp();
+    const navigate = useNavigate();
     const [scope, setScope] = useState<SkillScope>("public");
     const [sort, setSort] = useState<SkillSort>("popular");
     const [search, setSearch] = useState("");
@@ -65,17 +71,8 @@ export default function SkillsPage() {
     const [skills, setSkills] = useState<Skill[]>([]);
     const [categories, setCategories] = useState<SkillCategory[]>(fallbackSkillCategories);
     const [total, setTotal] = useState(0);
-    const [counts, setCounts] = useState<Partial<Record<SkillScope, number>>>({});
-    const tabsRef = useRef<HTMLDivElement>(null);
-    const indicatorRef = useRef<HTMLSpanElement>(null);
-    useLayoutEffect(() => {
-        const tabs = tabsRef.current;
-        const indicator = indicatorRef.current;
-        const active = tabs?.querySelector<HTMLButtonElement>('[aria-selected="true"]');
-        if (!tabs || !indicator || !active) return;
-        indicator.style.left = `${active.offsetLeft}px`;
-        indicator.style.width = `${active.offsetWidth}px`;
-    }, [scope, counts]);
+    const [scopeCounts, setScopeCounts] = useState<Partial<Record<SkillScope, number>>>({});
+    const [countsKey, setCountsKey] = useState(0);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [reloadKey, setReloadKey] = useState(0);
@@ -90,17 +87,34 @@ export default function SkillsPage() {
     const libraryCategoryScope = scope === "created" ? "created" : "mine";
 
     const reload = useCallback(() => setReloadKey((value) => value + 1), []);
-    const selectMarketplaceCategory = (categoryId: string) => {
-        setScope("public");
-        setTag(categoryId);
+    const refreshCounts = useCallback(() => setCountsKey((value) => value + 1), []);
+    const selectScope = (next: SkillScope) => {
+        setScope(next);
+        setTag("all");
+        setPlatformCategory("");
         setLibraryCategoryId("all");
         setPage(1);
     };
+    const selectMarketplaceCategory = (categoryId: string, nextPlatformCategory = "") => {
+        setTag(categoryId);
+        setPlatformCategory(nextPlatformCategory);
+        setPage(1);
+    };
     const selectLibraryCategory = (categoryId: string) => {
-        setScope((current) => current === "created" ? "created" : "mine");
         setLibraryCategoryId(categoryId);
         setPage(1);
     };
+
+    /* 平台策展分类失效（被停用或策展关闭）时回到「全部」，原先由下拉选择器承担的校验移到这里。 */
+    useEffect(() => {
+        if (!platformCategory) return;
+        const valid = platformCategory === "__uncategorized__"
+            || (platformCategory.startsWith("root:") ? curation?.roots?.some((root) => root.id === platformCategory.slice(5)) : curation?.categories.some((item) => item.id === platformCategory));
+        if (!curation?.enabled || !valid) {
+            setPlatformCategory("");
+            setPage(1);
+        }
+    }, [curation, platformCategory]);
 
     useEffect(() => {
         let cancelled = false;
@@ -111,12 +125,11 @@ export default function SkillsPage() {
                 ? { libraryUncategorized: true }
                 : libraryCategoryId !== "all" ? { libraryCategoryId } : {}
             : {};
-        listSkills({ page, pageSize, scope, sort, search: debouncedSearch || undefined, tag: !isLibraryScope && tag !== "all" ? tag : undefined, ...libraryFilter, ...curationQuery(curation, platformCategory) })
+        listSkills({ page, pageSize, scope, sort, search: debouncedSearch || undefined, tag: !isLibraryScope && tag !== "all" ? tag : undefined, ...libraryFilter, ...(isLibraryScope ? {} : curationQuery(curation, platformCategory)) })
             .then((result) => {
                 if (cancelled) return;
                 setSkills(result.skills);
                 setTotal(result.totalCount);
-                setCounts((prev) => ({ ...prev, [scope]: result.totalCount }));
                 if (result.categories.length) setCategories(result.categories);
             })
             .catch((error) => {
@@ -133,6 +146,20 @@ export default function SkillsPage() {
         };
     }, [debouncedSearch, isLibraryScope, libraryCategoryId, page, pageSize, reloadKey, scope, sort, tag, curation, platformCategory]);
 
+    /* 范围计数：每个范围只取 1 条记录读 totalCount，与当前搜索/分类无关，写操作后刷新。 */
+    useEffect(() => {
+        let cancelled = false;
+        void Promise.allSettled(scopeOptions.map((option) => listSkills({ scope: option.value, page: 1, pageSize: 1 }))).then((results) => {
+            if (cancelled) return;
+            const next: Partial<Record<SkillScope, number>> = {};
+            results.forEach((result, index) => {
+                if (result.status === "fulfilled") next[scopeOptions[index].value] = result.value.totalCount;
+            });
+            setScopeCounts(next);
+        });
+        return () => { cancelled = true; };
+    }, [reloadKey, countsKey]);
+
     useEffect(() => {
         let cancelled = false;
         setLibraryCategoryError("");
@@ -147,10 +174,22 @@ export default function SkillsPage() {
         return () => { cancelled = true; };
     }, [libraryCategoryScope, reloadKey]);
 
-    const groupedSkills = useMemo(() => curation?.enabled ? groupCuratedSkills(skills, curation) : groupSkills(skills, categories), [categories, skills, curation]);
-    const browseCategories: SkillCategory[] = curation?.enabled ? (curation.roots || []).map((root) => ({ value: root.id, label: root.name })) : categories;
-    const filtersActive = Boolean(search || (!isLibraryScope && tag !== "all") || (isLibraryScope && libraryCategoryId !== "all") || sort !== "popular");
-    const resetFilters = useCallback(() => { setSearch(""); setTag("all"); setLibraryCategoryId("all"); setSort("popular"); setPage(1); }, []);
+    const curationRoots = curation?.enabled ? (curation.roots || []).filter((root) => root.enabled !== false) : [];
+    const browseCategories: (SkillCategory & { iconKey?: string })[] = curation?.enabled ? curationRoots.map((root) => ({ value: root.id, label: root.name, iconKey: root.iconKey })) : categories;
+    const activeCurationCategory = curation?.enabled && platformCategory && !platformCategory.startsWith("root:") && platformCategory !== "__uncategorized__" ? curation.categories.find((item) => item.id === platformCategory) : undefined;
+    const activeCurationRootId = platformCategory.startsWith("root:") ? platformCategory.slice(5) : activeCurationCategory?.rootTag || "";
+    const libraryCategories = libraryCategoryList?.categories ?? [];
+    const scopeLabel = scopeOptions.find((option) => option.value === scope)?.label || "技能";
+    const viewLabel = isLibraryScope
+        ? libraryCategoryId === "all" ? scopeLabel : libraryCategoryId === "__uncategorized__" ? "未分类" : libraryCategories.find((category) => category.id === libraryCategoryId)?.name || "分类"
+        : curation?.enabled && platformCategory
+          ? platformCategory === "__uncategorized__"
+              ? "未细分"
+              : [curationRoots.find((root) => root.id === activeCurationRootId)?.name, activeCurationCategory?.name].filter(Boolean).join(" / ") || "分类"
+          : tag !== "all" ? skillCategoryLabel(tag, categories) : scopeLabel;
+    const categoryFiltered = isLibraryScope ? libraryCategoryId !== "all" : Boolean(platformCategory) || tag !== "all";
+    const filtersActive = Boolean(search || categoryFiltered || sort !== "popular");
+    const resetFilters = useCallback(() => { setSearch(""); setTag("all"); setPlatformCategory(""); setLibraryCategoryId("all"); setSort("popular"); setPage(1); }, []);
 
     const openSkill = async (skill: Skill) => {
         setActiveSkill(skill);
@@ -183,6 +222,11 @@ export default function SkillsPage() {
         }
     };
 
+    const openWorkbench = (skill: Skill) => {
+        setActiveSkill(null);
+        navigate(`/skills/${encodeURIComponent(skill.skillId)}/edit`);
+    };
+
     const patchSkill = (next: Skill) => {
         setSkills((items) => items.map((item) => item.skillId === next.skillId ? { ...item, ...next, instruction: next.instruction || item.instruction } : item));
         setActiveSkill((current) => current?.skillId === next.skillId ? { ...current, ...next, instruction: next.instruction || current.instruction } : current);
@@ -196,6 +240,7 @@ export default function SkillsPage() {
             patchSkill(result.skill);
             message.success(result.skill.isAdded ? "已加入我的技能" : "已从我的技能移除");
             if (scope === "mine") reload();
+            else refreshCounts();
         } catch (error) {
             message.error(error instanceof Error ? error.message : "技能状态更新失败");
         } finally {
@@ -210,6 +255,7 @@ export default function SkillsPage() {
             patchSkill(result.skill);
             message.success(result.skill.isLike ? "已收藏" : "已取消收藏");
             if (scope === "favorites" && !result.skill.isLike) reload();
+            else refreshCounts();
         } catch (error) {
             message.error(error instanceof Error ? error.message : "收藏状态更新失败");
         } finally {
@@ -309,179 +355,145 @@ export default function SkillsPage() {
         }
     };
 
-    const libraryCategories = libraryCategoryList?.categories ?? [];
-    const marketplaceCategoryTotal = categories.every((category) => category.count !== undefined)
-        ? categories.reduce((count, category) => count + (category.count ?? 0), 0)
-        : "—";
-    const renderSkillCard = (skill: Skill, index: number) => (
-        <SkillCard
-            key={skill.skillId}
-            skill={skill}
-            rootLabel={curation?.enabled ? curation.roots?.find((root) => root.id === effectiveCurationRoot(skill, curation))?.name : undefined}
-            categories={categories}
-            libraryCategories={libraryCategories}
-            canCategorize={isLibraryScope}
-            loading={mutatingID === skill.skillId}
-            style={{ animationDelay: `${Math.min(index, 5) * 30}ms` }}
-            onOpen={() => void openSkill(skill)}
-            onAdd={() => void toggleAdded(skill)}
-            onLike={() => void toggleLiked(skill)}
-            onEdit={() => void openEditor(skill)}
-            onDelete={() => confirmDelete(skill)}
-            onSetLibraryCategory={(categoryId) => void assignLibraryCategory(skill, categoryId)}
-        />
-    );
+    const openCategoryEditor = () => { setCategoryName(""); setCategoryScope("personal"); setCategoryEditorOpen(true); };
 
-    const skillContent = loading && !skills.length ? <SkillSkeleton /> : loadError ? <WorkspaceErrorState compact description={loadError} onRetry={reload} /> : isLibraryScope && skills.length ? (
-        <div className="library-grid skill-library-grid">
+    const renderSkillCard = (skill: Skill) => {
+        const rootId = curation?.enabled ? effectiveCurationRoot(skill, curation) : "";
+        const rootLabel = rootId ? curationRoots.find((root) => root.id === rootId)?.name : undefined;
+        return (
+            <SkillCard
+                key={skill.skillId}
+                skill={skill}
+                accentKey={rootId && rootId !== "__unassigned__" ? rootId : skill.tag}
+                categoryLabel={!isLibraryScope && !categoryFiltered ? rootLabel || skillCategoryLabel(skill.tag, categories) : undefined}
+                libraryCategories={libraryCategories}
+                canCategorize={isLibraryScope}
+                loading={mutatingID === skill.skillId}
+                onOpen={() => void openSkill(skill)}
+                onAdd={() => void toggleAdded(skill)}
+                onLike={() => void toggleLiked(skill)}
+                onEdit={() => void openEditor(skill)}
+                onOpenWorkbench={() => openWorkbench(skill)}
+                onDelete={() => confirmDelete(skill)}
+                onSetLibraryCategory={(categoryId) => void assignLibraryCategory(skill, categoryId)}
+            />
+        );
+    };
+
+    const skillContent = loading && !skills.length ? <SkillSkeleton /> : loadError ? <WorkspaceErrorState compact description={loadError} onRetry={reload} /> : skills.length ? (
+        <div className={cn("skill-tile-grid", loading && "is-refreshing")} aria-busy={loading}>
             {skills.map(renderSkillCard)}
-        </div>
-    ) : !isLibraryScope && groupedSkills.length ? (
-        <div key={`${scope}-${page}`} className="skills-scope-panel">
-            {groupedSkills.map((group) => {
-                const GroupIcon = curation?.enabled ? curationIcon(curation.roots?.find((root) => root.id === group.value)?.iconKey) : categoryIconOf(group.value);
-                return (
-                    <section key={group.value} data-category={group.value} aria-labelledby={`skill-category-${group.value}`}>
-                        <div className="skill-section-heading">
-                            <h2 id={`skill-category-${group.value}`} className="flex items-center gap-2 text-base font-semibold text-foreground/75">
-                                <span className="skill-group-icon"><GroupIcon /></span>
-                                {group.label}
-                            </h2>
-                            <span className="text-[var(--fs-label)] text-foreground/32">{group.skills.length} 个</span>
-                        </div>
-                        <div className="library-grid skill-library-grid">
-                            {group.skills.map(renderSkillCard)}
-                        </div>
-                    </section>
-                );
-            })}
         </div>
     ) : (
         <WorkspaceState
             compact
             className="min-h-[188px]"
             icon="skills"
-            title={filtersActive ? "没有找到匹配技能" : scope === "created" ? "还没有创建技能" : scope === "public" ? "技能广场还是空的" : "这里还没有技能"}
-            description={filtersActive ? "换个关键词或分类试试。" : scope === "favorites" ? "收藏的公开技能会显示在这里。" : scope === "mine" ? "从技能广场加入后会显示在这里。" : "创建并公开第一个技能，其他用户就能直接加入使用。"}
+            title={filtersActive ? (search.trim() ? `没有找到与“${search.trim()}”相关的技能` : "没有符合筛选条件的技能") : scope === "created" ? "还没有创建技能" : scope === "public" ? "技能广场还是空的" : "这里还没有技能"}
+            description={filtersActive ? "换一个关键词或分类，或清除筛选后查看全部。" : scope === "favorites" ? "收藏的公开技能会显示在这里。" : scope === "mine" ? "从技能广场加入后会显示在这里。" : "创建并公开第一个技能，其他用户就能直接加入使用。"}
             action={filtersActive
                 ? <Button onClick={resetFilters}>清除筛选</Button>
-                : (scope === "created" || scope === "public")
-                  ? <Button type="primary" icon={<Plus className="size-4" />} onClick={() => setInstallOpen(true)}>安装技能</Button>
-                  : undefined}
+                : scope === "mine"
+                  ? <Button onClick={() => selectScope("public")}>去技能广场</Button>
+                  : (scope === "created" || scope === "public")
+                    ? <Button type="primary" icon={<Plus className="size-4" />} onClick={() => setInstallOpen(true)}>安装技能</Button>
+                    : undefined}
         />
     );
+
+    const railItem = ({ key, label, icon: Icon, count, active, nested = false, onClick }: { key: string; label: string; icon?: LucideIcon; count?: number; active: boolean; nested?: boolean; onClick: () => void }) => (
+        <button key={key} type="button" className={cn("skills-rail-item", nested && "is-nested")} aria-pressed={active} onClick={onClick}>
+            {Icon ? <Icon aria-hidden="true" /> : null}
+            <span className="skills-rail-item-label">{label}</span>
+            {count !== undefined ? <span className="skills-rail-count">{formatSkillCount(count)}</span> : null}
+        </button>
+    );
+
+    const marketplaceAllActive = tag === "all" && !platformCategory;
 
     return (
         <>
             <WorkspacePage className="library-page skills-library-page" grid>
-                <PageHeader title="技能库" description="把提示词、角色设定和创作方法，变成随时可用的能力。" actions={<Button type="primary" icon={<Plus className="size-4" />} onClick={() => setInstallOpen(true)}>安装技能</Button>} />
+                <PageHeader title="技能库" description="把提示词、角色设定和创作方法，变成随时可用的能力。" />
 
-                <div className="skills-browse-bar">
-                <SkillCurationBrowser data={curation} value={platformCategory} onChange={(value) => { setPlatformCategory(value); setTag("all"); setPage(1); }} error={curationError} retry={retryCuration} />
-                <div className="skills-navigation">
-                    <div className="skills-tabs" ref={tabsRef} role="tablist" aria-label="技能库范围" onKeyDown={(event) => {
-                        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-                        event.preventDefault();
-                        const current = scopeOptions.findIndex((option) => option.value === scope);
-                        const next = event.key === "Home" ? 0 : event.key === "End" ? scopeOptions.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + scopeOptions.length) % scopeOptions.length;
-                        setScope(scopeOptions[next].value as SkillScope);
-                        setLibraryCategoryId("all");
-                        setPage(1);
-                        tabsRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
-                    }}>
-                        <span className="skills-tabs-indicator" ref={indicatorRef} aria-hidden="true" />
-                        {scopeOptions.map((option) => {
-                            const Icon = option.icon;
-                            const active = scope === option.value;
-                            const count = counts[option.value as SkillScope];
-                            return (
-                                <button
-                                    key={option.value}
-                                    type="button"
-                                    role="tab"
-                                    tabIndex={active ? 0 : -1}
-                                    aria-selected={active}
-                                    className={`skills-tab${active ? " is-active" : ""}`}
-                                    onClick={() => { setScope(option.value as SkillScope); setLibraryCategoryId("all"); setPage(1); }}
-                                >
-                                    <Icon className="size-4" />
-                                    <span>{option.label}</span>
-                                    {count !== undefined ? <span className="skills-tab-count">{count}</span> : null}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-                <CollectionToolbar active={filtersActive} onReset={resetFilters}>
-                        <Input className="min-w-0 sm:!w-56" prefix={<Search className="size-4 text-foreground/38" />} value={search} allowClear placeholder="搜索技能或作者" onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
-                        <Select aria-label="技能排序" className="w-24" value={sort} options={sortOptions} onChange={(value) => { setSort(value); setPage(1); }} />
-                </CollectionToolbar>
-                </div>
+                <div className="skills-browser">
+                    <aside className="skills-rail" aria-label="技能导航">
+                        <nav className="skills-rail-group" aria-label="技能范围">
+                            {scopeOptions.map((option) => railItem({ key: option.value, label: option.label, icon: option.icon, count: scopeCounts[option.value], active: scope === option.value, onClick: () => selectScope(option.value) }))}
+                        </nav>
 
-                <div className="skills-library-layout">
-                    <aside className="skills-library-sidebar" aria-label="技能分类筛选">
-                        <section className="skills-category-section">
-                            <div className="skills-library-sidebar-heading">
-                                <div>
-                                    <strong>技能广场分类</strong>
-                                    <span>筛选广场公开技能</span>
+                        {!isLibraryScope ? (
+                            <section className="skills-rail-section" aria-labelledby="skills-rail-categories">
+                                <div className="skills-rail-heading"><span id="skills-rail-categories" className="collection-filter-label">分类</span></div>
+                                {curationError ? <div className="skills-rail-error" role="alert">{curationError}<Button type="link" size="small" onClick={retryCuration}>重试</Button></div> : null}
+                                <div className="skills-rail-group">
+                                    {railItem({ key: "all", label: "全部", icon: Sparkles, active: marketplaceAllActive, onClick: () => selectMarketplaceCategory("all") })}
+                                    {browseCategories.map((category) => {
+                                        const Icon = curation?.enabled ? curationIcon(category.iconKey) : categoryIconOf(category.value);
+                                        if (!curation?.enabled) return railItem({ key: category.value, label: category.label, icon: Icon, count: category.count, active: tag === category.value, onClick: () => selectMarketplaceCategory(category.value) });
+                                        const children = activeCurationRootId === category.value ? curation.categories.filter((item) => item.rootTag === category.value && item.enabled !== false) : [];
+                                        return [
+                                            railItem({ key: category.value, label: category.label, icon: Icon, active: platformCategory === `root:${category.value}`, onClick: () => selectMarketplaceCategory("all", `root:${category.value}`) }),
+                                            ...children.map((child) => railItem({ key: child.id, label: child.name, nested: true, active: platformCategory === child.id, onClick: () => selectMarketplaceCategory("all", child.id) })),
+                                        ];
+                                    })}
+                                    {curation?.enabled ? railItem({ key: "__uncategorized__", label: "未细分", icon: FolderInput, active: platformCategory === "__uncategorized__", onClick: () => selectMarketplaceCategory("all", "__uncategorized__") }) : null}
                                 </div>
-                            </div>
-                            <nav className="skills-library-category-list" aria-label="技能广场分类">
-                                <button type="button" className={`skills-library-category-item${scope === "public" && tag === "all" && (!curation?.enabled || !platformCategory) ? " is-active" : ""}`} aria-pressed={scope === "public" && tag === "all" && (!curation?.enabled || !platformCategory)} onClick={() => { setPlatformCategory(""); selectMarketplaceCategory("all"); }}>
-                                    <span><Sparkles className="size-4" aria-hidden="true" />全部技能</span>
-                                    <span>{marketplaceCategoryTotal}</span>
-                                </button>
-                                {browseCategories.map((category) => {
-                                    const Icon = curation?.enabled ? curationIcon(curation.roots?.find((root) => root.id === category.value)?.iconKey) : categoryIconOf(category.value);
-                                    const active = scope === "public" && (curation?.enabled ? platformCategory === `root:${category.value}` : tag === category.value);
-                                    return (
-                                        <button key={category.value} type="button" className={`skills-library-category-item${active ? " is-active" : ""}`} aria-pressed={active} onClick={() => { if (curation?.enabled) { setPlatformCategory(`root:${category.value}`); selectMarketplaceCategory("all"); } else selectMarketplaceCategory(category.value); }}>
-                                            <span><Icon className="size-4" aria-hidden="true" />{category.label}</span>
-                                            <span>{category.count ?? "—"}</span>
-                                        </button>
-                                    );
-                                })}
-                            </nav>
-                        </section>
-
-                        <section className="skills-category-section">
-                            <div className="skills-library-sidebar-heading">
-                                <div>
-                                    <strong>我的技能分类</strong>
+                            </section>
+                        ) : (
+                            <section className="skills-rail-section" aria-labelledby="skills-rail-library">
+                                <div className="skills-rail-heading">
+                                    <span id="skills-rail-library" className="collection-filter-label">我的分类</span>
+                                    <Tooltip title="新建分类">
+                                        <button type="button" className="product-icon-button skills-rail-add" aria-label="新建技能库分类" onClick={openCategoryEditor}><FolderPlus /></button>
+                                    </Tooltip>
                                 </div>
-                                <Button size="small" icon={<FolderPlus className="size-3.5" />} onClick={() => { setCategoryName(""); setCategoryScope("personal"); setCategoryEditorOpen(true); }}>新建</Button>
-                            </div>
-                            {libraryCategoryError ? <div className="skills-library-category-error" role="alert">{libraryCategoryError}<Button type="link" size="small" onClick={reload}>重试</Button></div> : null}
-                            <nav className="skills-library-category-list" aria-label="我的技能分类">
-                                <button type="button" className={`skills-library-category-item${isLibraryScope && libraryCategoryId === "all" ? " is-active" : ""}`} aria-pressed={isLibraryScope && libraryCategoryId === "all"} onClick={() => selectLibraryCategory("all")}>
-                                    <span><Library className="size-4" aria-hidden="true" />全部技能</span>
-                                    <span>{libraryCategoryList?.totalCount ?? "—"}</span>
-                                </button>
-                                <button type="button" className={`skills-library-category-item${isLibraryScope && libraryCategoryId === "__uncategorized__" ? " is-active" : ""}`} aria-pressed={isLibraryScope && libraryCategoryId === "__uncategorized__"} onClick={() => selectLibraryCategory("__uncategorized__")}>
-                                    <span><FolderInput className="size-4" aria-hidden="true" />未分类</span>
-                                    <span>{libraryCategoryList?.uncategorizedCount ?? "—"}</span>
-                                </button>
-                                {libraryCategories.map((category) => (
-                                    <div key={category.id} className={`skills-library-category-row${isLibraryScope && libraryCategoryId === category.id ? " is-active" : ""}`}>
-                                        <button type="button" className={`skills-library-category-item${isLibraryScope && libraryCategoryId === category.id ? " is-active" : ""}`} aria-pressed={isLibraryScope && libraryCategoryId === category.id} onClick={() => selectLibraryCategory(category.id)}>
-                                            <span><FolderInput className="size-4" aria-hidden="true" />{category.name}</span>
-                                            <span>{category.count}</span>
+                                {libraryCategoryError ? <div className="skills-rail-error" role="alert">{libraryCategoryError}<Button type="link" size="small" onClick={reload}>重试</Button></div> : null}
+                                <div className="skills-rail-group">
+                                    {railItem({ key: "all", label: "全部", icon: Library, count: libraryCategoryList?.totalCount, active: libraryCategoryId === "all", onClick: () => selectLibraryCategory("all") })}
+                                    {railItem({ key: "__uncategorized__", label: "未分类", icon: FolderInput, count: libraryCategoryList?.uncategorizedCount, active: libraryCategoryId === "__uncategorized__", onClick: () => selectLibraryCategory("__uncategorized__") })}
+                                    {libraryCategories.map((category) => (
+                                        <div key={category.id} className="skills-rail-row">
+                                            {railItem({ key: category.id, label: category.name, icon: category.scope === "platform" ? Globe2 : FolderInput, count: category.count, active: libraryCategoryId === category.id, onClick: () => selectLibraryCategory(category.id) })}
+                                            {category.scope === "personal" || isAdmin ? (
+                                                <button type="button" className="product-icon-button skills-rail-delete" aria-label={`删除分类${category.name}`} title="删除分类" onClick={() => confirmDeleteLibraryCategory(category)}>
+                                                    <Trash2 aria-hidden="true" />
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    ))}
+                                    {!libraryCategories.length && libraryCategoryList ? (
+                                        <button type="button" className="skills-rail-item is-hint" onClick={openCategoryEditor}>
+                                            <Plus aria-hidden="true" />
+                                            <span className="skills-rail-item-label">新建分类整理技能</span>
                                         </button>
-                                        {category.scope === "personal" || isAdmin ? (
-                                            <button type="button" className="skills-library-category-delete" aria-label={`删除分类${category.name}`} title="删除分类" onClick={() => confirmDeleteLibraryCategory(category)}>
-                                                <Trash2 className="size-3.5" aria-hidden="true" />
-                                            </button>
-                                        ) : null}
-                                    </div>
-                                ))}
-                            </nav>
-                        </section>
+                                    ) : null}
+                                </div>
+                            </section>
+                        )}
                     </aside>
-                    <div className="skills-library-results">{skillContent}</div>
-                </div>
 
-                <PaginationBar current={page} pageSize={pageSize} total={total} pageSizeOptions={[20, 40, 80]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
+                    <section className="skills-results" aria-labelledby="skills-results-title">
+                        <div className="skills-results-header">
+                            <div className="skills-results-title">
+                                {viewLabel !== scopeLabel ? (
+                                    <>
+                                        <button type="button" className="skills-results-scope" onClick={() => selectScope(scope)}>{scopeLabel}</button>
+                                        <ChevronRight className="skills-results-separator" aria-hidden="true" />
+                                    </>
+                                ) : null}
+                                <h2 id="skills-results-title">{viewLabel}</h2>
+                                <span className="app-projects-header-meta">{loading && !skills.length ? "—" : `${total} 个`}</span>
+                            </div>
+                            <CollectionToolbar label="搜索与排序技能" active={filtersActive} onReset={resetFilters} trailing={<Button type="primary" icon={<Plus className="size-4" />} onClick={() => setInstallOpen(true)}>安装技能</Button>}>
+                                <Input className="min-w-0 sm:!w-56" prefix={<Search />} value={search} allowClear placeholder="搜索技能或作者" aria-label="搜索技能或作者" onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
+                                <Select aria-label="技能排序" className="w-28" value={sort} options={sortOptions} onChange={(value) => { setSort(value); setPage(1); }} />
+                            </CollectionToolbar>
+                        </div>
+                        {skillContent}
+                        <PaginationBar current={page} pageSize={pageSize} total={total} itemLabel="个" pageSizeOptions={[20, 40, 80]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
+                    </section>
+                </div>
             </WorkspacePage>
 
             <AppModal
@@ -533,91 +545,136 @@ export default function SkillsPage() {
                         <Sparkles className="size-4" aria-hidden="true" />
                         <p>{categoryScope === "platform" && isAdmin
                             ? "平台分类对所有用户可见、可分配，并可用于各自的技能库和画布 Agent；不会替换技能广场分类。"
-                            : "个人分类只影响你的技能库和画布 Agent。短剧影视、电商营销是技能广场的共享分类，可在左侧“技能广场分类”中筛选。"}</p>
+                            : "个人分类只影响你的技能库和画布 Agent。短剧影视、电商营销是技能广场的共享分类，可在左侧“技能广场”下的分类中筛选。"}</p>
                     </div>
                 </div>
             </AppModal>
-            <SkillDetailModal skill={activeSkill} loading={detailLoading} mutating={Boolean(activeSkill && mutatingID === activeSkill.skillId)} categories={categories} onClose={() => setActiveSkill(null)} onAdd={(skill) => void toggleAdded(skill)} onLike={(skill) => void toggleLiked(skill)} onEdit={(skill) => void openEditor(skill)} onSync={(skill) => void synchronizeSkill(skill)} />
+            <SkillDetailModal skill={activeSkill} loading={detailLoading} mutating={Boolean(activeSkill && mutatingID === activeSkill.skillId)} categories={categories} onClose={() => setActiveSkill(null)} onAdd={(skill) => void toggleAdded(skill)} onLike={(skill) => void toggleLiked(skill)} onEdit={(skill) => void openEditor(skill)} onOpenWorkbench={openWorkbench} onSync={(skill) => void synchronizeSkill(skill)} />
             <SkillInstallModal open={installOpen} onClose={() => setInstallOpen(false)} onInstalled={(skill) => { setInstallOpen(false); setActiveSkill(skill); reload(); }} onManualCreate={() => { setInstallOpen(false); void openEditor(); }} />
             <SkillEditorDrawer open={editorOpen} skill={editingSkill} onClose={() => setEditorOpen(false)} onSaved={(skill) => { setEditorOpen(false); setEditingSkill(null); setActiveSkill(skill); reload(); }} />
         </>
     );
 }
 
-function SkillCard({ skill, rootLabel, categories, libraryCategories, canCategorize, loading, style, onOpen, onAdd, onLike, onEdit, onDelete, onSetLibraryCategory }: { skill: Skill; rootLabel?: string; categories: SkillCategory[]; libraryCategories: SkillLibraryCategory[]; canCategorize: boolean; loading: boolean; style?: CSSProperties; onOpen: () => void; onAdd: () => void; onLike: () => void; onEdit: () => void; onDelete: () => void; onSetLibraryCategory: (categoryId: string) => void }) {
-    const CategoryIcon = categoryIconOf(skill.tag);
+/**
+ * 技能卡：分类色字形 tile + 名称（最多两行）+ 作者行，两行简介，底部是带标签的统计
+ * （likeCount = 收藏数，addedCount = 加入技能库的人数）。
+ * 整卡由名称按钮的伸展点击区打开详情；右上角常显紧凑的加入开关，编辑/更多在底部 hover 出现。
+ */
+function SkillCard({ skill, accentKey, categoryLabel, libraryCategories, canCategorize, loading, onOpen, onAdd, onLike, onEdit, onOpenWorkbench, onDelete, onSetLibraryCategory }: { skill: Skill; accentKey: string; categoryLabel?: string; libraryCategories: SkillLibraryCategory[]; canCategorize: boolean; loading: boolean; onOpen: () => void; onAdd: () => void; onLike: () => void; onEdit: () => void; onOpenWorkbench: () => void; onDelete: () => void; onSetLibraryCategory: (categoryId: string) => void }) {
     const currentLibraryCategory = libraryCategories.find((category) => category.id === skill.libraryCategoryId);
     const libraryCategoryLabel = currentLibraryCategory?.name || (skill.libraryCategoryId ? "已归类" : "未分类");
+    const author = skill.effectiveUser.name || "未知用户";
+    const workbenchLabel = skill.sourceType === "github" ? "在工作台查看" : "在工作台编辑";
+    const likeLabel = `${skill.isLike ? "取消收藏" : "收藏"}，${skill.likeCount} 人已收藏`;
+    const menuItems = [
+        { key: "detail", label: "查看详情" },
+        ...(skill.isOwner
+            ? [
+                  { key: "workbench", label: workbenchLabel },
+                  { key: "edit", label: "编辑技能信息" },
+                  { type: "divider" as const },
+                  { key: "delete", label: "删除技能", danger: true },
+              ]
+            : [{ key: "toggle-added", label: skill.isAdded ? "从我的技能移除" : "加入我的技能", disabled: loading }]),
+    ];
     return (
-        <article style={style} className={`product-collection-card library-card library-card-surface skill-library-card group${skill.isAdded ? " is-added" : ""}`}>
-            <div className="skill-card-top">
-                <span className="library-icon-tile skill-card-icon" aria-hidden="true"><CategoryIcon /></span>
-                <button type="button" className="skill-card-title-button" onClick={onOpen}>
-                    <h3>{skill.skillName}</h3>
-                </button>
-                {canCategorize ? (
-                    <Tooltip title={`技能库分类：${libraryCategoryLabel}`}>
-                        <Dropdown
-                            trigger={["click"]}
-                            menu={{
-                                items: [
-                                    { key: "__uncategorized__", label: "未分类" },
-                                    ...libraryCategories.map((category) => ({ key: category.id, label: category.name })),
-                                ],
-                                onClick: ({ key }) => onSetLibraryCategory(key === "__uncategorized__" ? "" : key),
-                            }}
-                        >
-                            <button type="button" aria-label={`设置技能分类，当前为${libraryCategoryLabel}`} className="skill-card-category-picker" disabled={loading}>
-                                <FolderInput className="size-4" aria-hidden="true" />
-                                <span>{libraryCategoryLabel}</span>
+        <article className={cn("product-collection-card skill-tile", skill.isAdded && "is-added")} data-accent={skillAccent(accentKey)}>
+            <div className="skill-tile-head">
+                <span className="skill-tile-glyph" aria-hidden="true">{skillGlyph(skill.skillName)}</span>
+                <div className="skill-tile-heading">
+                    <h3 className="skill-tile-name">
+                        <button type="button" className="skill-tile-open" title={skill.skillName} onClick={onOpen}><span className="skill-tile-name-text">{skill.skillName}</span></button>
+                    </h3>
+                    <div className="skill-tile-byline">
+                        <span className="skill-tile-author" title={`作者：${author}`}>{author}</span>
+                        {canCategorize ? (
+                            <Dropdown
+                                trigger={["click"]}
+                                menu={{
+                                    selectable: true,
+                                    selectedKeys: [skill.libraryCategoryId || "__uncategorized__"],
+                                    items: [
+                                        { key: "__uncategorized__", label: "未分类" },
+                                        ...libraryCategories.map((category) => ({ key: category.id, label: category.name })),
+                                    ],
+                                    onClick: ({ key }) => onSetLibraryCategory(key === "__uncategorized__" ? "" : key),
+                                }}
+                            >
+                                <button type="button" className="skill-tile-chip is-picker" aria-label={`设置技能分类，当前为${libraryCategoryLabel}`} title="设置技能库分类" disabled={loading}>
+                                    <FolderInput aria-hidden="true" />
+                                    <span>{libraryCategoryLabel}</span>
+                                    <ChevronDown aria-hidden="true" />
+                                </button>
+                            </Dropdown>
+                        ) : categoryLabel ? (
+                            <span className="skill-tile-chip">{categoryLabel}</span>
+                        ) : null}
+                        {skill.isPrivate ? (
+                            <Tooltip title="仅自己可见">
+                                <span className="skill-tile-private" role="img" aria-label="仅自己可见"><Lock aria-hidden="true" /></span>
+                            </Tooltip>
+                        ) : null}
+                    </div>
+                </div>
+            </div>
+
+            <p className="skill-tile-description">{skill.description || "暂无技能简介"}</p>
+
+            <div className="skill-tile-footer">
+                <Tooltip title={likeLabel}>
+                    <button type="button" disabled={loading} className="skill-tile-stat is-like" aria-pressed={skill.isLike} aria-label={likeLabel} onClick={onLike}>
+                        <Heart aria-hidden="true" />
+                        <span>{formatSkillCount(skill.likeCount)}</span>
+                    </button>
+                </Tooltip>
+                <span className="skill-tile-stat" title={`${skill.addedCount} 人已加入技能库`}>
+                    <Users aria-hidden="true" />
+                    <span>{formatSkillCount(skill.addedCount)} 人加入</span>
+                </span>
+                {/* 次要操作：hover / focus-within 显示，触屏常显；菜单展开时保持可见。 */}
+                <div className="skill-tile-actions">
+                    {skill.isOwner ? (
+                        <Tooltip title={workbenchLabel}>
+                            <button type="button" className="product-icon-button skill-tile-edit" aria-label={`${workbenchLabel}：${skill.skillName}`} onClick={onOpenWorkbench}>
+                                <Pencil />
                             </button>
-                        </Dropdown>
-                    </Tooltip>
-                ) : null}
-                {skill.isOwner ? (
+                        </Tooltip>
+                    ) : null}
                     <Dropdown
                         trigger={["click"]}
+                        placement="bottomRight"
                         menu={{
-                            items: [
-                                { key: "edit", label: "编辑技能" },
-                                { key: "delete", label: "删除技能", danger: true },
-                            ],
-                            onClick: ({ key }) => key === "edit" ? onEdit() : onDelete(),
+                            items: menuItems,
+                            onClick: ({ key }) => key === "detail" ? onOpen() : key === "workbench" ? onOpenWorkbench() : key === "edit" ? onEdit() : key === "delete" ? onDelete() : onAdd(),
                         }}
                     >
-                        <button type="button" aria-label="技能操作" className="skill-card-more">
-                            <MoreHorizontal className="size-4" />
+                        <button type="button" className="product-icon-button skill-tile-more" aria-label={`${skill.skillName} 更多操作`} title="更多操作">
+                            <MoreHorizontal />
                         </button>
                     </Dropdown>
-                ) : null}
+                </div>
             </div>
-            <button type="button" className="skill-card-description" onClick={onOpen}>
-                <p>{skill.description || "暂无技能简介"}</p>
-            </button>
-            <div className="skill-card-footer">
-                <button type="button" disabled={loading} className="skill-card-like" aria-label={skill.isLike ? "取消收藏" : "收藏"} onClick={onLike}>
-                    <Heart className={`size-3.5 ${skill.isLike ? "fill-current text-rose-500" : ""}`} />
-                    <span>{formatSkillCount(skill.likeCount)}</span>
-                </button>
-                <span className="skill-card-author">{skill.effectiveUser.name || "未知用户"}</span>
-                <span className="skill-card-tag">{rootLabel || skillCategoryLabel(skill.tag, categories)}</span>
-                {skill.isPrivate ? <span className="skill-card-flag">仅自己</span> : null}
-            </div>
-            {/* 加入是这个页面的主行为，给它完整的按钮 + 文案 + 已加入人数，不再藏在角落的加号里。 */}
-            {skill.isOwner
-                ? <div className="skill-card-action"><span className="skill-card-owner-flag">我创建的</span><span className="skill-card-added-count">{formatSkillCount(skill.addedCount)} 人已加入</span></div>
-                : (
-                    <div className="skill-card-action">
-                        <Button loading={loading} aria-pressed={skill.isAdded} icon={skill.isAdded ? <Check /> : <Plus />} onClick={onAdd}>
-                            {skill.isAdded ? "已加入" : "加入技能库"}
-                        </Button>
-                        <Tooltip title={`${formatSkillCount(skill.addedCount)} 人已加入`}><span className="skill-card-added-count">{formatSkillCount(skill.addedCount)}</span></Tooltip>
-                    </div>
-                )}
+
+            {/* 加入状态是持久业务状态，常显：未加入为细线 +，已加入为安静的对勾。作者本人的技能不需要加入。 */}
+            {skill.isOwner ? null : (
+                <div className="skill-tile-corner">
+                    <Tooltip title={skill.isAdded ? "已加入我的技能，点击移除" : "加入我的技能"}>
+                        <button type="button" className="skill-tile-add" aria-pressed={skill.isAdded} aria-label={skill.isAdded ? `从我的技能移除 ${skill.skillName}` : `加入我的技能 ${skill.skillName}`} disabled={loading} onClick={onAdd}>
+                            {loading ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : skill.isAdded ? <Check aria-hidden="true" /> : <Plus aria-hidden="true" />}
+                            <span>{skill.isAdded ? "已加入" : "加入"}</span>
+                        </button>
+                    </Tooltip>
+                </div>
+            )}
         </article>
     );
 }
 
 function SkillSkeleton() {
-    return <div className="library-grid skill-library-grid py-6">{Array.from({ length: 8 }, (_, index) => <div key={index} className="h-[260px] animate-pulse rounded-[var(--r-xl)] bg-foreground/[.035]" />)}</div>;
+    return (
+        <div className="skill-tile-grid" aria-busy="true" aria-label="正在加载技能">
+            {Array.from({ length: 8 }, (_, index) => <div key={index} className="skill-tile-skeleton" />)}
+        </div>
+    );
 }

@@ -207,7 +207,7 @@ function CharacterArchive({ asset }: { asset: Extract<LibraryAsset, { kind: "ent
             <div className="relative aspect-[4/3] overflow-hidden rounded-[var(--r-xl)]">
                 <CharacterAssetCover asset={asset} size="hero" />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 px-5 pb-4">
-                    <div className="text-[10px] font-medium uppercase tracking-[.24em] text-white/55">Character{asset.data.version ? ` · v${asset.data.version}` : ""}</div>
+                    <div className="text-[var(--fs-label)] font-medium uppercase tracking-[.24em] text-white/55">Character{asset.data.version ? ` · v${asset.data.version}` : ""}</div>
                     {aliases.length ? <div className="mt-1 truncate text-xs text-white/70">又名 {aliases.join("、")}</div> : null}
                 </div>
             </div>
@@ -220,7 +220,7 @@ function CharacterArchive({ asset }: { asset: Extract<LibraryAsset, { kind: "ent
                     </span>
                 )}
                 <span className="min-w-0">
-                    <span className="block text-[11px] text-foreground/45">声音</span>
+                    <span className="block text-[var(--fs-label)] text-foreground/45">声音</span>
                     <span className="block truncate text-sm font-medium">{asset.data.voiceName || "未绑定声音"}</span>
                 </span>
                 <span className={`ml-auto shrink-0 text-xs ${asset.data.visualStatus === "ready" ? "text-emerald-600 dark:text-emerald-400" : "text-foreground/45"}`}>{asset.data.visualStatus === "ready" ? "形象就绪" : "形象待完善"}</span>
@@ -289,7 +289,7 @@ export function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Lib
                             )}
                         </div>
                     )}
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-2">
                         {(asset.tags || []).map((tag) => (
                             <Tag key={tag} className="asset-archive-tag m-0">
                                 {tag}

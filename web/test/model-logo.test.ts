@@ -3,6 +3,15 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 describe("模型 Logo 选择器", () => {
+    test("库目录中的 Logo 都有选择器可按需加载的组件，避免升级后静默丢失", () => {
+        const toc = JSON.parse(readFileSync(resolve(import.meta.dir, "../node_modules/@lobehub/icons/es/toc.json"), "utf8")) as Array<{ group: string; id: string }>;
+        const missingIds = toc
+            .filter((item) => ["model", "provider", "application"].includes(item.group))
+            .filter((item) => !["Mono", "Color"].some((variant) => existsSync(resolve(import.meta.dir, `../node_modules/@lobehub/icons/es/${item.id}/components/${variant}.js`))))
+            .map((item) => item.id);
+        expect(missingIds).toEqual([]);
+    });
+
     test("使用 Vite 可识别的直接 glob 并包含前台模型 Logo 数据源", () => {
         const source = readFileSync(resolve(import.meta.dir, "../src/components/model-logo.tsx"), "utf8");
         const toc = JSON.parse(readFileSync(resolve(import.meta.dir, "../node_modules/@lobehub/icons/es/toc.json"), "utf8")) as Array<{ group: string; id: string }>;

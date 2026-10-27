@@ -17,6 +17,7 @@ const (
 	CodeTimeout         = 504
 
 	CodeQuotaExceeded          = 40301
+	CodeStorageReadOnly        = 40302
 	CodeIdempotencyConflict    = 40901
 	CodeCanvasResourcesMissing = 40902
 	CodeRateLimited            = 42901
@@ -32,15 +33,20 @@ const (
 	ReasonNotFound               ErrorReason = "not_found"
 	ReasonConflict               ErrorReason = "conflict"
 	ReasonProjectNameConflict    ErrorReason = "project_name_conflict"
+	ReasonSkillVersionConflict   ErrorReason = "skill_version_conflict"
 	ReasonCanvasResourcesMissing ErrorReason = "canvas_history_resources_missing"
 	ReasonFailedPrecondition     ErrorReason = "failed_precondition"
 	ReasonQuotaExceeded          ErrorReason = "quota_exceeded"
-	ReasonRateLimited            ErrorReason = "rate_limited"
-	ReasonUnavailable            ErrorReason = "unavailable"
-	ReasonTimeout                ErrorReason = "timeout"
-	ReasonInternal               ErrorReason = "internal"
-	ReasonBadGateway             ErrorReason = "bad_gateway"
-	ReasonUpstreamDNSFailed      ErrorReason = "upstream_dns_failed"
+	// 账号文件容量不足：前端据此展示扩容入口，与每日上传量等其它额度区分。
+	ReasonStorageCapacityExceeded ErrorReason = "storage_capacity_exceeded"
+	// 账号超出文件容量且宽限期已过：只允许读取、删除和购买扩容。
+	ReasonStorageReadOnly   ErrorReason = "storage_read_only"
+	ReasonRateLimited       ErrorReason = "rate_limited"
+	ReasonUnavailable       ErrorReason = "unavailable"
+	ReasonTimeout           ErrorReason = "timeout"
+	ReasonInternal          ErrorReason = "internal"
+	ReasonBadGateway        ErrorReason = "bad_gateway"
+	ReasonUpstreamDNSFailed ErrorReason = "upstream_dns_failed"
 )
 
 func ReasonForStatus(status int) ErrorReason {

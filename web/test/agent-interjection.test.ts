@@ -42,8 +42,21 @@ test("输入框运行中同时给出「发送（插话）」与「停止」", as
     expect(composer).not.toContain("const canStop = Boolean(sending && onStop);");
     expect(composer).toContain('aria-label="停止本轮"');
     // 插话/未送达要有可见标记
-    expect(composer).toContain('interjection?: "sent" | "undelivered";');
-    expect(composer).toContain('item.interjection === "undelivered" ? "插话未送达" : "插话"');
+    expect(composer).toContain('interjection?: "sent" | "delivered" | "undelivered" | "withdrawn";');
+    expect(composer).toContain('item.interjection === "undelivered" ? "插话未送达"');
+    // 撤回插话是独立入口，只在等待送达时出现；停止按钮不能是唯一的"取消"手段。
+    expect(composer).toContain('item.interjection === "sent" && onWithdrawInterjection');
+    expect(composer).toContain('aria-label="撤回这句插话"');
+});
+
+test("撤回插话走独立接口，不停止本轮", async () => {
+    const api = await Bun.file(new URL("../src/services/api/agent.ts", import.meta.url)).text();
+    const panel = moduleGroupSource("components/canvas/canvas-cloud-agent-panel.tsx");
+
+    expect(api).toContain("export function withdrawAgentInterjection(");
+    expect(api).toContain("http.delete<{ withdrawn: boolean }>");
+    expect(panel).toContain("await withdrawAgentInterjection(activeRun.id, messageId)");
+    expect(panel).not.toMatch(/withdrawInterjection[\s\S]{0,400}cancelAgentRun/);
 });
 
 test("插话走独立接口，不碰轮次接口", async () => {

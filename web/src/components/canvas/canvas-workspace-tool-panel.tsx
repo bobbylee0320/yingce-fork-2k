@@ -214,7 +214,7 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
 
     return (
         <>
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2.5">
+            <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
                 <Wrench className="size-3.5 shrink-0" />
                 <span className="truncate text-xs font-semibold">工具</span>
                 <span className="tabular-nums text-foreground/32">{totalCount.toLocaleString("zh-CN")}</span>
@@ -237,7 +237,7 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
                 ))}
             </div>
 
-            <div className="asset-filters shrink-0 border-b border-border/70 px-2 py-1.5">
+            <div className="asset-filters shrink-0 border-b border-border/70 px-2 py-2">
                 <div className="col-feed-tabs">
                     {FEED_TABS.map((tab) => (
                         <button key={tab.id} type="button" className={`col-feed-tab${feedTab === tab.id ? " on" : ""}`} aria-pressed={feedTab === tab.id} onClick={() => setFeedTab(tab.id)}>
@@ -250,7 +250,7 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
                         </button>
                     </span>
                 </div>
-                <div className="asset-filter-row mt-1.5">
+                <div className="asset-filter-row mt-2">
                     <input className="asset-search" placeholder="搜索名称/标签" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} aria-label="搜索工具" />
                     {searchInput ? (
                         <button type="button" className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover hover:text-foreground" onClick={() => setSearchInput("")} aria-label="清空搜索">
@@ -258,7 +258,7 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
                         </button>
                     ) : null}
                 </div>
-                <div className="col-tag-filter mt-1.5">
+                <div className="col-tag-filter mt-2">
                     {tagChips.map((tag) => (
                         <button key={tag.id || "all"} type="button" className={`col-tag-chip${tagFilter === tag.id ? " on" : ""}`} aria-pressed={tagFilter === tag.id} onClick={() => setTagFilter(tag.id)}>
                             {tag.label}
@@ -274,7 +274,7 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
                     <WorkspaceErrorState compact description={toolsQuery.error instanceof Error ? toolsQuery.error.message : undefined} onRetry={() => void toolsQuery.refetch()} />
                 ) : tools.length ? (
                     <>
-                        <div className="grid grid-cols-2 gap-1.5">
+                        <div className="grid grid-cols-2 gap-2">
                             {tools.map((tool) => (
                                 <ToolPresetCard
                                     key={tool.id}
@@ -289,7 +289,7 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
                             ))}
                         </div>
                         {toolsQuery.isFetchingNextPage ? (
-                            <div className="flex items-center justify-center gap-1.5 py-3 text-[11px] text-foreground/45">
+                            <div className="flex items-center justify-center gap-2 py-3 text-[var(--fs-label)] text-foreground/45">
                                 <Loader2 className="size-3.5 animate-spin" />
                                 正在加载…
                             </div>
@@ -403,9 +403,9 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
 
 const ToolGridSkeleton = memo(function ToolGridSkeleton() {
     return (
-        <div className="grid grid-cols-2 gap-1.5" aria-busy="true" aria-live="polite">
+        <div className="grid grid-cols-2 gap-2" aria-busy="true" aria-live="polite">
             {Array.from({ length: 8 }, (_, index) => (
-                <div key={index} className="flex flex-col gap-1 p-1.5">
+                <div key={index} className="flex flex-col gap-1 p-2">
                     <div className="aspect-[4/3] w-full animate-pulse rounded-[var(--r-sm)] bg-surface-active" />
                     <div className="h-3 w-3/4 animate-pulse rounded bg-surface-active" />
                 </div>
@@ -495,7 +495,7 @@ const ToolPresetCard = memo(function ToolPresetCard({
     return (
         <div
             ref={rootRef}
-            className="group relative flex flex-col gap-1 rounded-[var(--r-md)] border p-1.5 text-left transition-[background-color] hover:bg-[var(--surface-hover)] focus-within:ring-2 focus-within:ring-primary/35"
+            className="group relative flex flex-col gap-1 rounded-[var(--r-md)] border p-2 text-left transition-[background-color] hover:bg-[var(--surface-hover)] focus-within:ring-2 focus-within:ring-primary/35"
             style={commonStyle}
             onMouseEnter={() => {
                 if (showHoverVideo) setHovered(true);
@@ -519,7 +519,7 @@ const ToolPresetCard = memo(function ToolPresetCard({
                     <video
                         ref={videoRef}
                         src={hoverVideoUrl}
-                        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ease-out ${videoReady ? "opacity-100" : "opacity-0"}`}
+                        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ease-out ${videoReady ? "opacity-100" : "opacity-0"}`}
                         muted
                         playsInline
                         loop
@@ -531,7 +531,7 @@ const ToolPresetCard = memo(function ToolPresetCard({
                     />
                 ) : null}
                 {/* 左上角标签 */}
-                <span className="absolute left-1 top-1 rounded-[var(--r-sm)] bg-black/40 px-1.5 py-0.5 text-[9px] font-medium leading-3 text-white backdrop-blur-sm">{feedTabLabel}</span>
+                <span className="absolute left-1 top-1 rounded-[var(--r-sm)] bg-black/40 px-2 py-0.5 text-[var(--fs-label)] font-medium leading-3 text-white backdrop-blur-sm">{feedTabLabel}</span>
                 {/* 右上角操作按钮 */}
                 <span className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
@@ -575,8 +575,8 @@ const ToolPresetCard = memo(function ToolPresetCard({
                     </Dropdown>
                 </span>
             </div>
-            <span className="truncate text-[11px] font-medium leading-4 text-foreground">{tool.label}</span>
-            {tool.desc ? <span className="truncate text-[10px] leading-3 text-foreground/40">{tool.desc}</span> : null}
+            <span className="truncate text-[var(--fs-label)] font-medium leading-4 text-foreground">{tool.label}</span>
+            {tool.desc ? <span className="truncate text-[var(--fs-label)] leading-3 text-foreground/40">{tool.desc}</span> : null}
         </div>
     );
 });

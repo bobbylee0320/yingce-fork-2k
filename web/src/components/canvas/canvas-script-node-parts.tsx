@@ -36,9 +36,9 @@ export function StoryboardMiniPipeline({ pipeline, theme, rows }: { pipeline: Ca
         >
             {steps.map((step, index) => (
                 <Fragment key={step.key}>
-                    {index > 0 ? <span className="mx-2.5 h-px min-w-3.5 flex-1 max-w-20" style={{ background: theme.node.stroke }} /> : null}
+                    {index > 0 ? <span className="mx-2 h-px min-w-3.5 flex-1 max-w-20" style={{ background: theme.node.stroke }} /> : null}
                     <span
-                        className="flex items-center gap-1.5 whitespace-nowrap text-[var(--fs-tiny)]"
+                        className="flex items-center gap-2 whitespace-nowrap text-[var(--fs-tiny)]"
                         title={step.hint}
                         style={{
                             color: step.state === "done" ? theme.node.muted : step.state === "current" ? theme.accent.primary : step.state === "error" ? theme.accent.danger : theme.node.faint,
@@ -72,7 +72,7 @@ export function GenerationBatchDetails({ batch, rows, onRetryItem }: { batch: Ca
                 {batch.items.map((item) => {
                     const requiresPromptChange = isContentModerationError(item.errorDetails);
                     return (
-                        <div key={item.id} className="flex min-h-9 items-center gap-2 border-t border-foreground/10 py-1.5 first:border-t-0">
+                        <div key={item.id} className="flex min-h-9 items-center gap-2 border-t border-foreground/10 py-2 first:border-t-0">
                             <span className="w-14 shrink-0 text-xs font-medium">镜头 {shotByRowId.get(item.rowId) || "--"}</span>
                             <span className="min-w-0 flex-1 truncate text-xs text-foreground/60" title={item.errorDetails ? generationErrorMessage(item.errorDetails) : undefined}>
                                 {generationBatchItemLabel(item)}

@@ -96,7 +96,7 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
                 "aceternity-floating-dock flex items-center",
                 scrollable ? "overflow-x-auto" : "overflow-visible",
                 embedded ? "gap-0.5 px-0.5 shadow-none" : "gap-0.5 border backdrop-blur-2xl",
-                !embedded && (compact ? "rounded-[var(--r-lg)] p-1" : "rounded-[var(--r-xl)] p-1.5"),
+                !embedded && (compact ? "rounded-[var(--r-lg)] p-1" : "rounded-[var(--r-xl)] p-2"),
                 className,
             )}
             style={{ ...style, "--dock-item-size": `${itemSize}px` } as CSSProperties}
@@ -165,7 +165,7 @@ function DockTooltip({ show, label, compact }: { show: boolean; label: string; c
                     transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
                     className={cn(
                         "aceternity-dock-tooltip pointer-events-none absolute bottom-full left-1/2 z-[var(--dock-tooltip-z)] mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border font-medium shadow-lg",
-                        compact ? "px-1.5 py-0.5 text-[var(--fs-micro)]" : "px-2 py-1 text-[var(--fs-tiny)]",
+                        compact ? "px-2 py-0.5 text-[var(--fs-micro)]" : "px-2 py-1 text-[var(--fs-tiny)]",
                     )}
                 >
                     {label}
@@ -206,7 +206,7 @@ function DockCommandButton({ command, compact, showLabel, nativeTitle, motionEna
                 aria-pressed={pressed}
                 disabled={command.disabled}
                 className={cn(
-                    "aceternity-dock-command is-labeled inline-flex h-[var(--dock-item-size)] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--dock-item-radius)] border-0 px-2.5 outline-none",
+                    "aceternity-dock-command is-labeled inline-flex h-[var(--dock-item-size)] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--dock-item-radius)] border-0 px-2 outline-none",
                     command.active && "is-active",
                     command.danger && "is-danger",
                 )}
@@ -216,7 +216,7 @@ function DockCommandButton({ command, compact, showLabel, nativeTitle, motionEna
             >
                 <span className="grid size-3.5 shrink-0 place-items-center">{command.icon}</span>
                 <span className="inline-flex h-4 items-center text-[var(--fs-label)] font-medium leading-none">{command.displayLabel || command.label}</span>
-                {command.badge !== undefined ? <span className="aceternity-dock-command-badge inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[var(--fs-micro)] font-bold leading-4">{command.badge}</span> : null}
+                {command.badge !== undefined ? <span className="aceternity-dock-command-badge inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[var(--fs-micro)] font-semibold leading-4">{command.badge}</span> : null}
             </motion.button>
         );
     }
@@ -233,7 +233,7 @@ function DockCommandButton({ command, compact, showLabel, nativeTitle, motionEna
                 disabled={command.disabled}
                 className={cn(
                     "aceternity-dock-command relative grid h-[var(--dock-item-size)] place-items-center rounded-[var(--dock-item-radius)] border-0 outline-none",
-                    command.wide ? "min-w-[var(--dock-precision-width)] px-1.5" : "w-[var(--dock-item-size)]",
+                    command.wide ? "min-w-[var(--dock-precision-width)] px-2" : "w-[var(--dock-item-size)]",
                     command.quiet && "is-quiet",
                     command.active && "is-active",
                     command.danger && "is-danger",

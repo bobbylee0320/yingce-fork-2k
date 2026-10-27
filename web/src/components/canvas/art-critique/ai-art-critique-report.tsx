@@ -6,6 +6,7 @@ import { ART_CRITIQUE_CATEGORY_COLORS, ART_CRITIQUE_SEVERITY_COLORS, repairIssue
 import { useCopyText } from "@/hooks/use-copy-text";
 import { Button, Tag } from "antd";
 import type { ArtCritiquePromptStatus, CanvasTheme } from "./ai-art-critique-modal";
+import { progressFillStyle } from "@/lib/progress-fill";
 
 export const ART_CRITIQUE_STAGE_PROGRESS: Record<ArtCritiquePipelineStage, number> = {
     preparing: 8,
@@ -35,14 +36,14 @@ export function ArtCritiqueProgress({ stage, theme }: { stage: ArtCritiquePipeli
             </div>
             <div className="h-2 overflow-hidden rounded-full" style={{ background: "color-mix(in oklch, var(--workspace-accent) 14%, transparent)" }}>
                 <div
-                    className="h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none"
+                    className="h-full rounded-full transition-transform duration-[250ms] ease-out motion-reduce:transition-none"
                     role="progressbar"
                     aria-label="AI 审美批改阶段进度"
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-valuenow={percent}
                     aria-valuetext={`${artCritiqueStageLabel(stage)}，约 ${percent}%`}
-                    style={{ width: `${percent}%`, background: theme.accent.primary }}
+                    style={progressFillStyle(percent, { background: theme.accent.primary })}
                 />
             </div>
             <div className="text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
@@ -65,7 +66,7 @@ export function ReportSummary({ report, theme, isDraft }: { report: NonNullable<
                 )}
                 <span>{isDraft ? "整体判断（初稿）" : "整体判断"}</span>
                 {report.rubricVersion ? (
-                    <span className="ml-auto text-[11px] font-normal" style={{ color: theme.node.muted }}>
+                    <span className="ml-auto text-[var(--fs-label)] font-normal" style={{ color: theme.node.muted }}>
                         标准 {report.rubricVersion}
                     </span>
                 ) : null}
@@ -83,7 +84,7 @@ export function ReportSummary({ report, theme, isDraft }: { report: NonNullable<
                 </details>
             ) : null}
             {report.pipelineWarnings?.length ? (
-                <details className="group rounded-[var(--r-md)] px-2.5 py-2 text-xs" style={{ background: "color-mix(in oklch, var(--status-warning) 8%, transparent)", color: "var(--status-warning)" }}>
+                <details className="group rounded-[var(--r-md)] px-2 py-2 text-xs" style={{ background: "color-mix(in oklch, var(--status-warning) 8%, transparent)", color: "var(--status-warning)" }}>
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-medium outline-none focus-visible:underline [&::-webkit-details-marker]:hidden">
                         本次分析有部分步骤降级
                         <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />
@@ -125,7 +126,7 @@ export function IssueCard({ issue, index, selected, theme, onClick, onHover }: {
     return (
         <button
             type="button"
-            className="group flex w-full items-start gap-3 border-b px-3.5 py-3.5 text-left outline-none transition last:border-b-0 hover:bg-black/[.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] dark:hover:bg-white/[.04]"
+            className="group flex w-full items-start gap-3 border-b px-4 py-4 text-left outline-none transition last:border-b-0 hover:bg-black/[.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] dark:hover:bg-white/[.04]"
             style={{ borderColor: theme.node.edge, background: selected ? `color-mix(in oklch, ${color} 8%, ${theme.node.panel})` : "transparent", outlineColor: color }}
             onClick={onClick}
             onMouseEnter={() => onHover(issue.id)}
@@ -133,12 +134,12 @@ export function IssueCard({ issue, index, selected, theme, onClick, onHover }: {
             onFocus={() => onHover(issue.id)}
             onBlur={() => onHover(null)}
         >
-            <span className="grid size-7 shrink-0 place-items-center rounded-[var(--r-sm)] text-xs font-bold" style={{ background: color, color: "#fff" }}>
+            <span className="grid size-7 shrink-0 place-items-center rounded-[var(--r-sm)] text-xs font-semibold" style={{ background: color, color: "#fff" }}>
                 {index}
             </span>
             <span className="min-w-0 flex-1">
                 <span className="block line-clamp-2 text-sm font-semibold leading-5">{issue.title}</span>
-                <span className="mt-1.5 flex min-w-0 items-center gap-2 text-xs" style={{ color: theme.node.muted }}>
+                <span className="mt-2 flex min-w-0 items-center gap-2 text-xs" style={{ color: theme.node.muted }}>
                     <span style={{ color: ART_CRITIQUE_CATEGORY_COLORS[issue.category] }}>{artCritiqueCategoryLabel(issue.category)}</span>
                     <span className="size-1 shrink-0 rounded-full bg-current opacity-40" aria-hidden="true" />
                     <span style={{ color }}>{artCritiqueSeverityLabel(issue.severity)}</span>
@@ -151,7 +152,7 @@ export function IssueCard({ issue, index, selected, theme, onClick, onHover }: {
                     <span className="ml-auto shrink-0 tabular-nums">{Math.round(issue.confidence * 100)}%</span>
                 </span>
             </span>
-            <ChevronRight className="mt-1 size-4 shrink-0 opacity-35 transition-transform group-hover:translate-x-0.5 group-hover:opacity-70" aria-hidden="true" />
+            <ChevronRight className="mt-1 size-4 shrink-0 opacity-35 transition-opacity duration-150 group-hover:opacity-70" aria-hidden="true" />
         </button>
     );
 }
@@ -195,7 +196,7 @@ export function IssueDetailView({
                 <div className="flex items-center gap-2 text-sm font-semibold">
                     <span className="size-2 rounded-full" style={{ background: severityColor }} aria-hidden="true" />
                     <span>具体问题</span>
-                    <Tag bordered={false} className="ml-auto text-[11px]" style={{ color: severityColor }}>
+                    <Tag bordered={false} className="ml-auto text-[var(--fs-label)]" style={{ color: severityColor }}>
                         {artCritiqueSeverityLabel(issue.severity)}
                     </Tag>
                 </div>
@@ -205,7 +206,7 @@ export function IssueDetailView({
                     <span className="size-1 rounded-full bg-current opacity-40" aria-hidden="true" />
                     <span>{Math.round(issue.confidence * 100)}% 把握</span>
                     {issue.verification && issue.verification.verdict !== "confirmed" ? (
-                        <span className="rounded-full px-1.5 py-0.5" style={{ background: "color-mix(in oklch, var(--status-warning) 12%, transparent)", color: "var(--status-warning)" }}>
+                        <span className="rounded-full px-2 py-0.5" style={{ background: "color-mix(in oklch, var(--status-warning) 12%, transparent)", color: "var(--status-warning)" }}>
                             待复核
                         </span>
                     ) : null}
@@ -220,7 +221,7 @@ export function IssueDetailView({
                     <div className="text-xs leading-5" style={{ color: theme.node.muted }}>
                         <span className="font-semibold">定位参考：</span>
                         {issue.targetDescription}
-                        <span className="ml-1 rounded-full px-1.5 py-0.5" style={{ background: "color-mix(in oklch, var(--workspace-accent) 8%, transparent)" }}>
+                        <span className="ml-1 rounded-full px-2 py-0.5" style={{ background: "color-mix(in oklch, var(--workspace-accent) 8%, transparent)" }}>
                             {targetSourceLabel}
                         </span>
                     </div>
@@ -259,14 +260,14 @@ export function IssueDetailView({
                 </div>
                 {issue.suggestion.actions.length ? (
                     <div>
-                        <div className="mb-1.5 text-xs font-semibold" style={{ color: theme.node.muted }}>
+                        <div className="mb-2 text-xs font-semibold" style={{ color: theme.node.muted }}>
                             建议动作
                         </div>
                         <ol className="m-0 flex list-none flex-col gap-2 p-0 text-sm leading-6">
                             {issue.suggestion.actions.map((item, index) => (
                                 <li key={item} className="flex items-start gap-2">
                                     <span
-                                        className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[var(--fs-micro)] font-bold"
+                                        className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[var(--fs-micro)] font-semibold"
                                         style={{ background: "color-mix(in oklch, var(--workspace-accent) 10%, transparent)", color: "var(--workspace-accent)" }}
                                     >
                                         {index + 1}
@@ -278,7 +279,7 @@ export function IssueDetailView({
                     </div>
                 ) : null}
                 {issue.suggestion.preserve.length ? (
-                    <div className="rounded-[var(--r-md)] px-3 py-2.5" style={{ background: "color-mix(in oklch, var(--status-success) 6%, transparent)" }}>
+                    <div className="rounded-[var(--r-md)] px-3 py-2" style={{ background: "color-mix(in oklch, var(--status-success) 6%, transparent)" }}>
                         <div className="mb-1 text-xs font-semibold" style={{ color: "var(--status-success)" }}>
                             需要保留
                         </div>
@@ -289,7 +290,7 @@ export function IssueDetailView({
                         </ul>
                     </div>
                 ) : null}
-                <div className="rounded-[var(--r-md)] border px-3 py-2.5 text-xs leading-5" style={{ borderColor: theme.node.edge, background: theme.node.panel }}>
+                <div className="rounded-[var(--r-md)] border px-3 py-2 text-xs leading-5" style={{ borderColor: theme.node.edge, background: theme.node.panel }}>
                     <span className="font-semibold">预期效果：</span>
                     {issue.suggestion.expectedEffect}
                 </div>
@@ -313,7 +314,7 @@ export function OptionCard({ option, theme }: { option: ArtCritiqueOption; theme
             <div className="flex items-center gap-2 text-sm font-semibold">
                 <Sparkles className="size-4" style={{ color: ART_CRITIQUE_CATEGORY_COLORS[option.category] }} aria-hidden="true" />
                 <span className="min-w-0 flex-1">{option.title}</span>
-                <span className="shrink-0 text-[11px] font-normal" style={{ color: theme.node.muted }}>
+                <span className="shrink-0 text-[var(--fs-label)] font-normal" style={{ color: theme.node.muted }}>
                     {Math.round(option.confidence * 100)}% 参考把握
                 </span>
             </div>
@@ -335,7 +336,7 @@ export function FilterChip({ label, active, color, onClick }: { label: string; a
     return (
         <button
             type="button"
-            className="rounded-full border px-2.5 py-1 text-xs font-medium outline-none transition-[background-color,border-color,box-shadow,color] hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="rounded-full border px-2 py-1 text-xs font-medium outline-none transition-[background-color,border-color,box-shadow,color] hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
                 borderColor: active ? color || "var(--workspace-accent)" : "var(--border-subtle)",
                 background: active ? `color-mix(in oklch, ${color || "var(--workspace-accent)"} 12%, transparent)` : "transparent",

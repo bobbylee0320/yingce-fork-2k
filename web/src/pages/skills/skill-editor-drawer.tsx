@@ -102,7 +102,7 @@ export function SkillEditorDrawer({ open, skill, onClose, onSaved }: { open: boo
     return (
         <AppDrawer className="library-drawer" open={open} size={720} mask={{ closable: !dirty }} title={skill ? "编辑技能" : "创建技能"} onClose={requestClose} extra={<Button type="primary" loading={saving} icon={<Save className="size-4" />} onClick={() => form.submit()}>保存技能</Button>}>
             {!isPackageSkill ? <div className="mb-4 rounded-xl border bg-foreground/[.02] p-3">
-                <div className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium">
                     <Wand2 className="size-4" />
                     AI 起草
                     <span className="font-normal text-foreground/45">描述想法，一键生成名称、简介与指令草稿（可再编辑）</span>
@@ -120,7 +120,7 @@ export function SkillEditorDrawer({ open, skill, onClose, onSaved }: { open: boo
                     <span className="text-xs text-foreground/45">将使用你的文本模型生成一次草稿</span>
                     <Button type="primary" loading={drafting} disabled={!draftIdea.trim()} icon={<Wand2 className="size-4" />} onClick={() => void draftFromIdea()}>生成草稿</Button>
                 </div>
-            </div> : <div className="mb-4 rounded-xl border bg-foreground/[.02] p-3 text-sm leading-6 text-foreground/58">这是多文件技能包。这里仅编辑名称、简介、分类和展示信息；技能正文请更新 ZIP，或在 GitHub 仓库修改后执行同步。</div>}
+            </div> : <div className="mb-4 rounded-xl border bg-foreground/[.02] p-3 text-sm leading-6 text-foreground/58">这是多文件技能包。这里仅编辑名称、简介、分类和展示信息；正文与附属文件请在技能卡片的“编辑”工作台中修改，GitHub 技能请在仓库修改后执行同步。</div>}
             <Form form={form} layout="vertical" requiredMark="optional" onFinish={submit} onValuesChange={() => setDirty(true)}>
                 <div className="grid gap-x-4 sm:grid-cols-2">
                     <Form.Item name="skillName" label="技能名称" rules={[{ required: true, message: "请填写技能名称" }, { max: 80, message: "最多 80 个字符" }]}>

@@ -31,13 +31,13 @@
 }
 
 .canvas-node-toolbar-menu-actions .ant-dropdown-menu-item-group-title {
-    padding: 5px 10px 3px;
+    padding: 4px 8px 4px;
     font-size: var(--fs-tiny);
     line-height: 16px;
 }
 
 .canvas-node-toolbar-menu-actions .ant-dropdown-menu-item {
-    padding: 5px 10px;
+    padding: 4px 8px;
 }
 
 .canvas-node-toolbar-menu-label {
@@ -232,7 +232,7 @@
     width: 100%;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
+    padding: 8px 12px;
     border: 0;
     background: transparent;
     color: inherit;
@@ -261,7 +261,7 @@
 }
 
 .canvas-grid-split-mini span {
-    border-radius: 1px;
+    border-radius: 4px;
     background: currentColor;
     opacity: 0.72;
 }

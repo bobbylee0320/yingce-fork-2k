@@ -57,14 +57,14 @@ export function CanvasTimelineRuler({ pxPerMs, durationMs, playheadMs, width, th
                 <div key={tick.ms} className="absolute top-0 h-full" style={{ left: tick.x }}>
                     <div className="absolute top-0 w-px" style={{ height: tick.major ? 10 : 5, background: theme.timeline.rulerTick }} />
                     {tick.major ? (
-                        <span className="absolute left-1 top-1 whitespace-nowrap text-[10px] leading-none opacity-60" style={{ color: theme.timeline.rulerLabel }}>
+                        <span className="absolute left-1 top-1 whitespace-nowrap text-[var(--fs-label)] leading-none opacity-60" style={{ color: theme.timeline.rulerLabel }}>
                             {formatTimelineTime(tick.ms)}
                         </span>
                     ) : null}
                 </div>
             ))}
             <div className="pointer-events-none absolute bottom-0 top-0" style={{ left: Math.round(playheadMs * pxPerMs), width: 2, background: theme.timeline.playhead }}>
-                <span className="absolute -top-0.5 left-1 whitespace-nowrap text-[10px] font-semibold leading-none" style={{ color: theme.timeline.playhead }}>
+                <span className="absolute -top-0.5 left-1 whitespace-nowrap text-[var(--fs-label)] font-semibold leading-none" style={{ color: theme.timeline.playhead }}>
                     {formatTimelineTime(playheadMs)}
                 </span>
             </div>

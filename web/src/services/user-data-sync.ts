@@ -20,6 +20,7 @@ import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
 import { repairMissingCanvasAssets, rebindInconsistentCanvasAssets } from "@/services/canvas-asset-repair";
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
+import { canvasPromptAssetMentionIds } from "@/lib/canvas/canvas-resource-references";
 import { applyAgentCanvasPatch, mergeThreeWayValue, type AgentCanvasPatch } from "@/lib/canvas/agent-canvas-patch";
 import { collectLocalMediaKeys, ensureRemoteResourceReferences, restoreRemoteTextNodeContents } from "./user-data-sync-media";
 import { submitCanvasMutationBatches, type CanvasMutationBatchState } from "./canvas-mutation-batches";
@@ -273,7 +274,7 @@ export async function loadCanvasProjectForEditing(id: string, options: { onLoad?
             throw error;
         }
         if (epoch !== sessionEpoch) throw new Error("账号已切换，请重新打开画布");
-        await loadReferencedAssets(collectAssetIds(remote));
+        await loadReferencedAssets(collectCanvasLoadAssetIds(remote));
         const hash = await canvasContentHash(remote);
         if (epoch !== sessionEpoch || getActiveUserScope() !== scope) throw new Error("账号已切换，请重新打开画布");
         const local = useCanvasStore.getState().openProject(id);
@@ -536,6 +537,21 @@ function collectAssetIds(value: unknown, ids = new Set<string>()): Set<string> {
     return ids;
 }
 
+function collectPromptAssetMentionIds(value: unknown, ids = new Set<string>()): Set<string> {
+    if (typeof value === "string") canvasPromptAssetMentionIds(value).forEach((id) => ids.add(id));
+    else if (value && typeof value === "object") Object.values(value).forEach((child) => collectPromptAssetMentionIds(child, ids));
+    return ids;
+}
+
+/**
+ * 打开画布时要读取的素材：字段绑定的 assetId 加上提示词里的 @[asset:ID]。
+ * 登录走增量会话，素材 store 只有本机缓存；不补提示词引用，换设备或清缓存后生成必然找不到素材。
+ * 同步依赖校验仍只用 collectAssetIds，提示词引用不阻塞画布保存。
+ */
+function collectCanvasLoadAssetIds(project: unknown) {
+    return collectPromptAssetMentionIds(project, collectAssetIds(project));
+}
+
 async function loadReferencedAssets(ids: Iterable<string>, refresh = false) {
     const epoch = sessionEpoch;
     const loadedIds = new Set(useAssetStore.getState().assets.map((asset) => asset.id));
@@ -560,6 +576,17 @@ export async function loadAssetsForUse(ids: Iterable<string>, options?: { refres
         const available = new Set(useAssetStore.getState().assets.map((asset) => asset.id));
         if (requestedIds.some((id) => !available.has(id) || (activeRemoteUserId && !verifiedAssets.has(id)))) throw new Error("部分素材不存在或无权访问，请重新选择素材");
     });
+}
+
+/**
+ * 生成前补齐提示词 @[asset:ID] 引用的素材并返回最新素材列表。
+ * 画布可能从本地日志打开而未经过远端加载；素材确实不存在时由 loadAssetsForUse 报错。
+ */
+export async function loadPromptMentionedAssets(prompt: string): Promise<Asset[]> {
+    const loadedIds = new Set(useAssetStore.getState().assets.map((asset) => asset.id));
+    const missingIds = canvasPromptAssetMentionIds(prompt).filter((id) => !loadedIds.has(id));
+    if (missingIds.length) await loadAssetsForUse(missingIds);
+    return useAssetStore.getState().assets;
 }
 
 export async function syncRemoteUserData(userId?: string | null) {
@@ -1263,7 +1290,7 @@ async function reconcileCanvasLocalEdits(id: string, rejected?: PendingCanvasMut
     useSyncProgressStore.getState().setProjectProgress(id, { phase: "saving", errorKind: undefined, message: "正在对齐云端画布" });
     const remote = await restoreRemoteTextNodeContents((await getRemoteCanvasProject(id)).project);
     ensureSession();
-    await loadReferencedAssets(collectAssetIds(remote));
+    await loadReferencedAssets(collectCanvasLoadAssetIds(remote));
     const hash = await canvasContentHash(remote);
     ensureSession();
     const local = useCanvasStore.getState().openProject(id);

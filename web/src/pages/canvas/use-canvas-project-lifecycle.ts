@@ -1,3 +1,4 @@
+import { agentCanvasFocusTargets, type AgentCanvasFocus } from "@/lib/canvas/agent-canvas-focus";
 import { mergeAgentCanvasEditor } from "@/lib/canvas/agent-canvas-patch";
 import { rebaseCanvasLocalEdits } from "@/lib/canvas/canvas-sync-rebase";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
@@ -98,7 +99,7 @@ export function useCanvasProjectLifecycle({
     const [addedSkills, setAddedSkills] = useState<Skill[]>([]);
     const [loadError, setLoadError] = useState("");
     const [loadAttempt, setLoadAttempt] = useState(0);
-    const [agentCreatedNodes, setAgentCreatedNodes] = useState<{ projectId: string; nodes: CanvasNodeData[] } | null>(null);
+    const [agentFocus, setAgentFocus] = useState<{ projectId: string; focus: AgentCanvasFocus } | null>(null);
     const viewportSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const observedContentRef = useRef<CanvasHistorySnapshot | null>(null);
@@ -265,9 +266,13 @@ export function useCanvasProjectLifecycle({
         connectionsRef.current = merged.connections;
         setNodes(merged.nodes);
         setConnections(merged.connections);
-        const previousIds = new Set(previous?.nodes.map((node) => node.id));
-        const created = project.nodes.filter((node) => !previousIds.has(node.id));
-        if (created.length) setAgentCreatedNodes({ projectId: project.id, nodes: created });
+        const focus = agentCanvasFocusTargets(previous, project);
+        if (focus) {
+            // 镜头跟随编辑器里的实际位置：用户可能正拖着其中某个节点。
+            const liveById = new Map(merged.nodes.map((node) => [node.id, node]));
+            const nodes = focus.nodes.map((node) => liveById.get(node.id)).filter((node): node is CanvasNodeData => Boolean(node));
+            if (nodes.length) setAgentFocus({ projectId: project.id, focus: { ...focus, nodes } });
+        }
     }), [projectId, projectLoaded, nodesRef, connectionsRef, chatSessionsRef, activeChatIdRef, canvasAppearance, backgroundMode, showImageInfo, setNodes, setConnections, setChatSessions, setActiveChatId, setCanvasAppearance, setBackgroundMode, setShowImageInfo]);
 
     useEffect(() => {
@@ -416,7 +421,7 @@ export function useCanvasProjectLifecycle({
         loadError,
         retryLoad: () => setLoadAttempt((attempt) => attempt + 1),
         addedSkills,
-        agentCreatedNodes: agentCreatedNodes?.projectId === projectId ? agentCreatedNodes.nodes : null,
+        agentFocus: agentFocus?.projectId === projectId ? agentFocus.focus : null,
         clearCanvasFiles,
         createAndOpenProject,
         currentProject,

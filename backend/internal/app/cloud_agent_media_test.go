@@ -1035,6 +1035,68 @@ func TestCloudAgentMediaCancellationUpdatesNode(t *testing.T) {
 	}
 }
 
+// 停止本轮（或用户想撤回插话时误点停止）不能把已经提交上游、可能已计费的媒体任务
+// 一起取消：任务继续生成，结果照常回写画布，收尾等它结束后再完成。
+func TestCloudAgentStopKeepsSubmittedMediaTask(t *testing.T) {
+	s, db, a := agentMediaFixture(t)
+	s.closeApprovedCloudAgentMediaWaiters()
+	run, _ := agentMediaRun(t, s, a, "request_approval")
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	approveAgentMediaDraft(t, s, run.ID)
+	run, state := agentInterjectionState(t, s, run.ID)
+	taskID := state.MediaTaskID
+	if taskID == "" {
+		t.Fatal("approved task missing")
+	}
+	if err := db.Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]any{"status": model.TaskStatusRunning, "stage": "上游生成中", "provider_request_id": "upstream-1"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CancelCloudAgent(context.Background(), "user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	task, err := s.repo.TaskForUser("user", taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.Status != model.TaskStatusRunning {
+		t.Fatalf("submitted media task was cancelled with the run: %s", task.Status)
+	}
+	run, state = agentInterjectionState(t, s, run.ID)
+	if run.Status != "cancelled" || !run.CleanupPending || state.MediaTaskID != taskID {
+		t.Fatalf("stop must wait for the submitted media: status=%s cleanup=%v media=%s", run.Status, run.CleanupPending, state.MediaTaskID)
+	}
+	notice := false
+	for _, event := range state.Events {
+		if event.Type == "run_cancelled" && event.Payload["mediaContinues"] == true {
+			notice = true
+		}
+	}
+	if !notice {
+		t.Fatal("stop did not tell the user the billed media continues")
+	}
+	if err := db.Create(&model.Resource{ID: "stop-output", UserID: "user", Kind: "video", Status: "ready", MimeType: "video/mp4"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": `{"mode":"video","video":{"storageKey":"resource:stop-output"}}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, state = agentInterjectionState(t, s, run.ID)
+	if run.Status != "cancelled" || run.CleanupPending || state.MediaTaskID != "" {
+		t.Fatalf("cleanup did not finish after media completed: status=%s cleanup=%v media=%s", run.Status, run.CleanupPending, state.MediaTaskID)
+	}
+	canvas, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
+	doc, _ := creationDocument(canvas.PayloadJSON)
+	nodes, _ := creationObjects(doc["nodes"])
+	if meta := nodes[a.NodeID]["metadata"].(map[string]any); meta["status"] != "success" {
+		t.Fatalf("finished media was not written back: %+v", meta["status"])
+	}
+}
+
 func TestCloudAgentStoryboardPrecisionAndPermission(t *testing.T) {
 	storyboard := map[string]any{"rows": []any{
 		map[string]any{"id": "shot-1", "shotNumber": float64(1), "videoMotionPrompt": strings.Repeat("切镜指令", 500), "assetBindings": []any{map[string]any{"nodeId": "hero", "role": "character", "url": "do-not-expose"}}, "private": "do-not-expose"},

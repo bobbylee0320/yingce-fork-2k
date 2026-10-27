@@ -560,7 +560,7 @@ export function AssetLibraryPickerModal({
                                             aria-pressed={category === "archived"}
                                             onClick={() => setCategory("archived")}
                                         >
-                                            <span className="assets-filter-item-label flex items-center gap-1.5">
+                                            <span className="assets-filter-item-label flex items-center gap-2">
                                                 <Trash2 className="size-3.5" />
                                                 <span>回收站</span>
                                             </span>

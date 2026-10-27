@@ -67,15 +67,15 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
             className="aceternity-floating-panel w-[580px] max-w-full overflow-hidden rounded-[var(--r-2xl)] border backdrop-blur-2xl"
             style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
         >
-            <div className="flex h-11 items-center gap-1.5 border-b px-2.5" style={{ borderColor: theme.toolbar.border }}>
-                <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex h-11 items-center gap-2 border-b px-2" style={{ borderColor: theme.toolbar.border }}>
+                <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {characters.map((character) => (
                         <motion.button
                             key={character.id}
                             type="button"
                             layout
                             whileTap={reducedMotion ? undefined : { scale: 0.96 }}
-                            className="relative flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] border px-1.5 pr-2 text-[var(--fs-label)] font-medium outline-none"
+                            className="relative flex h-8 shrink-0 items-center gap-2 rounded-[var(--dock-item-radius)] border px-2 pr-2 text-[var(--fs-label)] font-medium outline-none"
                             style={{ background: activeCharacterId === character.id ? theme.toolbar.activeBg : theme.spatial.surface, borderColor: activeCharacterId === character.id ? theme.spatial.glowStrong : theme.toolbar.border }}
                             onClick={() => onSelectCharacter(character.id)}
                         >
@@ -84,14 +84,14 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
                             <span>{character.name}</span>
                         </motion.button>
                     ))}
-                    <button type="button" className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] border px-2 text-[var(--fs-label)] font-medium opacity-70 transition hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onManualSelect}>
+                    <button type="button" className="flex h-8 shrink-0 items-center gap-2 rounded-[var(--dock-item-radius)] border px-2 text-[var(--fs-label)] font-medium opacity-70 transition hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onManualSelect}>
                         <ScanFace className="size-3.5" />手动框选
                     </button>
                 </div>
                 <button type="button" aria-label="关闭情绪调节" className="grid size-7 shrink-0 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose}><X className="size-3.5" /></button>
             </div>
 
-            <div className="grid h-[216px] grid-cols-[minmax(0,1fr)_212px] gap-2.5 p-2.5">
+            <div className="grid h-[216px] grid-cols-[minmax(0,1fr)_212px] gap-2 p-2">
                 <EmotionHeadPreview preset={preset} />
                 <EmotionPad preset={preset} onChange={onPresetChange} />
             </div>
@@ -107,7 +107,7 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
                     disabled={generating}
                     whileHover={reducedMotion || generating ? undefined : { y: -1 }}
                     whileTap={reducedMotion || generating ? undefined : { scale: 0.97 }}
-                    className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] px-3 text-[var(--fs-label)] font-semibold disabled:cursor-wait disabled:opacity-55"
+                    className="flex h-8 shrink-0 items-center gap-2 rounded-[var(--dock-item-radius)] px-3 text-[var(--fs-label)] font-semibold disabled:cursor-wait disabled:opacity-55"
                     style={{ background: theme.node.activeStroke, color: theme.node.panel }}
                     onClick={onConfirm}
                 >
@@ -144,7 +144,7 @@ function EmotionPad({ preset, onChange }: { preset: CanvasEmotionPreset; onChang
     const selectedColumn = 2 - preset.intimacy;
     const selectedRow = 2 - preset.arousal;
     return (
-        <div className="relative rounded-[var(--r-lg)] border px-[25px] pb-[22px] pt-[24px]" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border }}>
+        <div className="relative rounded-[var(--r-lg)] border px-6 pb-6 pt-[24px]" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border }}>
             <span className="pointer-events-none absolute inset-x-0 top-1.5 text-center text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>激动</span>
             <span className="pointer-events-none absolute inset-x-0 bottom-1.5 text-center text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>平静</span>
             <span className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 text-[var(--fs-micro)] [writing-mode:vertical-rl]" style={{ color: theme.node.muted }}>亲近</span>

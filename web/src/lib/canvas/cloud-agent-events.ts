@@ -147,6 +147,23 @@ export function applyAgentEvent(
         setPrompt?.((current) => (current.trim() ? current : text));
         return;
     }
+    if (event.type === "user_interjection_delivered") {
+        // 送达后已进入模型上下文，撤回入口必须消失。
+        const messageId = String(payload.messageId || "");
+        setMessages((current) => current.map((item) => (item.id === messageId && item.interjection === "sent" ? { ...item, interjection: "delivered" as const } : item)));
+        return;
+    }
+    if (event.type === "user_interjection_withdrawn") {
+        const messageId = String(payload.messageId || "");
+        setMessages((current) => current.map((item) => (item.id === messageId ? { ...item, interjection: "withdrawn" as const } : item)));
+        // 撤回的原话放回输入框，便于修改后重新插话；用户已经在输入新内容时不覆盖。
+        setPrompt?.((current) => (current.trim() ? current : text));
+        return;
+    }
+    if (event.type === "run_cancelled") {
+        setMessages((current) => appendUniqueMessage(current, { id: event.eventId, role: "system", text: text || "已停止本轮" }));
+        return;
+    }
     if (event.type === "context_compaction_requested") {
         const id = compactionMessageID(event, payload);
         const compactionId = typeof payload.compactionId === "string" ? payload.compactionId : undefined;

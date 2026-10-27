@@ -279,7 +279,7 @@ export function MediaConversionNodeContent({ node, theme }: MediaConversionNodeC
 
     return (
         <div
-            className="flex h-full min-h-0 w-full flex-col gap-2.5 overflow-hidden rounded-[inherit] p-3"
+            className="flex h-full min-h-0 w-full flex-col gap-2 overflow-hidden rounded-[inherit] p-3"
             style={{ background: theme.node.panel, color: theme.node.text }}
             onPointerDown={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
@@ -308,7 +308,7 @@ export function MediaConversionNodeContent({ node, theme }: MediaConversionNodeC
                             {input?.type === CanvasNodeType.Video ? <Video className="size-8 opacity-35" aria-hidden="true" /> : <ImageIcon className="size-8 opacity-35" aria-hidden="true" />}
                         </div>
                     )}
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/75 to-transparent px-2.5 pb-2 pt-8 text-white">
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/75 to-transparent px-2 pb-2 pt-8 text-white">
                         <div className="min-w-0">
                             <div className="truncate text-[var(--fs-micro)] font-semibold">{displayResult ? (status === "stale" ? "上次结果 · 待更新" : "转换结果") : input?.title || "等待输入"}</div>
                             <div className="mt-0.5 truncate text-[var(--fs-micro)] opacity-75">{hasMultipleInputs ? "已连接多个输入" : input ? `${input.type === CanvasNodeType.Video ? "视频" : "图片"} · ${previewStatusText}` : "连接图片或视频节点"}</div>
@@ -355,7 +355,7 @@ export function MediaConversionNodeContent({ node, theme }: MediaConversionNodeC
                 {showRuntimeRecovery ? (
                     <button
                         type="button"
-                        className="shrink-0 rounded-[var(--r-sm)] px-1.5 py-0.5 font-semibold outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10"
+                        className="shrink-0 rounded-[var(--r-sm)] px-2 py-0.5 font-semibold outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10"
                         style={{ color: theme.accent.primary, outlineColor: theme.accent.primary }}
                         disabled={localRuntimeConnecting}
                         onClick={(event) => { event.stopPropagation(); void retryLocalRuntime(); }}
@@ -474,7 +474,7 @@ function OperationPicker({ theme, nodeId, value, disabled, onSelect }: { theme: 
                                       type="button"
                                       role="option"
                                       aria-selected={selected}
-                                      className="flex w-full min-w-0 items-center gap-2 rounded-[var(--r-md)] px-2.5 py-2 text-left transition"
+                                      className="flex w-full min-w-0 items-center gap-2 rounded-[var(--r-md)] px-2 py-2 text-left transition"
                                       style={{ background: selected ? theme.toolbar.itemHover : "transparent", color: selected ? theme.toolbar.activeText : theme.node.text }}
                                       onMouseEnter={(event) => {
                                           event.currentTarget.style.background = theme.toolbar.itemHover;
@@ -504,7 +504,7 @@ function OperationPicker({ theme, nodeId, value, disabled, onSelect }: { theme: 
 
     return (
         <div className={`relative ${open ? "z-[var(--z-toast)]" : ""}`}>
-            <div className="mb-1.5 px-0.5 text-[var(--fs-micro)] font-medium" style={{ color: theme.node.muted }}>转换方式</div>
+            <div className="mb-2 px-0.5 text-[var(--fs-micro)] font-medium" style={{ color: theme.node.muted }}>转换方式</div>
             <button
                 ref={triggerRef}
                 id={`${nodeId}-operation`}
@@ -514,7 +514,7 @@ function OperationPicker({ theme, nodeId, value, disabled, onSelect }: { theme: 
                 aria-controls={open ? `${nodeId}-operation-menu` : undefined}
                 disabled={disabled}
                 data-canvas-no-zoom
-                className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-[var(--r-md)] border px-2.5 text-left outline-none transition hover:brightness-[1.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-[var(--r-md)] border px-2 text-left outline-none transition hover:brightness-[1.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 style={{
                     borderColor: open ? theme.accent.primary : theme.node.edge,
                     background: open ? theme.toolbar.itemHover : theme.node.fill,

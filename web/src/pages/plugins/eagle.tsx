@@ -204,8 +204,8 @@ export default function EagleLibraryPage() {
 
                         <section className="min-w-0">
                             <nav aria-label="Eagle 文件夹路径" className="mb-3 flex min-w-0 items-center gap-1 text-xs text-foreground/48">
-                                <button type="button" className="truncate rounded px-1.5 py-1 hover:bg-surface-hover" onClick={() => handleFolderSelect("root")}>Eagle 素材库</button>
-                                {folderPath.map((folder) => <span key={folder.id} className="contents"><span aria-hidden="true">/</span><button type="button" className="truncate rounded px-1.5 py-1 font-medium text-foreground hover:bg-surface-hover" onClick={() => handleFolderSelect(folder.id)}>{folder.name}</button></span>)}
+                                <button type="button" className="truncate rounded px-2 py-1 hover:bg-surface-hover" onClick={() => handleFolderSelect("root")}>Eagle 素材库</button>
+                                {folderPath.map((folder) => <span key={folder.id} className="contents"><span aria-hidden="true">/</span><button type="button" className="truncate rounded px-2 py-1 font-medium text-foreground hover:bg-surface-hover" onClick={() => handleFolderSelect(folder.id)}>{folder.name}</button></span>)}
                             </nav>
 
                             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -260,13 +260,13 @@ function EagleItemCard({ item, selected, onOpen }: { item: ExternalAssetItem; se
             </span>
             {item.fileUrl ? <a href={item.fileUrl} download={item.title} target="_blank" rel="noreferrer" className="eagle-cover-download" aria-label={"下载原文件：" + item.title}><Download className="size-3.5" aria-hidden="true" /></a> : null}
         </AssetLibraryCardMedia>
-        <button type="button" className="block w-full px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={onOpen}>
+        <button type="button" className="block w-full px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={onOpen}>
             <div className="flex min-w-0 items-center justify-between gap-2">
                 <h2 className="truncate text-[var(--fs-body)] font-semibold text-foreground" title={item.title}>{item.title}</h2>
                 <span className="shrink-0 text-[var(--fs-tiny)] tabular-nums text-foreground/38">{formatBytes(item.bytes || 0)}</span>
             </div>
             <div className="mt-1 truncate text-[var(--fs-label)] text-foreground/52" title={item.folderPath?.join(" / ") || "Eagle 根目录"}>{item.folderPath?.join(" / ") || "Eagle 根目录"}</div>
-            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[var(--fs-tiny)] text-foreground/38">
+            <div className="mt-1 flex min-w-0 items-center gap-2 text-[var(--fs-tiny)] text-foreground/38">
                 <span className="truncate">{formatDimensions(item)}</span>
                 <span aria-hidden="true">·</span>
                 <span className="truncate">Eagle 原文件</span>
@@ -295,7 +295,7 @@ function EagleAssetDrawer({ item, onClose, totalBytes }: { item: ExternalAssetIt
                 <EagleFact label="所在文件夹" value={item.folderPath?.join(" / ") || "Eagle 根目录"} />
                 <EagleFact label="素材库总大小" value={formatBytes(totalBytes)} />
             </div>
-            {item.tags?.length ? <div><Typography.Text strong className="text-xs">标签</Typography.Text><div className="mt-2 flex flex-wrap gap-1.5">{item.tags.map((tag) => <Tag key={tag} className="m-0">{tag}</Tag>)}</div></div> : null}
+            {item.tags?.length ? <div><Typography.Text strong className="text-xs">标签</Typography.Text><div className="mt-2 flex flex-wrap gap-2">{item.tags.map((tag) => <Tag key={tag} className="m-0">{tag}</Tag>)}</div></div> : null}
             {item.description ? <div><Typography.Text strong className="text-xs">备注</Typography.Text><p className="mt-2 text-sm leading-6 text-foreground/65">{item.description}</p></div> : null}
             {item.fileUrl ? <a href={item.fileUrl} download={item.title} target="_blank" rel="noreferrer" className="eagle-drawer-download inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><Download className="size-4" aria-hidden="true" />下载 Eagle 原文件</a> : null}
         </div> : null}

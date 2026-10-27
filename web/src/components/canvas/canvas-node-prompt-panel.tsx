@@ -331,10 +331,10 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                 </>
             ) : (
                 <div className="canvas-node-composer-mode">
-                    <span className="grid size-3.5 shrink-0 place-items-center" style={{ color: monochromeAccent }}>
+                    <span className="canvas-node-composer-mode-icon" style={{ color: monochromeAccent }}>
                         <GenerationModeIcon mode={mode} />
                     </span>
-                    <span className="truncate text-[var(--fs-tiny)] font-medium">{modeDisplayName(mode)}生成</span>
+                    <span className="canvas-node-composer-mode-title truncate">{modeDisplayName(mode)}生成</span>
                     {activeReferenceCount > 0 ? <span className="canvas-node-composer-reference-heading">{referenceShelfHeading(activeReferences)}</span> : null}
                 </div>
             )}
@@ -353,24 +353,28 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                 <Tooltip title="用 AI 润色提示词">
                     <button
                         type="button"
-                        className="canvas-node-composer-header-action inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5"
+                        className="canvas-node-composer-header-action is-labeled"
                         onClick={() => setPromptOptimizerOpen(true)}
                         aria-label="润色提示词"
                     >
-                        <WandSparkles className="size-3" />
-                        <span className="text-[var(--fs-tiny)] font-medium">润色</span>
+                        <WandSparkles />
+                        <span>润色</span>
                     </button>
                 </Tooltip>
             ) : null}
+                {/* 工具类操作与窗口类操作（放大/关闭）分组，避免关闭按钮混在命令里。 */}
+                {!expanded && (canExpandPrompt || onClose) && ((!simpleMode && (mode === "image" || mode === "video")) || showPromptTemplates || canOptimizePrompt) ? (
+                    <span className="canvas-node-composer-header-divider" aria-hidden />
+                ) : null}
                 {!expanded && canExpandPrompt ? (
                     <Tooltip title="放大编辑">
                         <button
                             type="button"
-                            className="canvas-node-composer-header-action grid size-6 shrink-0 place-items-center rounded-md"
+                            className="canvas-node-composer-header-action is-icon"
                             onClick={() => setExpandedPromptOpen(true)}
                             aria-label="放大编辑提示词"
                         >
-                            <Maximize2 className="size-3" />
+                            <Maximize2 />
                         </button>
                     </Tooltip>
                 ) : null}
@@ -378,11 +382,11 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                     <Tooltip title="关闭">
                         <button
                             type="button"
-                            className="canvas-node-composer-header-action grid size-6 shrink-0 place-items-center rounded-md"
+                            className="canvas-node-composer-header-action is-icon"
                             onClick={onClose}
                             aria-label="关闭创作面板"
                         >
-                            <X className="size-3" />
+                            <X />
                         </button>
                     </Tooltip>
                 ) : null}
@@ -443,7 +447,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
             <div className="canvas-node-composer-footer">
                 <div className={expanded ? "min-w-0 flex-1" : "canvas-node-composer-model"}>
                     <ModelPicker
-                        className="!h-7 !w-full !min-w-0 !text-[var(--fs-tiny)] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3"
+                        className="canvas-node-composer-model-trigger !h-8 !w-full !min-w-0 !text-[var(--fs-tiny)] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3"
                         fullWidth
                         config={config}
                         value={config.model}
@@ -494,7 +498,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                                         className="!w-14 !h-7 [&_.ant-input-number-input]:!text-[var(--fs-tiny)]"
                                     />
                                 </Tooltip>
-                            ) : <span className="text-[10px]" style={{ color: theme.node.muted }}>行数和列结构由模型判断</span>}
+                            ) : <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>行数和列结构由模型判断</span>}
                         </>
                     ) : mode === "image" ? (
                         // 图片模式下，显示相机配置与镜头配置
@@ -560,8 +564,8 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                         onContentSizeChange={expanded ? setExpandedPromptContentHeight : setPromptContentHeight}
                         containerClassName="min-h-0 flex-1"
                         className={expanded
-                            ? "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-2.5 text-[var(--fs-body-lg)] leading-6 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
-                            : "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-2.5 py-1.5 text-[var(--fs-body)] leading-5 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"}
+                            ? "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-2 text-[var(--fs-body-lg)] leading-6 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
+                            : "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-2 py-2 text-[var(--fs-body)] leading-5 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"}
                         style={{ color: theme.node.text, outline: "none", boxShadow: "none" }}
                         placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
                         aria-label={`${modeDisplayName(mode)}提示词`}
@@ -607,7 +611,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                 <div className="canvas-node-composer-parameters overflow-hidden">
                     <button
                         type="button"
-                        className="canvas-node-composer-parameters-toggle flex w-full items-center gap-1.5 rounded-[var(--r-md)] px-2 py-1 text-[var(--fs-micro)] font-medium transition-colors"
+                        className="canvas-node-composer-parameters-toggle flex w-full items-center gap-2 rounded-[var(--r-md)] px-2 py-1 text-[var(--fs-micro)] font-medium transition-colors"
                         style={{ color: theme.node.muted }}
                         onClick={() => setParamsExpanded(!paramsExpanded)}
                         aria-expanded={paramsExpanded}
@@ -647,7 +651,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                 }}
             >
                 <div ref={expandedModalRef} className="relative flex min-h-0 flex-col" style={{ ...composerTokens, color: theme.node.text, maxHeight: `calc(100dvh - ${PROMPT_EDITOR_VIEWPORT_MARGIN}px)`, ...(expandedModalSize ? { height: expandedModalSize.height } : null) }}>
-                    <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3">
+                    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
                         <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
                         {renderPromptEditor(true, Boolean(expandedModalSize))}
                         {hasVideoPromptTools ? (

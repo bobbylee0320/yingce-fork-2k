@@ -55,6 +55,7 @@ export const getGenerationAssetDefaults = () => undefined;
 export const appQueryClient = { invalidateQueries: async () => {} };
 export const repairMissingCanvasAssets = () => ({ createdAssets: 0, updatedProjects: 0 });
 export const rebindInconsistentCanvasAssets = () => ({ createdAssets: 0, updatedProjects: 0, reboundNodes: 0 });
+export const canvasPromptAssetMentionIds = text => [...new Set([...String(text).matchAll(/@\\[asset:([^\\]]+)\\]/g)].map(match => match[1]).filter(id => id === id.trim()))];
 export class ApiError extends Error { retryable = false; constructor(message, options = {}) { super(message); Object.assign(this, options); } }
 export const apiBaseURL = "/api";
 const unexpected = () => { throw new Error("unexpected dependency call"); };

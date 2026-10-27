@@ -1,4 +1,4 @@
-import { App, Button, Input, Modal } from "antd";
+import { Alert, App, Button, Input, Modal } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Download, Eye, Search, Trash2 } from "lucide-react";
 import { saveAs } from "file-saver";
@@ -199,6 +199,7 @@ export default function StorageResourcesPanel() {
                 <AdminStatTile label="实际可用体积" value={stats ? formatBytes(stats.physicalBytes) : "--"} detail="仅统计已就绪资源" />
                 <AdminStatTile label="存储分布" value={stats ? formatBytes(stats.remoteBytes) : "--"} detail={stats ? `本地 ${formatBytes(stats.localBytes)} · 远端` : undefined} />
             </div>
+            {stats?.offload && (stats.offload.pending > 0 || stats.offload.failed > 0) ? <OffloadAlert offload={stats.offload} /> : null}
             <AdminDataTable
                 toolbar={
                     <div className="admin-storage-resource-filters">
@@ -389,4 +390,12 @@ function formatDuration(durationMs: number) {
     const seconds = Math.round(durationMs / 1000);
     const minutes = Math.floor(seconds / 60);
     return minutes > 0 ? `${minutes}:${String(seconds % 60).padStart(2, "0")}` : `${seconds} 秒`;
+}
+
+function OffloadAlert({ offload }: { offload: AdminStorageStats["offload"] }) {
+    const parts = [`${offload.pending.toLocaleString()} 个作品（${formatBytes(offload.pendingBytes)}）等待同步到对象存储`];
+    if (offload.oldestPending) parts.push(`最早一条保存于 ${new Date(offload.oldestPending).toLocaleString("zh-CN", { hour12: false })}`);
+    if (offload.lastErrorCode) parts.push(`最近错误 ${offload.lastErrorCode}`);
+    const failed = offload.failed > 0 ? `另有 ${offload.failed.toLocaleString()} 个作品的本地文件丢失，无法自动同步，请在请求日志中按任务排查。` : undefined;
+    return <Alert type={offload.failed > 0 ? "error" : "warning"} showIcon message="对象存储写入失败，部分作品暂存在服务器" description={[parts.join("；") + "。用户访问不受影响，存储恢复后会自动同步。", failed].filter(Boolean).join(" ")} />;
 }

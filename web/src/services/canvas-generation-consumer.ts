@@ -165,7 +165,7 @@ export async function applyCanvasGenerationTaskNodeEffect(input: {
     const node = await prepareCanvasMediaNodeAsset(input.projectId, applied.node, input.signal);
     const additionalNodes = await Promise.all(applied.additionalNodes.map((child) => prepareCanvasMediaNodeAsset(input.projectId, child, input.signal)));
     throwIfAborted(input.signal);
-    const imageBatchRootId = generationTaskInput(input.task)?.metadata?.edit === "mask" ? before.metadata?.batchRootId : undefined;
+    const imageBatchRootId = ["mask", "region"].includes(generationTaskInput(input.task)?.metadata?.edit || "") ? before.metadata?.batchRootId : undefined;
     const previousNodes = input.nodesRef.current;
     if (groupChanged(previousNodes)) throw new CanvasGenerationDurableAckError(new Error("图层已修改，请按当前图层重新读取结果"));
     const nodes = commitCanvasGenerationResult(previousNodes, before, node, input.task.id, additionalNodes);

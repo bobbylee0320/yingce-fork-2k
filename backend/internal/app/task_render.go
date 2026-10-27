@@ -88,7 +88,8 @@ func (w *taskWorkerCoordinator) processTimelineRender(task *model.Task, ctx cont
 	}
 	durationMs := planDurationMs(plan)
 	fileName := fmt.Sprintf("timeline-render-%s.mp4", time.Now().Format("20060102-150405"))
-	resource, _, err := s.storeResource(task.UserID, "media", fileName, "video/mp4", stat.Size(), renderWidth, renderHeight, durationMs, file, nil, false)
+	outWidth, outHeight := plan.size()
+	resource, _, err := s.storeResource(task.UserID, "media", fileName, "video/mp4", stat.Size(), outWidth, outHeight, durationMs, file, nil, false)
 	if err != nil || resource == nil {
 		return w.failTimelineTask(task, "渲染失败", "保存渲染产物失败")
 	}
@@ -131,7 +132,7 @@ func renderFfmpegBinary() (string, error) {
 	}
 	path, err := exec.LookPath("ffmpeg")
 	if err != nil {
-		return "", fmt.Errorf("渲染依赖未安装（需要 ffmpeg，可通过 %s 指定）", renderFfmpegEnv)
+		return "", fmt.Errorf("后端未安装 ffmpeg（安装后重试，或通过 %s 指定路径）", renderFfmpegEnv)
 	}
 	return path, nil
 }
@@ -145,8 +146,14 @@ func materializeRenderSources(ctx context.Context, s *Service, userID string, pl
 	}
 	cleanup := func() { _ = os.RemoveAll(tmpDir) }
 	cache := map[string]string{}
+	segments := make([]*renderSegment, 0, len(plan.Segments)+len(plan.AudioOverlays))
 	for i := range plan.Segments {
-		seg := &plan.Segments[i]
+		segments = append(segments, &plan.Segments[i])
+	}
+	for i := range plan.AudioOverlays {
+		segments = append(segments, &plan.AudioOverlays[i])
+	}
+	for _, seg := range segments {
 		resourceID, ok := mediaResourceID(seg.Clip)
 		if !ok {
 			// 无可用媒体引用时渲染为黑场段，保证时间轴连续。
@@ -154,12 +161,16 @@ func materializeRenderSources(ctx context.Context, s *Service, userID string, pl
 		}
 		path, cached := cache[resourceID]
 		if !cached {
-			_, reader, err := s.OpenResource(userID, resourceID)
+			resource, reader, err := s.OpenResource(userID, resourceID)
 			if err != nil || reader == nil {
 				cleanup()
 				return "", nil, fmt.Errorf("无法读取时间线引用的媒体，可能已被删除")
 			}
-			ext := extForMime("video/mp4")
+			// 扩展名决定 ffmpeg 的解复用器；图片以 .mp4 命名会让 -loop 输入失败。
+			ext := extForMime(resource.MimeType)
+			if strings.HasPrefix(resource.MimeType, "image/") {
+				ext = "." + strings.TrimPrefix(strings.SplitN(resource.MimeType, ";", 2)[0], "image/")
+			}
 			path = filepath.Join(tmpDir, fmt.Sprintf("src-%d%s", len(cache), ext))
 			file, err := os.Create(path)
 			if err != nil {

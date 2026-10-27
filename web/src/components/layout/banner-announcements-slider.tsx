@@ -74,7 +74,7 @@ export function BannerAnnouncementsSlider() {
     // 底色随每条通知的类型切换：加过渡让不同风格的条目轮播时平滑换色，与标题动画节奏一致。
     return (
         <div
-            className="relative flex min-h-10 w-full shrink-0 items-center justify-center px-4 py-2 text-white transition-colors duration-300 ease-out"
+            className="relative flex min-h-10 w-full shrink-0 items-center justify-center px-4 py-2 text-white transition-colors duration-200 ease-out"
             style={bannerAnnouncementBarStyle(currentBanner.noticeType)}
         >
             <button
@@ -84,7 +84,7 @@ export function BannerAnnouncementsSlider() {
                 className="group flex h-full w-full min-w-0 items-center justify-center px-8 transition-opacity enabled:hover:opacity-90 disabled:cursor-default"
                 title={hasLink ? "点击查看详情" : undefined}
             >
-                <span className="flex min-w-0 items-center justify-center gap-2.5">
+                <span className="flex min-w-0 items-center justify-center gap-2">
                     {/* 标题内容区：通过外层弹性居中对齐，不用固定高度控制 */}
                     <span className="relative flex min-w-0 items-center justify-center">
                         <AnimatePresence mode="wait">
@@ -93,14 +93,14 @@ export function BannerAnnouncementsSlider() {
                                 initial={reducedMotion ? { opacity: 0, y: 0 } : { opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={reducedMotion ? { opacity: 0, y: 0 } : { opacity: 0, y: -10 }}
-                                transition={{ duration: 0.3, ease: "easeOut" }}
+                                transition={{ duration: 0.2, ease: "easeOut" }}
                                 className="inline-flex items-center justify-center truncate font-semibold tracking-wide drop-shadow-sm"
                             >
                                 <BannerAnnouncementTitle runs={currentBanner.titleRuns} fallbackText={currentBanner.title} />
                             </motion.span>
                         </AnimatePresence>
                     </span>
-                    {hasLink ? <BannerAnnouncementLinkHint chevronClassName="size-3.5 transition-transform group-hover:translate-x-0.5" /> : null}
+                    {hasLink ? <BannerAnnouncementLinkHint chevronClassName="size-3.5 opacity-80 transition-opacity duration-150 group-hover:opacity-100" /> : null}
                 </span>
             </button>
             <button

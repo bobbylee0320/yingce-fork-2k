@@ -223,7 +223,7 @@ export function PanoramaNodeContent({ node, theme, disableMediaEffects }: Panora
                 onClose={() => setActive(false)}
                 closeLabel="退出环视"
             />
-            <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/55 px-2 py-0.5 text-[10px] text-white/70 backdrop-blur-sm">
+            <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/55 px-2 py-0.5 text-[var(--fs-label)] text-white/70 backdrop-blur-sm">
                 {projectionLabel} · 拖拽环视 · 方向键旋转
             </div>
         </div>
@@ -240,7 +240,7 @@ function PanoramaViewerToolbar({ canCapture, onScreenshot, onQuadExport, onReset
     closeLabel: string;
 }) {
     return (
-        <div className="absolute right-2.5 top-2.5 flex gap-1.5" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="absolute right-2.5 top-2.5 flex gap-2" onMouseDown={(event) => event.stopPropagation()}>
             {onExpand ? (
                 <ViewerToolbarButton title="全屏环视" onClick={onExpand}><Maximize2 className="size-4" /></ViewerToolbarButton>
             ) : null}

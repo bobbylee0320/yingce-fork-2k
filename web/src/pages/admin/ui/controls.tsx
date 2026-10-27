@@ -80,7 +80,7 @@ export function Checkbox(props: Parameters<typeof AdminCheckbox>[0]) {
     return <AdminCheckbox {...props} />;
 }
 
-export function AdminTooltip({ title, placement = "top", delay = 80, children }: { title?: ReactNode; placement?: "top" | "right" | "bottom" | "left"; delay?: number; children: ReactNode }) {
+export function AdminTooltip({ title, placement = "top", delay = 500, children }: { title?: ReactNode; placement?: "top" | "right" | "bottom" | "left"; delay?: number; children: ReactNode }) {
     if (!title) return <>{children}</>;
     return (
         <AntTooltip title={title} placement={placement} mouseEnterDelay={delay / 1000}>

@@ -80,7 +80,7 @@ export function CharacterImageLibrary({ currentResourceId, busyKey, canvasTitles
     return (
         <div className="space-y-4">
             <SearchField value={keyword} placeholder="搜索素材库图片" onChange={setKeyword} />
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-3 gap-2">
                 <FilePicker accept="image/*" onFile={onUpload}>
                     {(open) => (
                         <button
@@ -108,14 +108,8 @@ export function CharacterImageLibrary({ currentResourceId, busyKey, canvasTitles
                             onClick={() => onPick(resourceId)}
                             className={`group relative aspect-[3/4] overflow-hidden rounded-lg bg-foreground/[.05] outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--workspace-accent)] disabled:cursor-default ${current ? "ring-2 ring-[var(--workspace-accent)] ring-offset-2 ring-offset-background" : ""}`}
                         >
-                            <CachedResourceImage
-                                storageKey={asset.data.storageKey}
-                                src={asset.coverUrl}
-                                variant="thumbnail"
-                                alt={title}
-                                className="h-full w-full object-cover transition-transform duration-300 [transition-timing-function:cubic-bezier(.16,1,.3,1)] group-hover:scale-[1.04] motion-reduce:transition-none"
-                            />
-                            <span className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-1 bg-gradient-to-t from-black/75 to-transparent px-2 pb-1.5 pt-6 text-left text-[11px] text-white opacity-0 transition duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+                            <CachedResourceImage storageKey={asset.data.storageKey} src={asset.coverUrl} variant="thumbnail" alt={title} className="h-full w-full object-cover" />
+                            <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-2 pb-2 pt-6 text-left text-[var(--fs-label)] text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100 motion-reduce:transition-none">
                                 <span className="block truncate">{title}</span>
                             </span>
                             {current ? (
@@ -208,7 +202,7 @@ export function CharacterVoiceLibrary({
                     const seconds = asset.data.durationMs ? Math.round(asset.data.durationMs / 1000) : 0;
                     const title = canvasTitles?.get(resourceId) || asset.title;
                     return (
-                        <li key={asset.id} className="group flex items-center gap-3 py-2.5">
+                        <li key={asset.id} className="group flex items-center gap-3 py-2">
                             <button
                                 type="button"
                                 onClick={() => void toggle(resourceId, asset.data.storageKey)}
@@ -218,8 +212,8 @@ export function CharacterVoiceLibrary({
                                 {playing === resourceId ? <Pause className="size-3.5" /> : <Play className="size-3.5 translate-x-px" />}
                             </button>
                             <span className="min-w-0 flex-1">
-                                <span className="block truncate text-[13px] font-medium">{title}</span>
-                                <span className="text-[11px] text-foreground/40">{seconds ? `${seconds} 秒` : "音频"}</span>
+                                <span className="block truncate text-[var(--fs-ui)] font-medium">{title}</span>
+                                <span className="text-[var(--fs-label)] text-foreground/40">{seconds ? `${seconds} 秒` : "音频"}</span>
                             </span>
                             {current ? (
                                 <span className="inline-flex items-center gap-1 text-xs font-medium text-foreground/70">
@@ -231,7 +225,7 @@ export function CharacterVoiceLibrary({
                                     type="button"
                                     disabled={Boolean(busyKey)}
                                     onClick={() => onPick(resourceId, title)}
-                                    className="rounded-md px-2.5 py-1 text-xs font-medium text-foreground/55 opacity-0 outline-none transition hover:bg-foreground/[.07] hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[var(--workspace-accent)] group-hover:opacity-100 disabled:cursor-wait"
+                                    className="rounded-md px-2 py-1 text-xs font-medium text-foreground/55 opacity-0 outline-none transition hover:bg-foreground/[.07] hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[var(--workspace-accent)] group-hover:opacity-100 disabled:cursor-wait"
                                 >
                                     {busyKey === resourceId ? <Loader2 className="size-3.5 animate-spin" /> : "使用"}
                                 </button>

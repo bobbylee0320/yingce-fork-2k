@@ -32,6 +32,7 @@ const summary = (overrides: Partial<AgentConversationSummary> = {}): AgentConver
 function client(overrides: Partial<CloudAgentHistoryClient> = {}): CloudAgentHistoryClient {
     return {
         listConversations: async () => ({ items: [summary()] }),
+        getConversation: async (id) => summary({ id }),
         listRuns: async () => ({ items: [run("first")] }),
         getRun: async (id) => ({ run: run(id, { ...(id === "child" ? { parentId: "first" } : {}), eventCount: 0, events: [] }) }),
         ...overrides,
@@ -90,6 +91,68 @@ describe("Agent cloud conversation history", () => {
         });
         expect(reads).toEqual([0]);
         expect(result.messages.at(-1)?.text).toBe("完整回答");
+    });
+
+    test("long finished runs reuse the restored prefix with the tail window instead of re-reading from seq 0", async () => {
+        const events = (id: string, from: number, to: number) => Array.from({ length: to - from + 1 }, (_, index) => event(id, from + index, "assistant_delta", { messageId: `${id}-answer`, text: "字" }));
+        // 列表视图：尾部 40 条窗口，首条 seq > 1。
+        const listed = (id: string, count: number) => run(id, { eventCount: count, latestSeq: count, eventsTruncated: true, events: events(id, count - 39, count) });
+        const cached = projectCloudAgentConversation(conversationId, [run("first", { events: events("first", 1, 50) }), run("second", { parentId: "first", status: "running", events: events("second", 1, 50) })]);
+        const reads: Array<{ id: string; seq: number; fromStart?: boolean }> = [];
+        const result = await loadCloudAgentConversation(conversationId, {
+            existing: cached,
+            client: client({
+                listRuns: async () => ({ items: [listed("first", 50), { ...listed("second", 600), parentId: "first" }] }),
+                getRun: async (id, _signal, options) => {
+                    const seq = options?.sinceSeq || 0;
+                    reads.push({ id, seq, fromStart: options?.fromStart });
+                    return { run: run(id, { parentId: "first", eventCount: 600, events: events(id, seq + 1, Math.min(600, seq + 500)) }) };
+                },
+            }),
+        });
+        // 已结束的长轮次完全不请求；仍在增长的轮次只从本机前缀末尾增量读。
+        expect(reads).toEqual([
+            { id: "second", seq: 50, fromStart: false },
+            { id: "second", seq: 550, fromStart: false },
+        ]);
+        expect(result.runs?.find((item) => item.id === "first")?.events).toHaveLength(50);
+        expect(result.runs?.find((item) => item.id === "second")?.events).toHaveLength(600);
+        expect(result.lastEventSeq).toBe(600);
+    });
+
+    test("observed conversation outside the canvas directory reuses cache when its summary is unchanged", async () => {
+        const cached = projectCloudAgentConversation(conversationId, [run("first")]);
+        const calls: string[] = [];
+        const tracked = client({
+            listConversations: async () => {
+                calls.push("directory");
+                return { items: [] };
+            },
+            getConversation: async (id) => {
+                calls.push(`summary:${id}`);
+                return summary({ id, canvasId: "other-canvas" });
+            },
+            listRuns: async () => {
+                calls.push("runs");
+                return { items: [run("first")] };
+            },
+            getRun: async (id) => {
+                calls.push(`run:${id}`);
+                return { run: run(id, { eventCount: 0, events: [] }) };
+            },
+        });
+        const reused = await refreshCloudAgentConversations({ canvasId: "canvas-1", observedConversationIds: [conversationId], existing: [cached], client: tracked });
+        expect(reused[0]).toBe(cached);
+        expect(calls).toEqual(["directory", `summary:${conversationId}`]);
+        calls.length = 0;
+        const changed = await refreshCloudAgentConversations({
+            canvasId: "canvas-1",
+            observedConversationIds: [conversationId],
+            existing: [cached],
+            client: { ...tracked, getConversation: async (id) => (calls.push(`summary:${id}`), summary({ id, revision: 2 })) },
+        });
+        expect(calls).toEqual(["directory", `summary:${conversationId}`, "runs", "run:first"]);
+        expect(changed[0]).not.toBe(cached);
     });
 
     test("replays tools, plans, interjections and failure without browser side effects", () => {

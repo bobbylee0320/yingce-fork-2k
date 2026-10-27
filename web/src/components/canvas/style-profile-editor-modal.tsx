@@ -124,8 +124,8 @@ function StylePreview({ profile }: { profile: StyleProfileSnapshot }) {
             </div>
             <div className="p-4 sm:p-5">
                 <h3 className="text-base font-semibold">{profile.title || "未命名风格"}</h3>
-                <p className="mt-1.5 text-xs leading-5 text-foreground/48">{profile.description || "填写简介，让风格库中更容易判断它适合什么项目。"}</p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <p className="mt-2 text-xs leading-5 text-foreground/48">{profile.description || "填写简介，让风格库中更容易判断它适合什么项目。"}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
                     {profile.tags.length ? profile.tags.map((tag) => <span key={tag} className="rounded bg-foreground/10 px-2 py-1 text-[var(--fs-tiny)] text-foreground/58">{tag}</span>) : <span className="text-[var(--fs-tiny)] text-foreground/35">暂无标签</span>}
                 </div>
                 <dl className="mt-5 grid grid-cols-2 border-y border-border py-3 text-[var(--fs-tiny)]">
@@ -209,7 +209,7 @@ function SectionHeading({ title, description }: { title: string; description: st
 }
 
 function Field({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) {
-    return <label className={`grid gap-1.5 text-xs ${className}`}><span className="font-medium text-foreground/62">{label}</span>{children}</label>;
+    return <label className={`grid gap-2 text-xs ${className}`}><span className="font-medium text-foreground/62">{label}</span>{children}</label>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

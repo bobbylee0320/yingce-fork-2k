@@ -219,6 +219,26 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"files": files})
 	})
 
+	r.PUT("/skills/:id/files", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, service.SkillPackageEditMaxBytes)
+		var req service.SkillPackageEditRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			failService(c, service.BadAuthRequest("技能文件修改数据格式无效或超过大小限制"))
+			return
+		}
+		result, err := svc.EditSkillPackageFiles(user.ID, c.Param("id"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+
 	r.GET("/skills/:id/file", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

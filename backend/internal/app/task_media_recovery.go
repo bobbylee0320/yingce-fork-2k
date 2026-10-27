@@ -25,8 +25,17 @@ type mediaCheckpoint struct {
 	Attempts       int                   `json:"attempts"`
 	ManualAttempts int                   `json:"manualAttempts"`
 	LastManualAt   time.Time             `json:"lastManualAt"`
-	WaitingForSlot bool                  `json:"waitingForSlot,omitempty"`
+	// WaitingForSlot 表示本次失败只因保存并发已满，排队时间不应消耗实际传输重试窗口。
+	WaitingForSlot bool `json:"waitingForSlot,omitempty"`
+	// RefundedBilling 是管理员恢复已退款订单时的计费决定：charge 补扣，waive 免除。
+	// 为空时，已退款订单交付成功后也不会自动补扣。
+	RefundedBilling string `json:"refundedBilling,omitempty"`
 }
+
+const (
+	refundedBillingCharge = "charge"
+	refundedBillingWaive  = "waive"
+)
 
 type mediaCheckpointItem struct {
 	Reference  protocol.MediaReference `json:"reference"`
@@ -60,6 +69,10 @@ func mediaStageLabel(stage string) string {
 		return "保存本地文件失败"
 	case "register":
 		return "登记作品失败"
+	case "local_fallback":
+		return "本地兜底保存失败"
+	case "offload":
+		return "同步对象存储失败"
 	default:
 		return "记录恢复信息失败"
 	}
@@ -236,8 +249,15 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 				return nil, err
 			}
 			started := time.Now()
-			resource, err = s.storeTaskMediaFile(task, index, path, item.MIMEType, checkpoint.Mode, resource)
-			s.logMediaStage(*task, stage, started, err)
+			var fallbackCause error
+			resource, fallbackCause, err = s.storeTaskMediaFile(task, index, path, item.MIMEType, checkpoint.Mode, resource)
+			if fallbackCause != nil {
+				// 直传失败已由本地兜底接住：分别记录失败的上传和成功的兜底保存。
+				s.logMediaStage(*task, stage, started, fallbackCause)
+				s.logMediaStage(*task, "local_fallback", started, nil)
+			} else {
+				s.logMediaStage(*task, stage, started, err)
+			}
 			if err != nil {
 				return nil, &mediaRecoveryError{stage: stage, retryable: retryableMediaRecovery(err), cause: err}
 			}
@@ -266,6 +286,10 @@ var errMediaRecoveryBusy = errors.New("作品保存并发已满")
 
 func retryableMediaRecovery(err error) bool {
 	if retryableProtocolMediaDownload(err) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	// 对象存储的 503 / 限流 / 超时由各家 SDK 的错误类型表达，不是 providerHTTPError。
+	if classifyStorageError(err).Transient {
 		return true
 	}
 	var upstream providerHTTPError
@@ -398,6 +422,103 @@ func (s *Service) RecoverTaskMedia(userID, id string) (*model.Task, error) {
 	return taskForOutput(*next), nil
 }
 
+// AdminRecoverTaskMedia 由管理员把“作品已生成但保存失败”的任务重新排队保存。
+// 与用户重试不同：不受手动次数限制，重新给满自动重试窗口，并且可以处理已退款订单。
+// 订单已退款时必须明确选择补扣（charge）或免除（waive）。
+func (s *Service) AdminRecoverTaskMedia(actor *model.User, logID string, refundedBilling string) (result *model.Task, returnErr error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	if s.IsDraining() {
+		return nil, BadAuthRequest("服务正在维护，请稍后重试")
+	}
+	log, err := s.repo.APICallLog(strings.TrimSpace(logID))
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("请求日志不存在")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(log.TaskID) == "" {
+		return nil, BadAuthRequest("该请求没有关联任务")
+	}
+	task, err := s.repo.Task(log.TaskID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("任务不存在")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if task.UserID != log.UserID {
+		return nil, BadAuthRequest("请求与任务归属不一致")
+	}
+	billingStatus := ""
+	refundedBilling = strings.TrimSpace(refundedBilling)
+	defer func() {
+		outcome := "requeued"
+		if returnErr != nil {
+			outcome = "failed"
+		}
+		_ = s.appendAdminAudit(actor, "api_log.recover_task_media", "api_call_log", log.ID, "人工恢复作品保存", map[string]any{
+			"apiCallLogId": log.ID, "taskId": task.ID, "billingOrderId": task.BillingOrderID, "billingStatus": billingStatus,
+			"refundedBilling": refundedBilling, "outcome": outcome, "error": errorString(returnErr),
+		})
+	}()
+	if task.MediaRecoveryJSON == "" {
+		return nil, BadAuthRequest("该任务没有作品恢复信息，请改用查询上游或 URL 转存")
+	}
+	if task.Status == model.TaskStatusQueued || task.Status == model.TaskStatusRunning || task.Status == model.TaskStatusSucceeded {
+		return taskForOutput(*task), nil
+	}
+	if task.Status != model.TaskStatusFailed {
+		return nil, BadAuthRequest("仅保存失败的作品可以恢复")
+	}
+	if task.BillingOrderID != "" {
+		order, err := s.repo.BillingOrder(task.BillingOrderID)
+		if err != nil {
+			return nil, err
+		}
+		if order.UserID != task.UserID || order.TaskID != task.ID {
+			return nil, BadAuthRequest("任务与计费订单归属不一致")
+		}
+		billingStatus = string(order.Status)
+		if order.Status == model.BillingStatusRefunded {
+			if refundedBilling != refundedBillingCharge && refundedBilling != refundedBillingWaive {
+				return nil, BadAuthRequest("原订单已退款，请选择恢复后补扣或免除扣费")
+			}
+		} else {
+			refundedBilling = ""
+		}
+	} else {
+		refundedBilling = ""
+	}
+	checkpoint, err := s.decodeMediaCheckpoint(task)
+	if err != nil {
+		return nil, err
+	}
+	// 管理员恢复给一次完整的自动重试窗口；存储仍不可用时由本地兜底接住。
+	checkpoint.Attempts, checkpoint.StartedAt, checkpoint.RefundedBilling = 0, time.Now(), refundedBilling
+	data, err := json.Marshal(checkpoint)
+	if err != nil {
+		return nil, err
+	}
+	encrypted, err := s.encryptSettingSecret(string(data))
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.RequeueTaskMediaRecovery(task, encrypted); err != nil {
+		if errors.Is(err, repository.ErrTaskStateConflict) {
+			return nil, &AuthError{Status: 409, Message: "任务状态已变化，请刷新后重试"}
+		}
+		return nil, err
+	}
+	next, err := s.repo.Task(task.ID)
+	if err != nil {
+		return nil, err
+	}
+	return taskForOutput(*next), nil
+}
+
 func (s *Service) logMediaStage(task model.Task, stage string, started time.Time, err error) {
 	status := model.ApiCallStatusSucceeded
 	code, message := "", ""
@@ -405,6 +526,12 @@ func (s *Service) logMediaStage(task model.Task, stage string, started time.Time
 		status = model.ApiCallStatusFailed
 		code = "media_" + stage + "_failed"
 		message = mediaStageLabel(stage)
+		// 只附加存储服务返回的错误码和状态码，不写对象路径、URL 或凭据。
+		if label := classifyStorageError(err).Label(); label != "" {
+			message += "（存储返回 " + label + "）"
+		} else if errors.Is(err, errStorageCircuitOpen) {
+			message += "（存储熔断中，未直传）"
+		}
 	}
 	if logErr := s.LogAPICall(model.ApiCallLog{UserID: task.UserID, TaskID: task.ID, BillingOrderID: task.BillingOrderID, ProviderRequestID: task.ProviderRequestID, Source: "backend-task", Capability: capabilityFromTaskType(task.Type), Model: task.Model, RequestKind: stage, Method: "INTERNAL", Path: "task/media/" + stage, Status: status, ErrorCode: code, Error: message, DurationMs: time.Since(started).Milliseconds()}); logErr != nil {
 		_ = s.log(task.UserID, task.ID, "error", "记录作品保存阶段失败", logErr.Error())
@@ -439,6 +566,41 @@ func (s *Service) finishTaskMediaRecovery(task *model.Task, result map[string]in
 	if err != nil {
 		return s.handleMediaRecoveryFailure(task, &mediaRecoveryError{stage: "register", cause: err})
 	}
+	settle := s.refundedMediaSettlement(task)
 	s.cleanupMediaCheckpointFiles(task)
-	return s.terminalCoordinator().handleSuccess(task)
+	return s.terminalCoordinator().handleSuccessWithSettlement(task, settle)
+}
+
+// refundedMediaSettlement 处理“订单已退款、作品后来交付成功”的结算。未退款订单返回
+// nil，走常规结算。已退款订单只按管理员的决定补扣或免除，绝不静默重新扣费。
+func (s *Service) refundedMediaSettlement(task *model.Task) func() error {
+	if task.BillingOrderID == "" {
+		return nil
+	}
+	order, err := s.repo.BillingOrder(task.BillingOrderID)
+	if err != nil {
+		// 读不到订单时交给常规结算报错，进入待核对并记录日志。
+		return nil
+	}
+	if order.Status != model.BillingStatusRefunded {
+		return nil
+	}
+	action := ""
+	if checkpoint, err := s.decodeMediaCheckpoint(task); err == nil {
+		action = checkpoint.RefundedBilling
+	}
+	return func() error {
+		switch action {
+		case refundedBillingCharge:
+			if err := s.settleRecoveredBilling(task, task.ProviderRequestID); err != nil {
+				return err
+			}
+			_ = s.log(task.UserID, task.ID, "info", "作品已恢复，管理员确认补扣原订单", "")
+		case refundedBillingWaive:
+			_ = s.log(task.UserID, task.ID, "info", "作品已恢复，管理员确认免除扣费", "")
+		default:
+			_ = s.log(task.UserID, task.ID, "warn", "作品已交付，但订单此前已退款，未自动补扣", "")
+		}
+		return nil
+	}
 }

@@ -359,7 +359,7 @@ function MediaResult({ log, onPreview }: { log: ApiCallLog; onPreview: (url: str
     if (!url || (kind !== "image" && kind !== "video")) return <span className="text-foreground/30">--</span>;
     const previewUnavailable = unavailableUrl === url;
     return (
-        <div className="flex w-[90px] items-center gap-1.5">
+        <div className="flex w-[90px] items-center gap-2">
             <button
                 type="button"
                 title={previewUnavailable ? "预览不可用，素材可能已删除" : `预览${kind === "video" ? "视频" : "图片"}`}
@@ -397,6 +397,6 @@ function CallStatus({ log }: { log: ApiCallLog }) {
 }
 
 function requestKindText(value: ApiCallLog["requestKind"]) {
-    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", upload: "上传 OSS", local_save: "保存文件", register: "登记素材", repair: "结果修复" };
+    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", upload: "上传 OSS", local_save: "保存文件", local_fallback: "本地兜底保存", offload: "同步 OSS", register: "登记素材", repair: "结果修复" };
     return labels[value] || "上游请求";
 }

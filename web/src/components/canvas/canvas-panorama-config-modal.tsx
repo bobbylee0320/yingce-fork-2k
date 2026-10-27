@@ -232,12 +232,12 @@ const PanoramaSetupForm = memo(
                         ref={trackImageReady(image.id)}
                         onLoad={() => markImageLoaded(image.id)}
                         onError={() => markImageFailed(image.id)}
-                        className={`h-full w-full object-cover transition-opacity duration-300 ${loaded && !failed ? "opacity-100" : "opacity-0"}`}
+                        className={`h-full w-full object-cover transition-opacity duration-200 ${loaded && !failed ? "opacity-100" : "opacity-0"}`}
                     />
                     {!failed && !loaded && <div className="absolute inset-0 animate-pulse bg-foreground/5" />}
                     {failed && (
                         <div className="absolute inset-0 grid place-items-center">
-                            <span className="px-2 text-center text-[11px] leading-4 text-foreground/40">加载失败</span>
+                            <span className="px-2 text-center text-[var(--fs-label)] leading-4 text-foreground/40">加载失败</span>
                         </div>
                     )}
                 </div>
@@ -249,7 +249,7 @@ const PanoramaSetupForm = memo(
         const selectedThumb = (image: PanoramaReferenceImage, index: number) => (
             <div key={image.id} className={`group relative shrink-0 ${thumbSizeClass}`}>
                 {renderImageSurface(image, "aspect-[4/3] rounded-[var(--r-md)]")}
-                <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-1.5 py-0.5 text-[9px] font-medium text-white backdrop-blur-sm">
+                <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[var(--fs-label)] font-medium text-white backdrop-blur-sm">
                     <span className="size-1 rounded-full" style={{ backgroundColor: image.color }} />
                     {sourceMode === "image" ? "源图" : `${index + 1}`}
                 </span>
@@ -268,7 +268,7 @@ const PanoramaSetupForm = memo(
             <button
                 type="button"
                 onClick={openAssetPicker}
-                className={`flex shrink-0 flex-col items-center justify-center gap-1.5 rounded-[var(--r-md)] bg-foreground/5 text-[10px] font-medium text-foreground/45 transition-colors hover:bg-foreground/10 hover:text-foreground/65 ${thumbSizeClass} aspect-[4/3]`}
+                className={`flex shrink-0 flex-col items-center justify-center gap-2 rounded-[var(--r-md)] bg-foreground/5 text-[var(--fs-label)] font-medium text-foreground/45 transition-colors hover:bg-foreground/10 hover:text-foreground/65 ${thumbSizeClass} aspect-[4/3]`}
             >
                 <Plus className="size-4" strokeWidth={1.8} />
                 <span>添加</span>
@@ -278,13 +278,13 @@ const PanoramaSetupForm = memo(
         return (
             <>
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
-                    <header className="flex shrink-0 items-center gap-2.5 border-b border-border px-5 py-3">
+                    <header className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3">
                         <span className="grid size-7 shrink-0 place-items-center rounded-[var(--r-md)] bg-foreground/5 text-foreground/70">
                             <Globe className="size-3.5" strokeWidth={1.8} />
                         </span>
                         <div className="min-w-0">
-                            <h2 className="text-[13px] font-semibold leading-tight">全景图生成</h2>
-                            <p className="text-[10px] text-foreground/45">AI 补全环境或直接转换</p>
+                            <h2 className="text-[var(--fs-ui)] font-semibold leading-tight">全景图生成</h2>
+                            <p className="text-[var(--fs-label)] text-foreground/45">AI 补全环境或直接转换</p>
                         </div>
                     </header>
 
@@ -292,13 +292,13 @@ const PanoramaSetupForm = memo(
                         <div className="space-y-3">
                             {/* 生成方式 */}
                             <div>
-                                <div className="mb-1.5 text-[11px] font-semibold text-foreground">生成方式</div>
+                                <div className="mb-2 text-[var(--fs-label)] font-semibold text-foreground">生成方式</div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <button
                                         type="button"
                                         aria-pressed={sourceMode === "ai"}
                                         onClick={() => setSourceMode("ai")}
-                                        className={`flex items-center gap-2 rounded-[var(--r-md)] px-2.5 py-2 text-left transition-all ${
+                                        className={`flex items-center gap-2 rounded-[var(--r-md)] px-2 py-2 text-left transition-colors duration-150 ${
                                             sourceMode === "ai"
                                                 ? "bg-accent text-white"
                                                 : "bg-foreground/5 text-foreground hover:bg-foreground/10"
@@ -306,15 +306,15 @@ const PanoramaSetupForm = memo(
                                     >
                                         <Sparkles className="size-4 shrink-0" />
                                         <div className="min-w-0">
-                                            <div className="text-[11px] font-semibold">AI 生成</div>
-                                            <div className="text-[9px] leading-tight opacity-75">补全环境</div>
+                                            <div className="text-[var(--fs-label)] font-semibold">AI 生成</div>
+                                            <div className="text-[var(--fs-label)] leading-tight opacity-75">补全环境</div>
                                         </div>
                                     </button>
                                     <button
                                         type="button"
                                         aria-pressed={sourceMode === "image"}
                                         onClick={() => setSourceMode("image")}
-                                        className={`flex items-center gap-2 rounded-[var(--r-md)] px-2.5 py-2 text-left transition-all ${
+                                        className={`flex items-center gap-2 rounded-[var(--r-md)] px-2 py-2 text-left transition-colors duration-150 ${
                                             sourceMode === "image"
                                                 ? "bg-accent text-white"
                                                 : "bg-foreground/5 text-foreground hover:bg-foreground/10"
@@ -322,8 +322,8 @@ const PanoramaSetupForm = memo(
                                     >
                                         <ImageIcon className="size-4 shrink-0" />
                                         <div className="min-w-0">
-                                            <div className="text-[11px] font-semibold">图片直出</div>
-                                            <div className="text-[9px] leading-tight opacity-75">直接转换</div>
+                                            <div className="text-[var(--fs-label)] font-semibold">图片直出</div>
+                                            <div className="text-[var(--fs-label)] leading-tight opacity-75">直接转换</div>
                                         </div>
                                     </button>
                                 </div>
@@ -331,13 +331,13 @@ const PanoramaSetupForm = memo(
 
                             {/* 参考图 / 源图 */}
                             <div>
-                                <div className="mb-1.5 flex items-center justify-between gap-2">
-                                    <div className="text-[11px] font-semibold text-foreground">{sourceMode === "image" ? "全景源图" : "参考图"}</div>
-                                    <Button size="small" type="text" icon={<Plus className="size-3.5" />} onClick={openAssetPicker} className="!h-6 !px-2 !text-[10px]">
+                                <div className="mb-2 flex items-center justify-between gap-2">
+                                    <div className="text-[var(--fs-label)] font-semibold text-foreground">{sourceMode === "image" ? "全景源图" : "参考图"}</div>
+                                    <Button size="small" type="text" icon={<Plus className="size-3.5" />} onClick={openAssetPicker} className="!h-6 !px-2 !text-[var(--fs-label)]">
                                         {sourceMode === "image" && selectedReferences.length > 0 ? "替换" : "添加"}
                                     </Button>
                                 </div>
-                                <div className="flex flex-wrap gap-1.5">
+                                <div className="flex flex-wrap gap-2">
                                     {selectedReferences.map((image, index) => selectedThumb(image, index))}
                                     {sourceMode !== "image" && addTile}
                                     {sourceMode === "image" && selectedReferences.length === 0 && addTile}
@@ -347,7 +347,7 @@ const PanoramaSetupForm = memo(
                             {/* 场景描述 */}
                             {sourceMode === "ai" && (
                                 <div>
-                                    <div className="mb-1.5 text-[11px] font-semibold text-foreground">场景描述</div>
+                                    <div className="mb-2 text-[var(--fs-label)] font-semibold text-foreground">场景描述</div>
                                     <Input.TextArea
                                         value={prompt}
                                         onChange={(event) => setPrompt(event.target.value)}
@@ -359,7 +359,7 @@ const PanoramaSetupForm = memo(
 
                             {/* 全景类型 */}
                             <div>
-                                <div className="mb-1.5 text-[11px] font-semibold text-foreground">全景类型</div>
+                                <div className="mb-2 text-[var(--fs-label)] font-semibold text-foreground">全景类型</div>
                                 <div className="grid grid-cols-2 gap-2">
                                     {(
                                         [
@@ -375,7 +375,7 @@ const PanoramaSetupForm = memo(
                                                 type="button"
                                                 aria-pressed={selected}
                                                 onClick={() => setProjection(option.value)}
-                                                className={`flex items-center gap-2 rounded-[var(--r-md)] px-2.5 py-2 text-left transition-all ${
+                                                className={`flex items-center gap-2 rounded-[var(--r-md)] px-2 py-2 text-left transition-colors duration-150 ${
                                                     selected
                                                         ? "bg-accent text-white"
                                                         : "bg-foreground/5 text-foreground hover:bg-foreground/10"
@@ -383,11 +383,11 @@ const PanoramaSetupForm = memo(
                                             >
                                                 <Icon className="size-4 shrink-0" />
                                                 <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-[11px] font-semibold">{option.title}</span>
-                                                        <span className={`rounded-sm px-1 py-px text-[9px] font-medium ${selected ? "bg-white/20" : "bg-foreground/8 text-foreground/55"}`}>{option.ratio}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[var(--fs-label)] font-semibold">{option.title}</span>
+                                                        <span className={`rounded-sm px-1 py-px text-[var(--fs-label)] font-medium ${selected ? "bg-white/20" : "bg-foreground/8 text-foreground/55"}`}>{option.ratio}</span>
                                                     </div>
-                                                    <div className={`text-[9px] leading-tight ${selected ? "opacity-80" : "text-foreground/50"}`}>{option.desc}</div>
+                                                    <div className={`text-[var(--fs-label)] leading-tight ${selected ? "opacity-80" : "text-foreground/50"}`}>{option.desc}</div>
                                                 </div>
                                             </button>
                                         );
@@ -397,17 +397,17 @@ const PanoramaSetupForm = memo(
 
                             {/* 高级选项 */}
                             <div>
-                                <div className="mb-1.5 text-[11px] font-semibold text-foreground">高级选项</div>
-                                <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between gap-3 rounded-[var(--r-md)] bg-foreground/5 px-2.5 py-1.5">
+                                <div className="mb-2 text-[var(--fs-label)] font-semibold text-foreground">高级选项</div>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between gap-3 rounded-[var(--r-md)] bg-foreground/5 px-2 py-2">
                                         <div className="min-w-0">
-                                            <div className="text-[11px] font-semibold text-foreground">智能比例</div>
-                                            <div className="text-[9px] leading-tight text-foreground/50">模型不支持时自动裁切</div>
+                                            <div className="text-[var(--fs-label)] font-semibold text-foreground">智能比例</div>
+                                            <div className="text-[var(--fs-label)] leading-tight text-foreground/50">模型不支持时自动裁切</div>
                                         </div>
                                         <Switch size="small" checked={smartBase} onChange={setSmartBase} />
                                     </div>
                                     {sourceMode === "ai" && (
-                                        <Button size="small" type="text" icon={<Copy className="size-3.5" />} onClick={() => onCopyPrompt?.(composed)} className="!h-6 !px-2 !text-[10px]">
+                                        <Button size="small" type="text" icon={<Copy className="size-3.5" />} onClick={() => onCopyPrompt?.(composed)} className="!h-6 !px-2 !text-[var(--fs-label)]">
                                             复制完整提示词
                                         </Button>
                                     )}
@@ -416,8 +416,8 @@ const PanoramaSetupForm = memo(
                         </div>
                     </main>
 
-                    <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border px-5 py-2.5">
-                        <span className={`truncate text-[10px] ${canSubmit ? "text-foreground/45" : "text-amber-500"}`}>
+                    <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border px-5 py-2">
+                        <span className={`truncate text-[var(--fs-label)] ${canSubmit ? "text-foreground/45" : "text-amber-500"}`}>
                             {sourceMode === "image" ? (directReference ? "已选源图" : "请选择源图") : selectedReferences.length > 0 ? `${selectedReferences.length} 张参考图` : "无参考图"}
                         </span>
                         <div className="flex shrink-0 items-center gap-2">
@@ -433,12 +433,12 @@ const PanoramaSetupForm = memo(
 
                 {/* 选图面板 */}
                 {isAssetPickerOpen && (
-                    <div className="absolute inset-0 z-[260] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+                    <div className="absolute inset-0 z-[var(--z-dialog)] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
                         <div className="flex max-h-full w-[500px] max-w-full flex-col overflow-hidden rounded-[var(--r-lg)] border border-border bg-background shadow-2xl">
                             <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-3">
                                 <div className="min-w-0">
                                     <div className="text-sm font-semibold text-foreground">{sourceMode === "image" ? "选择源图" : "选择参考图"}</div>
-                                    <div className="mt-0.5 text-[11px] text-foreground/45">
+                                    <div className="mt-0.5 text-[var(--fs-label)] text-foreground/45">
                                         {sourceMode === "image" ? "只选一张作为全景源" : `已选 ${draftSelectedIds.length} 张`}
                                     </div>
                                 </div>
@@ -456,7 +456,7 @@ const PanoramaSetupForm = memo(
                             </div>
                             <div className="ui-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
                                 {filteredReferences.length === 0 ? (
-                                    <div className="rounded-[var(--r-md)] bg-foreground/5 px-4 py-8 text-center text-[11px] text-foreground/45">没有匹配的图片</div>
+                                    <div className="rounded-[var(--r-md)] bg-foreground/5 px-4 py-8 text-center text-[var(--fs-label)] text-foreground/45">没有匹配的图片</div>
                                 ) : (
                                     <div className="grid grid-cols-5 gap-2">
                                         {filteredReferences.map((image) => {

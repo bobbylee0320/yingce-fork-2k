@@ -22,7 +22,7 @@
     margin: 0;
     color: var(--user-ink);
     font-size: var(--fs-title);
-    font-weight: 650;
+    font-weight: 600;
     letter-spacing: -0.025em;
     line-height: 1.35;
 }
@@ -38,7 +38,7 @@
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    gap: var(--space-1);
+    gap: var(--space-2);
 }
 
 .inspiration-hall-toolbar {
@@ -54,27 +54,38 @@
     max-width: 100%;
 }
 .inspiration-mode-count {
-    color: var(--user-ink-muted);
-    font-size: var(--fs-label);
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
     font-variant-numeric: tabular-nums;
 }
 
+/* 搜索框与内容库工具栏同一套外观：34px、9px 圆角、透明底 + 1px 细线。 */
 .inspiration-hall-search.ant-input-affix-wrapper {
     width: clamp(200px, 24%, 300px);
+    height: var(--user-control-height);
     min-width: 0;
     margin-left: auto;
-    background: var(--user-surface-muted);
-    border: 0;
-    border-radius: var(--user-radius-control);
+    background: transparent;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-button);
     color: var(--user-ink);
     font-size: var(--fs-caption);
     box-shadow: none;
+}
+.inspiration-hall-search.ant-input-affix-wrapper:hover {
+    border-color: var(--user-border-strong);
 }
 
 .inspiration-hall-search .ant-input-prefix {
     color: var(--user-ink-soft);
 }
+.inspiration-hall-search .ant-input-prefix svg {
+    width: var(--user-button-icon-size);
+    height: var(--user-button-icon-size);
+}
 .inspiration-hall-search.ant-input-affix-wrapper:focus-within {
+    border-color: var(--user-border-strong);
+    background: var(--user-surface);
     outline: var(--stroke-2) solid var(--control-focus-ring);
     outline-offset: var(--space-half);
 }
@@ -82,6 +93,8 @@
 .inspiration-hall-filter-toggle > svg:last-child {
     width: var(--space-3);
     height: var(--space-3);
+    margin-left: calc(-1 * var(--space-half));
+    color: var(--user-ink-soft);
     transition: transform var(--user-motion);
 }
 
@@ -157,7 +170,6 @@
 .inspiration-card:hover,
 .inspiration-card:focus-within {
     background: var(--library-surface-hover);
-    transform: translateY(var(--library-hover-offset));
 }
 
 .inspiration-card-open {
@@ -167,7 +179,7 @@
     flex-direction: column;
     border: 0;
     border-radius: inherit;
-    padding: 0;
+    padding: var(--space-2);
     background: transparent;
     color: inherit;
     text-align: left;
@@ -187,6 +199,7 @@
     flex-shrink: 0;
     aspect-ratio: 4 / 3;
     overflow: hidden;
+    border-radius: var(--user-radius-media);
     background: var(--library-cover-surface);
 }
 
@@ -195,11 +208,6 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform var(--user-motion);
-}
-
-.inspiration-card:hover .inspiration-card-cover img {
-    transform: scale(1.025);
 }
 .inspiration-card-source {
     position: absolute;
@@ -220,8 +228,8 @@
 /* 操作与详情按钮是兄弟节点；收藏和展开的菜单始终可见。 */
 .inspiration-card-actions {
     position: absolute;
-    top: var(--space-2);
-    right: var(--space-2);
+    top: var(--space-4);
+    right: var(--space-4);
     display: flex;
     gap: var(--space-1);
     opacity: 0;
@@ -277,7 +285,7 @@
     flex: 1;
     flex-direction: column;
     gap: var(--space-1);
-    padding: var(--space-3);
+    padding: var(--space-3) var(--space-2) var(--space-1);
 }
 
 .inspiration-card-title {
@@ -435,7 +443,7 @@
         gap: var(--space-3);
     }
     .inspiration-card-body {
-        padding: var(--space-2-half);
+        padding: var(--space-2) var(--space-1) 0;
     }
     .inspiration-card-source {
         font-size: var(--fs-tiny);
@@ -468,7 +476,7 @@
         left: var(--space-1);
         bottom: var(--space-1);
         max-width: calc(100% - var(--space-2));
-        padding-inline: var(--space-1-half);
+        padding-inline: var(--space-2);
     }
     .inspiration-card-title {
         font-size: var(--fs-caption);
@@ -499,17 +507,10 @@
 
 @media (prefers-reduced-motion: reduce) {
     .inspiration-card,
-    .inspiration-card-cover img,
     .inspiration-card-actions,
     .inspiration-card-action,
     .inspiration-icon-button,
     .inspiration-hall-filter-toggle > svg:last-child {
         transition: none;
-    }
-
-    .inspiration-card:hover,
-    .inspiration-card:focus-within,
-    .inspiration-card:hover .inspiration-card-cover img {
-        transform: none;
     }
 }

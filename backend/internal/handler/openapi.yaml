@@ -521,6 +521,40 @@ paths:
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
         "404": {$ref: "#/components/responses/Error"}
+  /skills/{id}/files:
+    parameters:
+      - {in: path, name: id, required: true, description: 技能 ID, schema: {type: string}}
+    put:
+      tags: [skills]
+      summary: 作者批量写入、重命名或删除技能包文本文件，并生成新的技能版本
+      description: 按顺序应用 operations 后重建 ZIP 与文件清单；SKILL.md 变化时同步 instruction。baseVersionId 必须等于当前版本，否则返回 409 skill_version_conflict，details.currentVersionId 为最新版本。GitHub 技能返回 409 failed_precondition。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [baseVersionId, operations]
+              properties:
+                baseVersionId: {type: string, description: 编辑开始时读取到的 versionId}
+                operations:
+                  type: array
+                  minItems: 1
+                  maxItems: 256
+                  items:
+                    type: object
+                    required: [op, path]
+                    properties:
+                      op: {type: string, enum: [write, rename, delete]}
+                      path: {type: string, description: 规范化相对路径，最多 8 层，不允许 .. / 绝对路径 / .git / 控制字符}
+                      to: {type: string, description: rename 的目标路径}
+                      content: {type: string, description: write 的 UTF-8 文本，单文件不超过 512KB}
+      responses:
+        "200": {description: 标准信封 data 为 skill、files 与 changed；内容未变化时 changed=false 且不生成版本}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
   /tools/{id}:
     parameters:
       - {in: path, name: id, required: true, schema: {type: integer, format: int64, minimum: 1}}
@@ -1313,6 +1347,23 @@ paths:
           description: 画布 ID、limit 或分页游标无效
         "404":
           description: 画布不存在或不属于当前用户
+  /agent/conversations/{id}:
+    get:
+      tags: [agent]
+      summary: 读取单个 Agent 对话的最新轮次摘要
+      description: 只读控制列，不载入事件。用于判断当前画布目录之外的已选对话是否变化；字段与目录项相同，latestRunId、status、revision、cleanupPending 来自该对话全局最新一轮。仅返回当前登录用户的记录。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, maxLength: 80 }
+      responses:
+        "200":
+          description: 信封 data 为单个目录项（id、canvasId、title、latestRunId、status、revision、cleanupPending、createdAt、updatedAt）
+        "400":
+          description: 会话 ID 无效
+        "404":
+          description: 会话不存在或不属于当前用户
   /agent/conversations/{id}/runs:
     get:
       tags: [agent]
@@ -1428,12 +1479,33 @@ paths:
           description: 信封 data.accepted 与 data.pending
         "409":
           description: 本轮已结束，应改为新一轮发送
+  /agent/runs/{id}/interjections/{messageId}:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 160
+    delete:
+      tags: [agent]
+      summary: 撤回尚未送达模型的插话
+      description: 只从待送队列移除并发出 user_interjection_withdrawn 事件；不停止本轮，也不取消已提交的生成任务。
+      responses:
+        "200":
+          description: 信封 data.withdrawn
+        "404":
+          description: 插话不存在
+        "409":
+          description: 插话已送达模型或本轮已结束，无法撤回
   /agent/runs/{id}/cancel:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
     post:
       tags: [agent]
       summary: 取消当前用户的 Agent 轮次
+      description: 停止 Agent 后续步骤并取消尚未提交上游的任务；已提交上游（可能已计费）的媒体任务继续完成并回写画布，收尾在其结束后完成。
       responses:
         "200":
           description: 信封 data.accepted
@@ -1957,7 +2029,7 @@ paths:
         "200":
           $ref: "#/components/responses/Envelope"
         "403":
-          description: 配额用尽（code=40301, reason=quota_exceeded）
+          description: 配额用尽（code=40301, reason=quota_exceeded 或 storage_capacity_exceeded）；账号只读（code=40302, reason=storage_read_only）
           content:
             application/json:
               schema:
@@ -2820,7 +2892,7 @@ components:
           properties:
             code:
               type: integer
-              enum: [400, 401, 403, 404, 409, 429, 500, 502, 503, 504, 40301, 40901, 42901]
+              enum: [400, 401, 403, 404, 409, 429, 500, 502, 503, 504, 40301, 40302, 40901, 42901]
             data:
               nullable: true
             reason:
@@ -2832,8 +2904,11 @@ components:
                 - not_found
                 - conflict
                 - project_name_conflict
+                - skill_version_conflict
                 - failed_precondition
                 - quota_exceeded
+                - storage_capacity_exceeded
+                - storage_read_only
                 - rate_limited
                 - unavailable
                 - timeout

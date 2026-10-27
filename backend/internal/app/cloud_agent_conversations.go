@@ -87,17 +87,41 @@ func (s *Service) CloudAgentConversations(userID, canvasID, before string, limit
 		rows = rows[:limit]
 	}
 	for _, run := range rows {
-		id := run.ConversationID
-		if id == "" {
-			id = run.ID
-		}
-		page.Items = append(page.Items, CloudAgentConversation{
-			ID: id, CanvasID: run.CanvasID, Title: run.Title, LatestRunID: run.ID,
-			Status: run.Status, Revision: run.Revision, CleanupPending: run.CleanupPending,
-			CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
-		})
+		page.Items = append(page.Items, cloudAgentConversationSummary(run))
 	}
 	return page, nil
+}
+
+func cloudAgentConversationSummary(run model.CloudAgentExecution) CloudAgentConversation {
+	id := run.ConversationID
+	if id == "" {
+		id = run.ID
+	}
+	return CloudAgentConversation{
+		ID: id, CanvasID: run.CanvasID, Title: run.Title, LatestRunID: run.ID,
+		Status: run.Status, Revision: run.Revision, CleanupPending: run.CleanupPending,
+		CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
+	}
+}
+
+// CloudAgentConversationSummaryByID 返回单个对话的最新轮次摘要。
+// 当前画布目录之外的已选对话靠它判断是否变化，避免每次轮询都重读全部轮次。
+func (s *Service) CloudAgentConversationSummaryByID(userID, conversationID string) (*CloudAgentConversation, error) {
+	if userID == "" {
+		return nil, kernel.Unauthorized("请先登录")
+	}
+	if err := validateCloudAgentID(conversationID, "会话 ID", 80); err != nil {
+		return nil, err
+	}
+	row, err := s.repo.CloudAgentConversationLatest(userID, conversationID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, kernel.NotFound("Agent 对话不存在")
+	}
+	if err != nil {
+		return nil, err
+	}
+	summary := cloudAgentConversationSummary(row)
+	return &summary, nil
 }
 
 func (s *Service) CloudAgentConversationRuns(userID, conversationID, after string, limit int) (*CloudAgentConversationRunPage, error) {

@@ -72,7 +72,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                             <div className="flex items-center gap-3 border-b border-border/65 px-1 pb-3">
                                 <SidebarUserAvatar user={user} className="size-8" />
                                 <div className="min-w-0 flex-1">
-                                    <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-sm font-medium">{user.displayName || user.username}</span><IdentityProviderBadge user={user} /></div>
+                                    <div className="flex min-w-0 items-center gap-2"><span className="truncate text-sm font-medium">{user.displayName || user.username}</span><IdentityProviderBadge user={user} /></div>
                                     {creditsEnabled ? <div className="mt-0.5 truncate text-[var(--fs-label)] tabular-nums text-foreground/45">可用 {balance} 积分</div> : null}
                                 </div>
                             </div>
@@ -115,7 +115,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
 }
 
 function MenuLink({ to, icon, label, onNavigate }: { to: string; icon: ReactNode; label: string; onNavigate: () => void }) {
-    return <Link to={to} onClick={onNavigate} className="flex h-9 items-center gap-2.5 rounded px-2 text-xs text-foreground/62 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5 [&_svg]:shrink-0">{icon}<span className="flex-1">{label}</span><ChevronRight className="!size-3 text-foreground/25" /></Link>;
+    return <Link to={to} onClick={onNavigate} className="flex h-9 items-center gap-2 rounded px-2 text-xs text-foreground/62 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5 [&_svg]:shrink-0">{icon}<span className="flex-1">{label}</span><ChevronRight className="!size-3 text-foreground/25" /></Link>;
 }
 
 function SidebarUserAvatar({ user, className }: { user: LocalUser; className: string }) {

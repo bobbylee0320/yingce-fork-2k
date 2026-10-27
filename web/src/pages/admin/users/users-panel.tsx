@@ -191,7 +191,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                                     <div className="px-2 pb-2 text-xs font-medium text-foreground/55">显示列</div>
                                     <div className="space-y-0.5">
                                         {userColumnOptions.map((option) => (
-                                            <label key={option.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60">
+                                            <label key={option.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm hover:bg-muted/60">
                                                 <Checkbox
                                                     bare
                                                     checked={visibleColumns.has(option.key)}

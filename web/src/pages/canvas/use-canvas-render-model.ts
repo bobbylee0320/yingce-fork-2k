@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { buildNodeGenerationInputs, type NodeGenerationInput } from "@/components/canvas/canvas-node-generation";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import { sameNodeSemanticData } from "@/lib/canvas/canvas-project-domain";
 import { canvasNodeRenderBudget, canvasNodeRenderPadding, CANVAS_MAX_RENDERED_CONNECTIONS } from "@/lib/canvas/canvas-render-budget";
-import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences, buildToolMentionReference, parseToolMentionTokens } from "@/lib/canvas/canvas-resource-references";
+import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences, buildToolMentionReference, parseToolMentionTokens, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { reuseCanvasReferenceListMap, reuseCanvasReferenceMap } from "@/lib/canvas/canvas-reference-stability";
 import { buildSkillMentionReferences } from "@/lib/canvas/canvas-skill-mentions";
 import { buildCanvasConnectionIndex, type CanvasIndexedConnection } from "@/lib/canvas/canvas-connection-index";
 import { retainCanvasLayoutNodes } from "@/lib/canvas/canvas-layout-snapshot";
@@ -33,7 +34,7 @@ type UseCanvasRenderModelOptions = {
     previsScenes?: PrevisScene[];
     infoNodeId: string | null;
     cropNodeId: string | null;
-    maskEditNodeId: string | null;
+    regionEditNodeId: string | null;
     imageEditNodeId: string | null;
     annotationNodeId: string | null;
     splitNodeId: string | null;
@@ -63,7 +64,7 @@ export function useCanvasRenderModel({
     previsScenes,
     infoNodeId,
     cropNodeId,
-    maskEditNodeId,
+    regionEditNodeId,
     imageEditNodeId,
     annotationNodeId,
     splitNodeId,
@@ -197,52 +198,14 @@ export function useCanvasRenderModel({
         });
         return ids;
     }, [candidateNodes, forcedRenderNodeIds, renderBounds.view]);
-    const [mountedNodeIds, setMountedNodeIds] = useState<Set<string>>(() => new Set());
-    useEffect(() => {
-        const candidateIds = new Set(candidateNodes.map((node) => node.id));
-        setMountedNodeIds((current) => {
-            const next = new Set<string>();
-            current.forEach((id) => {
-                if (candidateIds.has(id)) next.add(id);
-            });
-            immediateRenderNodeIds.forEach((id) => next.add(id));
-            return next.size === current.size && [...next].every((id) => current.has(id)) ? current : next;
-        });
-        const queue = candidateNodes
-            .filter((node) => !immediateRenderNodeIds.has(node.id))
-            .sort((left, right) => {
-                const leftDistance = distanceToBounds(canvasNodeBounds(left), renderBounds.view);
-                const rightDistance = distanceToBounds(canvasNodeBounds(right), renderBounds.view);
-                return leftDistance - rightDistance;
-            });
-        let cursor = 0;
-        let frameId = 0;
-        const schedule = () => {
-            frameId = requestAnimationFrame(() => {
-                const startedAt = performance.now();
-                const additions: string[] = [];
-                while (cursor < queue.length && additions.length < 12 && performance.now() - startedAt < 4) additions.push(queue[cursor++].id);
-                if (additions.length) {
-                    setMountedNodeIds((current) => {
-                        if (additions.every((id) => current.has(id))) return current;
-                        const next = new Set(current);
-                        additions.forEach((id) => next.add(id));
-                        return next;
-                    });
-                }
-                if (cursor < queue.length) schedule();
-            });
-        };
-        if (queue.length && typeof window !== "undefined") schedule();
-        return () => cancelAnimationFrame(frameId);
-    }, [candidateNodes, immediateRenderNodeIds, renderBounds.view]);
-    const visibleNodes = useMemo(() => candidateNodes.filter((node) => immediateRenderNodeIds.has(node.id) || mountedNodeIds.has(node.id)), [candidateNodes, immediateRenderNodeIds, mountedNodeIds]);
+    // 屏外缓冲节点的分帧挂载放在世界层内部（useCanvasProgressiveNodeMount）。
+    // 这里的派生数据按候选集一次算好，挂载进度不再逐帧重渲染整页并重建引用映射。
     const overviewRef = useRef(false);
     const overview = canvasOverviewMode(viewport.k, overviewRef.current);
     useEffect(() => { overviewRef.current = overview; }, [overview]);
     const nodeRenderLODById = useMemo(() => {
         const result = new Map<string, CanvasNodeRenderLOD>();
-        for (const node of visibleNodes) {
+        for (const node of candidateNodes) {
             // Selection/drag keeps every node visible, not every editor mounted.
             const editing = selectedNodeIds.size === 1 && selectedNodeIds.has(node.id);
             const inView = intersectsCanvasBounds(canvasNodeBounds(node), renderBounds.view);
@@ -250,10 +213,10 @@ export function useCanvasRenderModel({
             result.set(node.id, resolveCanvasNodeLOD(overview, inView, inEntry, editing));
         }
         return result;
-    }, [overview, selectedNodeIds, renderBounds.enter, renderBounds.view, visibleNodes]);
+    }, [overview, selectedNodeIds, renderBounds.enter, renderBounds.view, candidateNodes]);
     useEffect(() => {
-        renderedNodeIdsRef.current = new Set(visibleNodes.map((node) => node.id));
-    }, [visibleNodes]);
+        renderedNodeIdsRef.current = new Set(candidateNodes.map((node) => node.id));
+    }, [candidateNodes]);
 
     const imageAssets = useMemo(() => assets.filter((asset): asset is ImageAsset => asset.kind === "image" && asset.status !== "archived"), [assets]);
     const semanticNodesRef = useRef(nodes);
@@ -269,7 +232,7 @@ export function useCanvasRenderModel({
     const toolbarNode = isFrameNode(toolbarCandidate) ? null : toolbarCandidate;
     const infoNode = infoNodeId ? nodeById.get(infoNodeId) || null : null;
     const cropNode = cropNodeId ? nodeById.get(cropNodeId) || null : null;
-    const maskEditNode = maskEditNodeId ? nodeById.get(maskEditNodeId) || null : null;
+    const regionEditNode = regionEditNodeId ? nodeById.get(regionEditNodeId) || null : null;
     const imageEditNode = imageEditNodeId ? nodeById.get(imageEditNodeId) || null : null;
     const annotationNode = annotationNodeId ? nodeById.get(annotationNodeId) || null : null;
     const splitNode = splitNodeId ? nodeById.get(splitNodeId) || null : null;
@@ -347,7 +310,7 @@ export function useCanvasRenderModel({
     const configInputsById = useMemo(() => {
         const map = new Map<string, NodeGenerationInput[]>();
         const configNodeIds = new Set<string>();
-        visibleNodes.forEach((node) => {
+        candidateNodes.forEach((node) => {
             if (node.type === CanvasNodeType.Config) configNodeIds.add(node.id);
         });
         selectedNodeIds.forEach((nodeId) => {
@@ -356,25 +319,30 @@ export function useCanvasRenderModel({
         if (dialogNodeId && nodeById.get(dialogNodeId)?.type === CanvasNodeType.Config) configNodeIds.add(dialogNodeId);
         configNodeIds.forEach((nodeId) => map.set(nodeId, buildNodeGenerationInputs(nodeId, semanticNodes, connections)));
         return map;
-    }, [connections, dialogNodeId, nodeById, selectedNodeIds, semanticNodes, visibleNodes]);
+    }, [connections, dialogNodeId, nodeById, selectedNodeIds, semanticNodes, candidateNodes]);
     const activePrevisNode = useMemo(() => semanticNodes.find((node) => node.id === previsNodeId) || null, [previsNodeId, semanticNodes]);
     const activeStylePresetId = useMemo(() => semanticNodes.find((node) => node.metadata?.workflowKind === "styleboard")?.metadata?.stylePresetId, [semanticNodes]);
     const activeScriptNode = useMemo(() => semanticNodes.find((node) => node.id === scriptEditorNodeId && node.type === CanvasNodeType.Script) || null, [scriptEditorNodeId, semanticNodes]);
     const activePrevisScene = useMemo(() => previsScenes?.find((scene) => scene.id === activePrevisNode?.metadata?.previsSceneId) || null, [activePrevisNode?.metadata?.previsSceneId, previsScenes]);
     const resourceReferenceTargetNodes = useMemo(() => {
-        const targetNodes = [...visibleNodes];
+        const targetNodes = [...candidateNodes];
         const activeId = dialogNodeId || activeNodeId;
         if (activeId) {
             const activeNode = nodeById.get(activeId);
             if (activeNode) targetNodes.push(activeNode);
         }
         return targetNodes;
-    }, [activeNodeId, dialogNodeId, nodeById, visibleNodes]);
+    }, [activeNodeId, dialogNodeId, nodeById, candidateNodes]);
     const canvasResourceReferences = useMemo(
         () => buildCanvasResourceReferences(semanticNodes, connections, dialogNodeId || activeNodeId, resourceReferenceTargetNodes),
         [activeNodeId, connections, dialogNodeId, resourceReferenceTargetNodes, semanticNodes],
     );
-    const resourceReferenceByNodeId = useMemo(() => new Map(canvasResourceReferences.map((reference) => [reference.nodeId, reference])), [canvasResourceReferences]);
+    const resourceReferenceByNodeIdRef = useRef<ReadonlyMap<string, CanvasResourceReference>>(new Map());
+    const resourceReferenceByNodeId = useMemo(() => {
+        const map = reuseCanvasReferenceMap(resourceReferenceByNodeIdRef.current, new Map(canvasResourceReferences.map((reference) => [reference.nodeId, reference])));
+        resourceReferenceByNodeIdRef.current = map;
+        return map;
+    }, [canvasResourceReferences]);
     const skillMentionReferences = useMemo(() => buildSkillMentionReferences(addedSkills), [addedSkills]);
     const toolMentionReferencesByNodeId = useMemo(() => {
         const map = new Map<string, ReturnType<typeof buildToolMentionReference>[]>();
@@ -394,15 +362,19 @@ export function useCanvasRenderModel({
         }
         return map;
     }, [semanticNodes]);
+    const mentionReferencesByNodeIdRef = useRef<ReadonlyMap<string, CanvasResourceReference[]>>(new Map());
     const mentionReferencesByNodeId = useMemo(() => {
-        const map = buildCanvasNodeMentionReferenceMap(semanticNodes, connections, visibleNodes);
-        if (!skillMentionReferences.length && toolMentionReferencesByNodeId.size === 0) return map;
-        map.forEach((references, nodeId) => {
-            const extras = [...skillMentionReferences, ...(toolMentionReferencesByNodeId.get(nodeId) ?? [])];
-            if (extras.length) map.set(nodeId, [...references, ...extras]);
-        });
-        return map;
-    }, [connections, semanticNodes, skillMentionReferences, toolMentionReferencesByNodeId, visibleNodes]);
+        const map = buildCanvasNodeMentionReferenceMap(semanticNodes, connections, candidateNodes);
+        if (skillMentionReferences.length || toolMentionReferencesByNodeId.size) {
+            map.forEach((references, nodeId) => {
+                const extras = [...skillMentionReferences, ...(toolMentionReferencesByNodeId.get(nodeId) ?? [])];
+                if (extras.length) map.set(nodeId, [...references, ...extras]);
+            });
+        }
+        const stable = reuseCanvasReferenceListMap(mentionReferencesByNodeIdRef.current, map);
+        mentionReferencesByNodeIdRef.current = stable;
+        return stable;
+    }, [connections, semanticNodes, skillMentionReferences, toolMentionReferencesByNodeId, candidateNodes]);
 
     return {
         activePrevisNode,
@@ -425,7 +397,7 @@ export function useCanvasRenderModel({
         frameChildrenById,
         imageAssets,
         infoNode,
-        maskEditNode,
+        regionEditNode,
         imageEditNode,
         mentionReferencesByNodeId,
         nodeById,
@@ -441,12 +413,9 @@ export function useCanvasRenderModel({
         superResolveNode,
         toolbarNode,
         upscaleNode,
-        visibleNodes,
+        candidateNodes,
+        immediateRenderNodeIds,
+        renderViewBounds: renderBounds.view,
     };
 }
 
-function distanceToBounds(node: { left: number; top: number; right: number; bottom: number }, bounds: { left: number; top: number; right: number; bottom: number }) {
-    const dx = node.right < bounds.left ? bounds.left - node.right : node.left > bounds.right ? node.left - bounds.right : 0;
-    const dy = node.bottom < bounds.top ? bounds.top - node.bottom : node.top > bounds.bottom ? node.top - bounds.bottom : 0;
-    return Math.hypot(dx, dy);
-}

@@ -59,12 +59,10 @@ func PaymentNotificationResponseForWithRegistry(registry *payment.Registry, prov
 	return failureStatus, "", ""
 }
 
+// PaymentProviders 不再要求积分功能：关闭积分后存储空间商品仍可在线购买。
 func (s *Service) PaymentProviders(actor *model.User) ([]PaymentProviderView, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
-	}
-	if err := s.RequireFeature(FeatureCredits); err != nil {
-		return nil, err
 	}
 	items := make([]PaymentProviderView, 0)
 	for _, descriptor := range s.paymentRegistry.Descriptors() {

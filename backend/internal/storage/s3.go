@@ -78,6 +78,10 @@ func NewS3Client(setting Settings, timeout time.Duration) (*awss3.S3, error) {
 }
 
 func PutS3Object(setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
+	return putS3Object(context.Background(), setting, objectKey, mimeType, size, body)
+}
+
+func putS3Object(ctx context.Context, setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
 	setting = NormalizeSettings(setting)
 	client, err := NewS3Client(setting, transferTimeout(setting))
 	if err != nil {
@@ -107,7 +111,7 @@ func PutS3Object(setting Settings, objectKey string, mimeType string, size int64
 	if size >= 0 {
 		input.ContentLength = aws.Int64(size)
 	}
-	output, err := client.PutObjectWithContext(context.Background(), input)
+	output, err := client.PutObjectWithContext(ctx, input)
 	if err != nil {
 		return "", fmt.Errorf("S3 上传失败：%w", err)
 	}

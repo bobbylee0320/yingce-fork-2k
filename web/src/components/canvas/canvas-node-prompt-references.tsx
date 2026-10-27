@@ -35,9 +35,9 @@ export function ReferenceToolsPopover({
             rootClassName="canvas-reference-tools-popover"
             arrow={false}
             align={{ offset: [0, -8] }}
-            styles={{ root: { width: "min(280px, calc(100vw - 24px))" }, container: { width: "100%" }, content: { width: "100%", padding: 10 } }}
+            styles={{ root: { width: "min(280px, calc(100vw - 24px))" }, container: { width: "100%" }, content: { width: "100%", padding: 12 } }}
             content={
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                     <div>
                         <div className="text-sm font-medium leading-5">智能引用</div>
                         <div className="mt-0.5 text-xs leading-4 text-black/50 dark:text-white/50">输入素材序号或名称后按 Tab，可快速引用</div>
@@ -61,7 +61,7 @@ export function ReferenceToolsPopover({
                     </div>
                     <button
                         type="button"
-                        className="canvas-reference-tools-mention-button flex h-7 w-full items-center justify-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+                        className="canvas-reference-tools-mention-button flex h-7 w-full items-center justify-center gap-2 rounded-md border px-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-45"
                         style={{ borderColor: accent, color: accent, background: "transparent" }}
                         disabled={!canAutoMention}
                         onClick={onAutoMention}

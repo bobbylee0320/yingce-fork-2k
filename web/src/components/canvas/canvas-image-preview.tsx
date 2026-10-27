@@ -3,6 +3,7 @@ import { Image as ImageIcon, LoaderCircle } from "lucide-react";
 
 import { AppModal } from "@/components/ui/product/app-modal";
 import { resolveImageUrl } from "@/services/image-storage";
+import { peekCachedResourceObjectUrl } from "@/services/resource-blob-cache";
 
 type CanvasImagePreviewProps = {
     src?: string;
@@ -12,16 +13,18 @@ type CanvasImagePreviewProps = {
 };
 
 export function CanvasImagePreview({ src = "", storageKey, alt = "图片", onClose }: CanvasImagePreviewProps) {
-    const [resolvedSrc, setResolvedSrc] = useState(storageKey ? "" : src);
+    const [resolvedSrc, setResolvedSrc] = useState(() => (storageKey ? peekCachedResourceObjectUrl(storageKey) : src));
     const [loading, setLoading] = useState(Boolean(src || storageKey));
     const [error, setError] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
-        setResolvedSrc(storageKey ? "" : src);
+        // 本会话刚上传的图片直接用内存中的原图 Blob，打开预览不再等待服务器回传。
+        const localSrc = storageKey ? peekCachedResourceObjectUrl(storageKey) : "";
+        setResolvedSrc(storageKey ? localSrc : src);
         setLoading(Boolean(src || storageKey));
         setError(false);
-        if (!src && !storageKey) return () => {
+        if (localSrc || (!src && !storageKey)) return () => {
             cancelled = true;
         };
         void resolveImageUrl(storageKey, src)
@@ -52,7 +55,7 @@ export function CanvasImagePreview({ src = "", storageKey, alt = "图片", onClo
             open
             flush
             title={
-                <div className="flex min-w-0 items-center gap-2.5">
+                <div className="flex min-w-0 items-center gap-2">
                     <span
                         className="grid size-7 shrink-0 place-items-center rounded-[var(--r-sm)] border"
                         style={{

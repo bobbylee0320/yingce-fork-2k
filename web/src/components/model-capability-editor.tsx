@@ -746,7 +746,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function NumberField({ label, value, min, max, disabled, onChange }: { label: string; value?: number; min: number; max?: number; disabled: boolean; onChange: (value: number | null) => void }) {
     return (
         <label className="admin-capability-number-field block min-w-0">
-            <span className="admin-capability-field-label mb-1.5 block text-xs text-foreground/62">{label}</span>
+            <span className="admin-capability-field-label mb-2 block text-xs text-foreground/62">{label}</span>
             <InputNumber className="w-full" disabled={disabled} min={min} max={max} precision={0} value={value} onChange={onChange} />
         </label>
     );
@@ -754,7 +754,7 @@ function NumberField({ label, value, min, max, disabled, onChange }: { label: st
 
 function BooleanField({ label, value, disabled, onChange }: { label: string; value: { supported: boolean; default: boolean }; disabled: boolean; onChange: (value: { supported: boolean; default: boolean }) => void }) {
     return (
-        <div className="admin-capability-boolean-field flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2.5">
+        <div className="admin-capability-boolean-field flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2">
             <div className="min-w-0">
                 <div className="text-xs font-medium">{label}</div>
                 <div className="text-[var(--fs-tiny)] text-foreground/45">可发送参数与默认值</div>
@@ -775,7 +775,7 @@ function BooleanField({ label, value, disabled, onChange }: { label: string; val
 
 function ParameterField({ label, description, supported, disabled, onChange }: { label: string; description: string; supported: boolean; disabled: boolean; onChange: (supported: boolean) => void }) {
     return (
-        <div className="admin-capability-parameter-field flex min-h-12 items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2.5">
+        <div className="admin-capability-parameter-field flex min-h-12 items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2">
             <div className="min-w-0">
                 <div className="break-all text-xs font-medium">{label}</div>
                 <div className="mt-0.5 text-[var(--fs-tiny)] leading-5 text-foreground/45">{description}</div>

@@ -140,7 +140,7 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
                             {voiceName ? (
                                 <div className="flex items-center justify-between gap-3 rounded-lg bg-foreground/[.04] px-4 py-3">
                                     <span className="min-w-0">
-                                        <span className="block text-[11px] text-foreground/45">当前声音</span>
+                                        <span className="block text-[var(--fs-label)] text-foreground/45">当前声音</span>
                                         <span className="block truncate text-sm font-medium">{voiceName}</span>
                                     </span>
                                     <button type="button" disabled={Boolean(busyKey)} onClick={() => void commit("unbind", () => unbindCharacterVoice(assetId), "声音绑定已解除")} className="shrink-0 rounded text-xs text-foreground/45 underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-[var(--workspace-accent)] disabled:cursor-wait">
@@ -154,7 +154,7 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
                 </div>
                 <footer className={`grid shrink-0 transition-[grid-template-rows] duration-200 [transition-timing-function:cubic-bezier(.16,1,.3,1)] motion-reduce:transition-none ${dirty ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`} aria-hidden={!dirty}>
                     <div className="overflow-hidden">
-                        <div className="flex items-center justify-between gap-3 border-t border-border px-7 py-3.5">
+                        <div className="flex items-center justify-between gap-3 border-t border-border px-7 py-4">
                             <span className="text-xs text-foreground/45">资料有改动，保存后生成新版本</span>
                             <span className="flex gap-2">
                                 <Button type="text" size="small" tabIndex={dirty ? 0 : -1} onClick={() => setDrafts(baseline)}>还原</Button>
@@ -202,7 +202,7 @@ function CharacterTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) =
                         aria-controls={`character-tab-panel-${item.value}`}
                         tabIndex={active ? 0 : -1}
                         onClick={() => onChange(item.value)}
-                        className={`relative flex h-14 items-center justify-center gap-2 rounded-t-lg text-[15px] outline-none transition-colors duration-150 focus-visible:bg-foreground/[.05] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)] [&_svg]:size-[18px] ${active ? "font-semibold text-foreground" : "font-medium text-foreground/50 hover:bg-foreground/[.03] hover:text-foreground/80"}`}
+                        className={`relative flex h-14 items-center justify-center gap-2 rounded-t-lg text-[var(--fs-body)] outline-none transition-colors duration-150 focus-visible:bg-foreground/[.05] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)] [&_svg]:size-[18px] ${active ? "font-semibold text-foreground" : "font-medium text-foreground/50 hover:bg-foreground/[.03] hover:text-foreground/80"}`}
                     >
                         {item.icon}
                         {item.label}
@@ -227,16 +227,16 @@ function CharacterStage({ name, role, cover, hasCover, voiceName, voiceSampleId,
                 <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_50%_40%,rgba(255,255,255,.08),transparent_62%)] pb-24">
                     {hasCover ? null : (
                         <div className="text-center">
-                            <span className="mx-auto grid size-28 place-items-center rounded-full border border-white/12 text-5xl font-extralight text-white/70">{characterInitial(name)}</span>
+                            <span className="mx-auto grid size-28 place-items-center rounded-full border border-white/12 text-5xl font-normal text-white/70">{characterInitial(name)}</span>
                             <p className="mt-4 text-xs text-white/40">在右侧「形象」中选择或上传立绘</p>
                         </div>
                     )}
                 </div>
             )}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
-            <span className="absolute left-7 top-6 text-[10px] font-medium uppercase tracking-[.28em] text-white/50">Character{version ? ` · v${version}` : ""}</span>
+            <span className="absolute left-7 top-6 text-[var(--fs-label)] font-medium uppercase tracking-[.28em] text-white/50">Character{version ? ` · v${version}` : ""}</span>
             <div className="absolute inset-x-0 bottom-0 px-7 pb-7">
-                <h2 className="truncate text-[32px] font-semibold leading-tight tracking-tight">{name}</h2>
+                <h2 className="truncate text-[var(--fs-display)] font-semibold leading-tight tracking-tight">{name}</h2>
                 <p className="mt-1 line-clamp-2 max-w-[46ch] text-sm leading-6 text-white/60">{role || "尚未填写剧情身份"}</p>
                 <VoiceChip name={voiceName} sampleId={voiceSampleId} />
             </div>
@@ -252,7 +252,7 @@ function VoiceChip({ name, sampleId }: { name: string; sampleId: string }) {
         audioRef.current?.pause();
         setPlaying(false);
     }, [sampleId]);
-    if (!name) return <p className="mt-4 inline-flex items-center gap-1.5 text-xs text-white/35"><Mic className="size-3.5" />未绑定声音</p>;
+    if (!name) return <p className="mt-4 inline-flex items-center gap-2 text-xs text-white/35"><Mic className="size-3.5" />未绑定声音</p>;
     const toggle = async () => {
         if (!sampleId) return;
         const audio = audioRef.current || (audioRef.current = new Audio());
@@ -271,7 +271,7 @@ function VoiceChip({ name, sampleId }: { name: string; sampleId: string }) {
         }
     };
     return (
-        <button type="button" disabled={!sampleId} onClick={() => void toggle()} aria-label={sampleId ? `${playing ? "暂停" : "试听"}声音 ${name}` : `声音 ${name}`} className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/10 py-1 pl-1 pr-3.5 text-xs text-white/85 outline-none backdrop-blur transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white/60 disabled:cursor-default">
+        <button type="button" disabled={!sampleId} onClick={() => void toggle()} aria-label={sampleId ? `${playing ? "暂停" : "试听"}声音 ${name}` : `声音 ${name}`} className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/10 py-1 pl-1 pr-4 text-xs text-white/85 outline-none backdrop-blur transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white/60 disabled:cursor-default">
             <span className="grid size-6 place-items-center rounded-full bg-white text-black">{playing ? <Pause className="size-3" /> : sampleId ? <Play className="size-3 translate-x-px" /> : <Mic className="size-3" />}</span>
             <span className="truncate">{name}</span>
         </button>
@@ -286,7 +286,7 @@ function ProfileForm({ drafts, onChange }: { drafts: Drafts; onChange: (key: key
             </Field>
             {FIELD_GROUPS.map((group) => (
                 <fieldset key={group.title} className="space-y-4">
-                    <legend className="mb-4 flex w-full items-center gap-3 text-[11px] font-medium uppercase tracking-[.18em] text-foreground/40">
+                    <legend className="mb-4 flex w-full items-center gap-3 text-[var(--fs-label)] font-medium uppercase tracking-[.18em] text-foreground/40">
                         {group.title}
                         <span className="h-px flex-1 bg-border" />
                     </legend>
@@ -306,7 +306,7 @@ function ProfileForm({ drafts, onChange }: { drafts: Drafts; onChange: (key: key
 function Field({ label, wide = true, children }: { label: string; wide?: boolean; children: ReactNode }) {
     return (
         <label className={`block ${wide ? "col-span-2" : "col-span-2 sm:col-span-1"}`}>
-            <span className="mb-1.5 block text-xs text-foreground/55">{label}</span>
+            <span className="mb-2 block text-xs text-foreground/55">{label}</span>
             {children}
         </label>
     );

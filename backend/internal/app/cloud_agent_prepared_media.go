@@ -216,16 +216,41 @@ func pinCloudAgentPreparedMedia(repo *repository.Repository, userID, runID, appr
 	return repo.UpsertCloudAgentResourceLeases(userID, runID, approvalID, ids, prepared.Quote.ExpiresAt)
 }
 
+// cloudAgentPreparedSpecUnchanged 判断这次准入解析出的规格是否就是批准时固定的规格。
+func cloudAgentPreparedSpecUnchanged(prepared *cloudAgentPreparedMedia, task *model.Task) bool {
+	if prepared == nil || prepared.ResolvedHash == "" || task == nil {
+		return false
+	}
+	hash, err := cloudAgentResolvedMediaHash(task)
+	return err == nil && hash == prepared.ResolvedHash
+}
+
+// cloudAgentStaleApprovalError 表示批准时的报价、依赖或规格在提交前已经失效。此时还没有
+// 创建任务和订单，让 Agent 重新申请审批（仍需用户再次批准）而不是整轮失败；
+// 这类失败计入同一工具的自动纠正次数，不会无限重复。
+func cloudAgentStaleApprovalError(message, action string) error {
+	return &cloudAgentMediaAdmissionError{
+		error:          creationConflict(message),
+		Reason:         "approval_stale",
+		ErrorClass:     cloudAgentToolErrorStateConflict,
+		Retryable:      true,
+		RequiredAction: action,
+	}
+}
+
 func validateCloudAgentPreparedAdmission(repo *repository.Repository, userID string, prepared *cloudAgentPreparedMedia, task *model.Task, order *model.BillingOrder, doc map[string]any, args cloudAgentMediaArgs) error {
-	if prepared == nil || prepared.Version != 1 || prepared.Hash == "" || time.Now().After(prepared.Quote.ExpiresAt) {
-		return creationConflict("生成报价已过期，请刷新报价并重新批准；未提交任务")
+	if prepared == nil || prepared.Version != 1 || prepared.Hash == "" {
+		return creationConflict("缺少已批准的生成准备态，请重新申请审批；未提交任务")
+	}
+	if time.Now().After(prepared.Quote.ExpiresAt) {
+		return cloudAgentStaleApprovalError("生成报价已过期，请重新调用 generate_media 申请审批；未提交任务", "retry")
 	}
 	dependency, err := cloudAgentMediaDependencyHash(doc, args)
 	if err != nil {
 		return err
 	}
 	if dependency != prepared.DependencyHash {
-		return creationConflict("画布生成依赖已变化，请重新准备并批准；未提交任务")
+		return cloudAgentStaleApprovalError("画布生成依赖已变化，请重新读取画布后再申请审批；未提交任务", "reread_canvas")
 	}
 	if len(prepared.CharacterVersions) > 0 {
 		canvas, err := repo.CanvasProjectForUser(userID, task.ProjectID)
@@ -239,11 +264,11 @@ func validateCloudAgentPreparedAdmission(repo *repository.Repository, userID str
 		for id, versionID := range prepared.CharacterVersions {
 			node := nodes[id]
 			if node == nil || !cloudAgentCharacterNode(node) {
-				return creationConflict("角色卡已变化，请重新准备并批准；未提交任务")
+				return cloudAgentStaleApprovalError("角色卡已变化，请重新读取画布后再申请审批；未提交任务", "reread_canvas")
 			}
 			character, err := cloudAgentResolveCharacter(repo, userID, canvas.ProjectID, node)
 			if err != nil || character.Card.VersionID != versionID {
-				return creationConflict("角色卡版本已变化，请重新准备并批准；未提交任务")
+				return cloudAgentStaleApprovalError("角色卡版本已变化，请重新读取画布后再申请审批；未提交任务", "reread_canvas")
 			}
 		}
 	}
@@ -252,7 +277,7 @@ func validateCloudAgentPreparedAdmission(repo *repository.Repository, userID str
 		return err
 	}
 	if hash != prepared.ResolvedHash || cloudAgentQuoteHash(order) != prepared.QuoteHash {
-		return creationConflict("模型规格或价格已变化，请刷新报价并重新批准；未提交任务")
+		return cloudAgentStaleApprovalError("模型规格或价格已变化，请重新调用 generate_media 申请审批；未提交任务", "retry")
 	}
 	if _, err := cloudAgentPreparedReferences(repo, userID, prepared); err != nil {
 		return err

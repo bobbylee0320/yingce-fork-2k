@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
  */
 export const toolButtonVariants = cva(
     [
-        "inline-flex select-none items-center justify-center gap-1.5 rounded-md px-3",
+        "inline-flex select-none items-center justify-center gap-2 rounded-md px-3",
         "font-medium transition-colors",
         "outline-none focus-visible:outline-none data-[input-modality=keyboard]:focus-visible:ring-2 data-[input-modality=keyboard]:focus-visible:ring-ring",
         "disabled:pointer-events-none disabled:opacity-45",
@@ -36,9 +36,9 @@ export const toolButtonVariants = cva(
                 default: "bg-surface-secondary text-muted-foreground hover:bg-surface-hover hover:text-foreground",
             },
             size: {
-                xs: "h-6 px-1.5 text-tiny [&_svg]:size-3.5",
+                xs: "h-6 px-2 text-tiny [&_svg]:size-3.5",
                 sm: "h-7 px-2 text-caption [&_svg]:size-4",
-                default: "h-8 px-2.5 text-caption [&_svg]:size-4",
+                default: "h-8 px-2 text-caption [&_svg]:size-4",
                 lg: "h-9 px-3 text-body [&_svg]:size-[18px]",
             },
             tone: {

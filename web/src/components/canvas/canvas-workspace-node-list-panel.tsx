@@ -30,13 +30,13 @@ export function CanvasWorkspaceNodeListPanel({
 }) {
     return (
         <>
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2.5">
+            <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
                 <Layers className="size-3.5 shrink-0" />
                 <span className="truncate text-xs font-semibold">画布节点</span>
                 <span className="tabular-nums text-foreground/32">{nodes.length.toLocaleString("zh-CN")}</span>
             </header>
             <div className="shrink-0 border-b border-border/70 p-2">
-                <label className="flex h-8 items-center gap-1.5 rounded-[var(--r-md)] bg-foreground/[.045] px-2 focus-within:ring-2 focus-within:ring-[var(--workspace-accent-soft)]">
+                <label className="flex h-8 items-center gap-2 rounded-[var(--r-md)] bg-foreground/[.045] px-2 focus-within:ring-2 focus-within:ring-[var(--workspace-accent-soft)]">
                     <Search className="size-3.5 shrink-0 text-foreground/32" />
                     <input
                         value={query}
@@ -73,7 +73,7 @@ const CanvasNodeListItem = memo(function CanvasNodeListItem({ node, config, acti
             type="button"
             role="option"
             aria-selected={active}
-            className="grid w-full grid-cols-[44px_minmax(0,1fr)] items-center gap-2 rounded-[var(--r-md)] px-2 py-1.5 text-left transition-[background-color,box-shadow] hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+            className="grid w-full grid-cols-[44px_minmax(0,1fr)] items-center gap-2 rounded-[var(--r-md)] px-2 py-2 text-left transition-[background-color,box-shadow] hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
             style={{
                 background: active ? "var(--surface-active)" : undefined,
                 boxShadow: active ? "inset 0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent)" : undefined,
@@ -84,17 +84,17 @@ const CanvasNodeListItem = memo(function CanvasNodeListItem({ node, config, acti
         >
             <CanvasNodeListThumbnail node={node} />
             <span className="min-w-0 self-center">
-                <span className="flex min-w-0 items-center gap-1.5">
+                <span className="flex min-w-0 items-center gap-2">
                     <span className="min-w-0 truncate text-xs font-medium leading-4 text-foreground" title={node.title}>
                         {node.title || getNodeListLabel(node.type)}
                     </span>
                 </span>
-                <span className="mt-0.5 block truncate text-[10px] leading-3 text-foreground/45" title={materialSummary}>
+                <span className="mt-0.5 block truncate text-[var(--fs-label)] leading-3 text-foreground/45" title={materialSummary}>
                     {materialSummary}
                 </span>
-                <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] leading-3 text-foreground/40">
+                <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[var(--fs-label)] leading-3 text-foreground/40">
                     <Clock3 className="size-2.5 shrink-0" />
-                    <span className="mt-0.5 block text-[10px] tabular-nums text-foreground/35" title={fullTime(times.updatedAt)}>
+                    <span className="mt-0.5 block text-[var(--fs-label)] tabular-nums text-foreground/35" title={fullTime(times.updatedAt)}>
                         {times.updatedLabel}
                     </span>
                 </span>

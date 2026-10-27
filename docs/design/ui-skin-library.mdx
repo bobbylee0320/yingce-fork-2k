@@ -1,0 +1,139 @@
+# UI 皮肤库架构设计
+
+本文是 [站点及外观与皮肤主题设计合同](./site-appearance-and-skins.mdx) 第 3 节的后续设计，回答一个问题：在 [UI 设计系统规范](../ui-design-system.md) 定下全站尺度之后，皮肤库应该允许改什么、怎样保证任何一套皮肤都不会破坏这些规则。
+
+## 1. 现状
+
+| 部分 | 位置 | 说明 |
+| --- | --- | --- |
+| 皮肤数据 | `system_settings.appearance.skinThemes`，服务端校验在 `backend/internal/app/appearance_skins.go` | 每套皮肤 = 浅色 50 色 + 深色 50 色 + 17 项组件参数 + 主按钮填充 |
+| 前端映射 | `web/src/lib/skin-themes.ts` | `skinCSSVariables` 写 `:root` 变量，`getSkinAntOverrides` 生成 antd token |
+| 基线 | `web/src/styles/globals.css`、`web/src/lib/app-theme.ts` | 经典主题不注入变量，直接使用这里的默认值 |
+| 区域 token | `--user-*`（用户工作台）、`--admin-*`（后台）、`--workspace-*` / 画布 `canvas-theme.ts`、`--auth-*`（登录） | 四套区域 token 各自定义了一部分颜色，皮肤只覆盖其中一部分 |
+
+现有问题：
+
+1. **尺度可被皮肤改成任意值**。组件参数允许按钮圆角 0–32、动效 0–800ms、字重 400–700、悬停抬升 0–4px。这些都是设计系统的硬规则（圆角四档、150–250ms、字重最多 600、hover 不位移），皮肤可以轻易违反。
+2. **颜色要逐个手填**。100 个颜色里大部分可以由少数种子色推导（hover / active / soft / 边框透明度），手填容易出现同一角色多种颜色、对比度不足。
+3. **区域 token 没有全部接到皮肤**。`--user-*` 的表面与文字是写死的十六进制，自定义皮肤切换后用户工作台局部仍是经典配色；画布 `canvas-theme.ts` 完全独立。
+4. **antd 与 CSS 变量两套出口各自取值**。`app-theme.ts` 里有大量 `skin.x || 默认值` 分支，新增组件时容易漏掉一边。
+
+## 2. 目标
+
+- 皮肤只改「风格」，不改「规则」：颜色角色、材质强度、形状档位和密度档位可选，具体数值来自设计系统的固定档位。
+- 一份解析后的 token 同时驱动 CSS 变量、antd `ThemeConfig` 和画布主题，页面代码永远不按皮肤 ID 写分支。
+- 任何皮肤保存前都能被机器验证：档位合法、角色不重复、文字对比度达标。
+- 皮肤可以导入导出为标准 token 文件（Design Tokens Community Group 格式），便于设计工具往返。
+
+## 3. 分层
+
+```
+Foundation（固定，不可换肤）
+  间距 4 倍数、字号 6 档、字重 400/500/600、圆角档位 4/8/12/16、z-index 顺序、动效 150–250ms
+        │
+Skin（可换肤，只能在 Foundation 允许的范围里选）
+  ├─ color   角色种子色 + 中性色相 → 推导完整色板（浅 / 深两套）
+  ├─ shape   圆角预设：sharp / default / soft（只在档位内移动一档）
+  ├─ density 控件高度预设：compact 28/32/36 · default 28/34/40 · comfortable 32/36/44
+  ├─ material 阴影 none / soft / strong（都是两层）、毛玻璃开关、边框透明度
+  └─ brand   主按钮填充（纯色 / 渐变）
+        │
+Resolver（纯函数）
+  resolveSkin(manifest, mode) → ResolvedTokens（扁平的语义 token 表）
+        │
+Adapters
+  ├─ toCSSVariables(resolved)   → :root 上的 Semantic 变量（含 --user-* / --admin-* / --auth-* 别名）
+  ├─ toAntTheme(resolved)       → antd ThemeConfig（全局 + 组件 token）
+  └─ toCanvasTheme(resolved)    → 画布节点、连线、网格颜色
+```
+
+要点：
+
+- Foundation 只存在于 `globals.css` 的 Primitive 层与 `app-theme.ts`，皮肤数据里不出现像素值。
+- `shape` 预设只决定「控件 / 卡片 / 浮层 / 弹窗」各取哪一档，例如 `sharp = 4/8/8/12`、`default = 8/12/12/16`、`soft = 8/12/16/16`。档位之外的值无法表达。
+- 区域 token（`--user-*` 等）改成 Semantic 变量的别名，由 `toCSSVariables` 一次写出；区域样式文件只引用，不再定义十六进制。
+
+## 4. 皮肤清单格式
+
+```json
+{
+  "$schema": "https://yingce.dev/schema/skin-v1.json",
+  "id": "studio-teal",
+  "name": "创作室青橙",
+  "version": 1,
+  "extends": "classic",
+  "color": {
+    "accent": "#0f8b8d",
+    "neutralHue": 200,
+    "neutralChroma": 0.006,
+    "success": "#16a34a",
+    "warning": "#d97706",
+    "danger": "#dc2626",
+    "info": "#2563eb",
+    "overrides": { "light": {}, "dark": {} }
+  },
+  "shape": "default",
+  "density": "default",
+  "material": { "shadow": "soft", "glass": true, "borderAlpha": 0.1 },
+  "brand": { "button": { "light": { "mode": "solid" }, "dark": { "mode": "solid" } } }
+}
+```
+
+- `color` 只要求 5 个角色种子色和中性色相；`overrides` 允许覆盖推导结果中的个别语义色，键名只能是已登记的语义 token。
+- `extends` 让皮肤只写差异，未写的字段继承父皮肤；经典皮肤是唯一的根。
+- 导出时转换为 DTCG 结构（`$value` / `$type`），导入时反向转换并走同一套校验。
+
+## 5. 颜色推导
+
+在 OKLCH 空间计算，保证同一角色的明度阶在浅深两套里感知一致：
+
+| 语义 token | 推导 |
+| --- | --- |
+| `primary` / `primaryHover` / `primaryActive` | 种子色；hover 明度 ±0.04；active 明度 ±0.08（浅色变暗、深色变亮） |
+| `primaryForeground` | 在白 / 近黑之间取对比度更高者，要求 ≥ 4.5:1 |
+| `selected` / `selectedHover` | 中性前景 9% / 13% 透明度，不使用主色（主操作与普通选中是不同角色） |
+| `page` / `surface` / `surfaceHover` / `surfaceRaised` | 中性色相的固定明度阶：浅色 0.985 / 1.0 / 0.965 / 1.0，深色 0.16 / 0.2 / 0.24 / 0.22 |
+| `text` / `textSecondary` / `textTertiary` | 同一前景色的 100% / 64% / 46%（深色 100% / 68% / 50%） |
+| `border` / `borderStrong` | 前景色 `borderAlpha` / `borderAlpha × 1.7` |
+| `ring` | 主色 55% 透明度 |
+| 状态色 soft 底 | 状态色 12% 透明度 |
+
+推导结果是起点，管理员仍可在 `overrides` 里改个别值，校验器保证改完仍合法。
+
+## 6. 校验
+
+保存、导入和启动加载时都运行同一组规则（前端用于即时提示，服务端为最终防线）：
+
+1. 结构：只接受登记过的键；颜色只接受 6/8 位 HEX；预设只接受枚举值。
+2. 对比度：正文 / 背景 ≥ 4.5:1，次要文字 ≥ 4.5:1，辅助文字与图标 ≥ 3:1，主按钮文字 / 主按钮 ≥ 4.5:1，焦点环 / 背景 ≥ 3:1。
+3. 角色分离：`primary` 与 `selected`、`danger` 与 `primary` 的色差（ΔE OKLCH）不得低于阈值，避免主操作和危险操作看起来一样。
+4. 浅深两套必须都完整；缺一套时拒绝保存，而不是运行时复用。
+
+## 7. 运行时
+
+- 首屏：`main.tsx` 先取公开外观，`resolveSkin` 后一次写入 `:root` 变量与 `data-skin`，再挂载 React（保持现有无闪烁顺序）。
+- 切换明暗：只重算 `resolveSkin(manifest, mode)` 并替换变量；antd `ConfigProvider` 通过 `cssVar` 模式消费同一组值。
+- 缓存：解析结果按 `skinId + version + mode` 缓存，避免每次渲染重复推导。
+- 预览：后台编辑器对草稿调用同一个 resolver，把变量写到预览容器而不是 `:root`，不影响当前页面。
+
+## 8. 迁移步骤
+
+1. **收口出口**：把 `app-theme.ts` 中的 `skin.x || 默认值` 改为读取 `ResolvedTokens`；经典皮肤也走 resolver，默认值集中在一处。不改数据格式，可以单独发布。
+2. **区域 token 别名化**：`--user-*`、`--admin-*`、`--auth-*`、画布主题改为引用 Semantic 变量；逐区域迁移，每步做明暗截图对比。
+3. **组件参数收敛为预设**：服务端把现有 17 项数值参数映射到最近的 `shape` / `density` / `material` 预设（向下取整到档位），外观 schema 升到下一版本；读取旧数据时转换，管理员保存后写回。转换前备份外观 JSON。
+4. **颜色推导**：后台编辑器改为「种子色 + 覆盖」，现有 100 色作为 `overrides` 原样保留，管理员可以一键「按种子色重新推导」。
+5. **导入导出**：增加 DTCG 导入导出，复用同一套校验。
+
+每一步都可独立回退，不需要一次性重写。
+
+## 9. 验证
+
+- 单元测试：resolver 对每个内置皮肤输出完整 token 表；校验器对越界档位、低对比度、角色冲突返回结构化错误。
+- 合同测试：扫描 `web/src` 样式，确认区域样式文件不再出现十六进制颜色定义（迁移完成的区域）。
+- 视觉回归：每套内置皮肤 × 明暗 × 关键路由（首页、画布库、画布编辑器、素材库、设置、后台外观页）截图对比。
+
+## 10. 不做的事
+
+- 不允许皮肤携带任意 CSS、选择器、URL 或脚本。
+- 不提供逐组件的像素级参数；需要新的视觉变化时先扩展 Foundation 档位或新增预设。
+- 页面和组件不按皮肤 ID 分支；需要差异时新增语义 token。

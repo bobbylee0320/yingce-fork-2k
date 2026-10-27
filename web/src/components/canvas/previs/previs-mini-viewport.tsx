@@ -22,10 +22,10 @@ export function PrevisMiniViewport({ scene }: { scene: PrevisScene }) {
                     {visibleObjects.map((object) => <MiniObject key={object.id} object={object} />)}
                 </Suspense>
             </Canvas>
-            <div className="pointer-events-none absolute inset-x-3 top-3 flex items-center justify-between text-[9px] font-semibold uppercase tracking-[0.16em] text-white/55">
+            <div className="pointer-events-none absolute inset-x-3 top-3 flex items-center justify-between text-[var(--fs-label)] font-semibold uppercase tracking-[0.16em] text-white/55">
                 <span>Top view</span><span>{activeShot?.name || "未设置镜头"}</span>
             </div>
-            <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between gap-2 rounded-lg border border-white/12 bg-[#0d1118cc] px-3 py-2 text-[10px] font-medium text-white/80 backdrop-blur-md">
+            <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between gap-2 rounded-lg border border-white/12 bg-[#0d1118cc] px-3 py-2 text-[var(--fs-label)] font-medium text-white/80 backdrop-blur-md">
                 <Stat value={visibleObjects.length} label="对象" />
                 <Stat value={scene.cameras.length} label="机位" />
                 <Stat value={`${activeShot?.duration ?? 0}s`} label="时长" />

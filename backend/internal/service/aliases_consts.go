@@ -85,5 +85,6 @@ const (
 	ReasonUnavailable                  = app.ReasonUnavailable
 	SessionCookieName                  = app.SessionCookieName
 	SkillPackageUploadMaxBytes         = app.SkillPackageUploadMaxBytes
+	SkillPackageEditMaxBytes           = app.SkillPackageEditMaxBytes
 	WorkflowPluginRunningHub           = app.WorkflowPluginRunningHub
 )

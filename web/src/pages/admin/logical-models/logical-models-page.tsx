@@ -551,7 +551,7 @@ export default function LogicalModelsPage() {
 function EditorSection({ icon, title, description, children }: { icon?: ReactNode; title: string; description?: string; children: ReactNode }) {
     return (
         <section className="model-editor-section">
-            <div className="mb-4 flex items-center gap-2.5">
+            <div className="mb-4 flex items-center gap-2">
                 {icon ? <span className="grid size-7 shrink-0 place-items-center rounded-md bg-muted/50 text-foreground/55">{icon}</span> : null}
                 <div>
                     <h2 className="text-[var(--fs-body)] font-semibold">{title}</h2>

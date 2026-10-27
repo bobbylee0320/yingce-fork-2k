@@ -100,7 +100,8 @@ func (s *Service) startBillingAutoRefundWorker() {
 }
 
 // autoRefundReviewBilling 退回“待核对队列”中的冻结积分。队列口径与管理员页面一致
-// （待核对、运行超时、任务已失败/取消但仍预授权），保证开关处理的就是页面上看到的订单。
+// （待核对、运行超时、任务已失败/取消但仍预授权），但排除上游已确认生成作品的订单：
+// 这类订单要等作品交付后结算，或由管理员人工处理，自动退款会让作品白送。
 // 每轮重新读取开关，关闭后下一轮立即停止。
 func (s *Service) autoRefundReviewBilling(ctx context.Context) int {
 	setting, err := s.billingAutoRefundSetting()
@@ -111,7 +112,7 @@ func (s *Service) autoRefundReviewBilling(ctx context.Context) int {
 	if !setting.Enabled {
 		return 0
 	}
-	orders, _, err := s.repo.AdminBillingOrders("review", "", billingAutoRefundBatch, 0)
+	orders, err := s.repo.AutoRefundableBillingOrders(billingAutoRefundBatch)
 	if err != nil {
 		slog.Warn("billing auto refund query failed", "error", err)
 		return 0

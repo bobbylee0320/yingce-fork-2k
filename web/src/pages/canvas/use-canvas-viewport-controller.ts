@@ -7,9 +7,24 @@ import { getCanvasNodesBounds, viewportAtScale, viewportForBounds, type CanvasVi
 import { CanvasNodeType, type CanvasNodeData, type ContextMenuState, type Position, type ViewportTransform } from "@/types/canvas";
 import { useCanvasViewportTransition } from "./use-canvas-viewport-transition";
 import { unobscuredCanvasArea, viewportForAgentNodes } from "@/lib/canvas/canvas-viewport";
+import { agentFocusDuration, canvasNodesVisibleInArea, interpolateCameraViewport, type AgentCanvasFocus } from "@/lib/canvas/agent-canvas-focus";
+
+/** 同一批 Agent 增量的合并窗口。 */
+const AGENT_FOCUS_COALESCE_MS = 160;
+/** 用户最近一次平移/缩放后的静默期，期间只轻闪不移动镜头。 */
+const AGENT_FOCUS_USER_IDLE_MS = 2500;
+const AGENT_FOCUS_PULSE_MS = 1400;
+const AGENT_FOCUS_PULSE_LIMIT = 12;
+
+// 用户正在画布里的输入框、富文本或节点提示词里打字时，移动镜头会把光标所在面板挪走。
+function agentFocusEditingInside(container: HTMLElement) {
+    const active = container.ownerDocument.activeElement;
+    if (!(active instanceof HTMLElement) || !container.contains(active)) return false;
+    return active.isContentEditable || active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement;
+}
 
 type UseCanvasViewportControllerOptions = {
-    agentCreatedNodes: CanvasNodeData[] | null;
+    agentFocus: AgentCanvasFocus | null;
     containerRef: { current: HTMLDivElement | null };
     size: CanvasViewportSize;
     viewportRef: { current: ViewportTransform };
@@ -24,7 +39,7 @@ type UseCanvasViewportControllerOptions = {
 };
 
 export function useCanvasViewportController({
-    agentCreatedNodes,
+    agentFocus,
     containerRef,
     size,
     viewportRef,
@@ -61,23 +76,100 @@ export function useCanvasViewportController({
     }, [containerRef]);
 
     const { cancelViewportTransition, transitionViewportTo } = useCanvasViewportTransition(viewportRef, previewViewport, commitViewport);
-    const focusedAgentBatch = useRef<CanvasNodeData[] | null>(null);
-    useEffect(() => {
-        if (!agentCreatedNodes || focusedAgentBatch.current === agentCreatedNodes || size.width <= 0 || size.height <= 0) return;
-        focusedAgentBatch.current = agentCreatedNodes;
-        const targets = agentCreatedNodes.filter((node) => !isHiddenBatchChild(node, nodesRef.current) && !isNodeHiddenByCollapsedFrame(node, nodesRef.current));
-        const rect = containerRef.current?.getBoundingClientRect();
-        const panel = containerRef.current?.ownerDocument.querySelector(".canvas-agent-panel")?.getBoundingClientRect();
-        const area = unobscuredCanvasArea(size, rect && panel ? { left: panel.left - rect.left, top: panel.top - rect.top, right: panel.right - rect.left, bottom: panel.bottom - rect.top } : undefined);
-        const target = viewportForAgentNodes(targets, viewportRef.current, area);
+
+    // Agent 镜头跟随：Agent 新建或操作节点后，平滑飞到这些节点并轻闪提示。
+    // 同一批 SSE 增量会连续到达，先短暂合并再移动一次；用户刚操作过视口或正在拖拽/输入时不抢镜头。
+    const lastUserViewportInputRef = useRef(0);
+    const handledAgentFocusRef = useRef<AgentCanvasFocus | null>(null);
+    const pendingAgentFocusRef = useRef<{ nodeIds: Set<string>; created: boolean } | null>(null);
+    const agentFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pulseTimersRef = useRef(new Map<HTMLElement, ReturnType<typeof setTimeout>>());
+
+    const pulseAgentNodes = useCallback((nodes: CanvasNodeData[]) => {
+        const container = containerRef.current;
+        if (!container) return;
+        for (const node of nodes.slice(0, AGENT_FOCUS_PULSE_LIMIT)) {
+            const element = container.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(node.id)}"]`);
+            if (!element) continue;
+            const previous = pulseTimersRef.current.get(element);
+            if (previous) clearTimeout(previous);
+            // 先移除再强制回流，连续操作同一节点时动画能重新播放。
+            delete element.dataset.agentFocusPulse;
+            void element.offsetWidth;
+            element.dataset.agentFocusPulse = "true";
+            pulseTimersRef.current.set(element, setTimeout(() => {
+                delete element.dataset.agentFocusPulse;
+                pulseTimersRef.current.delete(element);
+            }, AGENT_FOCUS_PULSE_MS));
+        }
+    }, [containerRef]);
+
+    const runAgentFocusRef = useRef<() => void>(() => {});
+    runAgentFocusRef.current = () => {
+        agentFocusTimerRef.current = null;
+        const pending = pendingAgentFocusRef.current;
+        pendingAgentFocusRef.current = null;
+        const container = containerRef.current;
+        if (!pending || !container || size.width <= 0 || size.height <= 0) return;
+        const nodes = nodesRef.current;
+        const targets = nodes.filter((node) => pending.nodeIds.has(node.id) && !isHiddenBatchChild(node, nodes) && !isNodeHiddenByCollapsedFrame(node, nodes));
+        if (!targets.length) return;
+        const userBusy = container.dataset.canvasNodeDragging === "true" || performance.now() - lastUserViewportInputRef.current < AGENT_FOCUS_USER_IDLE_MS || agentFocusEditingInside(container);
+        if (userBusy) {
+            pulseAgentNodes(targets);
+            return;
+        }
+        const rect = container.getBoundingClientRect();
+        const panel = container.ownerDocument.querySelector(".canvas-agent-panel")?.getBoundingClientRect();
+        const area = unobscuredCanvasArea(size, panel ? { left: panel.left - rect.left, top: panel.top - rect.top, right: panel.right - rect.left, bottom: panel.bottom - rect.top } : undefined);
+        const current = viewportRef.current;
+        // 仅更新的节点已在视野内时只轻闪，不移动镜头。
+        if (!pending.created && canvasNodesVisibleInArea(targets, current, area)) {
+            pulseAgentNodes(targets);
+            return;
+        }
+        const target = viewportForAgentNodes(targets, current, area);
         if (!target) return;
-        setSelectedNodeIds(new Set(targets.map((node) => node.id)));
-        setSelectedConnectionId(null);
-        setContextMenu(null);
-        setDialogNodeId(null);
-        setToolbarNodeId(null);
-        transitionViewportTo(target);
-    }, [agentCreatedNodes, containerRef, nodesRef, size, viewportRef, setSelectedNodeIds, setSelectedConnectionId, setContextMenu, setDialogNodeId, setToolbarNodeId, transitionViewportTo]);
+        if (pending.created) {
+            setSelectedNodeIds(new Set(targets.map((node) => node.id)));
+            setSelectedConnectionId(null);
+            setContextMenu(null);
+            setDialogNodeId(null);
+            setToolbarNodeId(null);
+        }
+        const anchor = { x: (area.left + area.right) / 2, y: (area.top + area.bottom) / 2 };
+        transitionViewportTo(target, {
+            duration: agentFocusDuration(current, target, size),
+            interpolate: (from, to, progress) => interpolateCameraViewport(from, to, progress, anchor, size),
+            onComplete: () => pulseAgentNodes(targets),
+        });
+    };
+
+    useEffect(() => {
+        if (!agentFocus || handledAgentFocusRef.current === agentFocus) return;
+        handledAgentFocusRef.current = agentFocus;
+        const pending = pendingAgentFocusRef.current;
+        // 合并窗口内新建优先：已有新建批次时，后续纯更新不再扩大取景范围。
+        if (!pending || (agentFocus.created && !pending.created)) {
+            pendingAgentFocusRef.current = { nodeIds: new Set(agentFocus.nodes.map((node) => node.id)), created: agentFocus.created };
+        } else if (agentFocus.created || !pending.created) {
+            for (const node of agentFocus.nodes) pending.nodeIds.add(node.id);
+        }
+        if (agentFocusTimerRef.current) clearTimeout(agentFocusTimerRef.current);
+        agentFocusTimerRef.current = setTimeout(() => runAgentFocusRef.current(), AGENT_FOCUS_COALESCE_MS);
+    }, [agentFocus]);
+
+    useEffect(() => {
+        const pulseTimers = pulseTimersRef.current;
+        return () => {
+            if (agentFocusTimerRef.current) clearTimeout(agentFocusTimerRef.current);
+            for (const [element, timer] of pulseTimers) {
+                clearTimeout(timer);
+                delete element.dataset.agentFocusPulse;
+            }
+            pulseTimers.clear();
+        };
+    }, []);
 
     const screenToCanvas = useCallback((clientX: number, clientY: number): Position => {
         const rect = containerRef.current?.getBoundingClientRect();
@@ -163,13 +255,16 @@ export function useCanvasViewportController({
         transitionViewportTo(viewportAtScale(viewportRef.current, size, 1));
     }, [size, transitionViewportTo, viewportRef]);
 
+    // 这两个入口只由用户的滚轮、拖拽和小地图触发；记录时间供 Agent 镜头跟随避让。
     const handleViewportChange = useCallback((next: ViewportTransform) => {
+        lastUserViewportInputRef.current = performance.now();
         cancelViewportTransition();
         commitViewport(next);
         setContextMenu(null);
     }, [cancelViewportTransition, commitViewport, setContextMenu]);
 
     const handleViewportPreviewChange = useCallback((next: ViewportTransform) => {
+        lastUserViewportInputRef.current = performance.now();
         cancelViewportTransition();
         viewportRef.current = next;
     }, [cancelViewportTransition, viewportRef]);

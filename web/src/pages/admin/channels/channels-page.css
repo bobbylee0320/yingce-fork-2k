@@ -40,8 +40,8 @@
     display: flex;
     width: 100%;
     flex-direction: column;
-    gap: 7px;
-    padding: 9px 10px;
+    gap: 8px;
+    padding: 8px 8px;
     margin-bottom: 4px;
     border: 0;
     border-radius: var(--admin-radius);
@@ -96,7 +96,7 @@
     align-items: center;
     justify-content: center;
     min-width: 24px;
-    padding: 2px 7px;
+    padding: 2px 8px;
     border-radius: var(--admin-radius-sm);
     background: var(--admin-surface-3);
     color: var(--admin-text-secondary);
@@ -118,7 +118,7 @@
 .admin-channel-item-status {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     font-size: 11px;
 }
 
@@ -136,7 +136,7 @@
 
 .admin-channel-sidebar-footer {
     flex: none;
-    padding: 10px 12px;
+    padding: 8px 12px;
     border-top: 1px solid var(--admin-divider);
 }
 
@@ -156,7 +156,7 @@
 
 .admin-channel-detail-title {
     overflow-wrap: anywhere;
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 600;
 }
 
@@ -244,7 +244,7 @@
 .admin-model-reprice-field {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     width: 190px;
     max-width: 100%;
 }
@@ -309,7 +309,7 @@
 }
 
 .admin-model-reprice-table .ant-table-tbody > tr > td {
-    padding: 6px 16px;
+    padding: 8px 16px;
     vertical-align: middle;
     overflow-wrap: anywhere;
 }
@@ -326,7 +326,7 @@
 
 .admin-model-reprice-spec-row > div {
     min-width: 0;
-    padding: 6px 16px;
+    padding: 8px 16px;
 }
 
 .admin-model-reprice-spec-row + .admin-model-reprice-spec-row {
@@ -334,7 +334,7 @@
 }
 
 .admin-model-reprice-no-spec {
-    padding: 6px 16px;
+    padding: 8px 16px;
     color: var(--admin-text-muted);
 }
 

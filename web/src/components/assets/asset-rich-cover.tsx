@@ -49,14 +49,14 @@ export function CharacterAssetCover({ asset, size = "card" }: { asset: EntityAss
                 </>
             ) : showEmpty ? (
                 <span className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_50%_40%,rgba(255,255,255,.1),transparent_62%)]">
-                    <span className={`grid place-items-center rounded-full border border-white/15 font-light text-white/75 ${size === "hero" ? "size-24 text-4xl" : "size-14 text-2xl"}`}>{initial(asset.title)}</span>
+                    <span className={`grid place-items-center rounded-full border border-white/15 font-normal text-white/75 ${size === "hero" ? "size-24 text-4xl" : "size-14 text-2xl"}`}>{initial(asset.title)}</span>
                 </span>
             ) : (
                 <span className="absolute inset-0 animate-pulse bg-white/[.04] motion-reduce:animate-none" aria-hidden />
             )}
             <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/55 to-transparent" />
             {asset.data.voiceName ? (
-                <span className="pointer-events-none absolute bottom-2 right-2 inline-flex max-w-[70%] items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] text-white/85 backdrop-blur">
+                <span className="pointer-events-none absolute bottom-2 right-2 inline-flex max-w-[70%] items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[var(--fs-label)] text-white/85 backdrop-blur">
                     <Mic className="size-3 shrink-0" />
                     <span className="truncate">{asset.data.voiceName}</span>
                 </span>
@@ -75,7 +75,7 @@ export function characterAssetSummary(asset: EntityAsset) {
 /** 音频封面图形：确定性波形，不含交互（可放进按钮里）。 */
 export function AudioWaveArt({ seed, active = false }: { seed: string; active?: boolean }) {
     return (
-        <span className="relative flex h-full w-full items-center justify-center gap-[3px] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--foreground)_8%,transparent),color-mix(in_srgb,var(--foreground)_2%,transparent))] px-[14%]" aria-hidden>
+        <span className="relative flex h-full w-full items-center justify-center gap-1 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--foreground)_8%,transparent),color-mix(in_srgb,var(--foreground)_2%,transparent))] px-[14%]" aria-hidden>
             {waveBars(seed).map((height, index) => (
                 <span key={index} className={`w-[3px] shrink rounded-full transition-colors duration-200 ${active ? "bg-[var(--workspace-accent)]" : "bg-foreground/30"}`} style={{ height: `${height}%` }} />
             ))}
@@ -117,7 +117,7 @@ export function AudioPlayButton({ asset, className = "", onPlayingChange }: { as
                 event.stopPropagation();
                 void toggle();
             }}
-            className={`z-[3] grid size-9 place-items-center rounded-full bg-black/60 text-white outline-none backdrop-blur transition hover:scale-105 hover:bg-black/75 focus-visible:ring-2 focus-visible:ring-white/70 motion-reduce:transition-none ${className}`}
+            className={`z-[3] grid size-9 place-items-center rounded-full bg-black/60 text-white outline-none backdrop-blur transition-colors duration-150 hover:bg-black/75 focus-visible:ring-2 focus-visible:ring-white/70 motion-reduce:transition-none ${className}`}
         >
             {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
         </button>

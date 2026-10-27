@@ -83,7 +83,7 @@ export function CanvasVideoFrameDialog({ node, open, onClose, onConfirm }: Canva
     const lastFrameMs = Math.max(0, durationMs - 1);
 
     const title = (
-        <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2">
             <span className="grid size-8 shrink-0 place-items-center rounded-lg" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
                 <ImageIcon className="size-4" />
             </span>
@@ -121,7 +121,7 @@ export function CanvasVideoFrameDialog({ node, open, onClose, onConfirm }: Canva
                     )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: theme.toolbar.itemHover }}>
+                <div className="flex flex-wrap items-center gap-2 rounded-xl px-3 py-2" style={{ background: theme.toolbar.itemHover }}>
                     <span className="text-xs font-medium opacity-60">当前时间</span>
                     <InputNumber
                         size="small"
@@ -174,7 +174,7 @@ export function CanvasVideoFrameDialog({ node, open, onClose, onConfirm }: Canva
                     {frames.length ? (
                         <div className="thin-scrollbar grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
                             {frames.map((frame, index) => (
-                                <div key={frame.id} className="flex min-w-0 items-center gap-2 rounded-lg px-2.5 py-2" style={{ background: theme.toolbar.itemHover }}>
+                                <div key={frame.id} className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2" style={{ background: theme.toolbar.itemHover }}>
                                     <button type="button" className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2" style={{ "--tw-ring-color": theme.node.activeStroke } as CSSProperties} onClick={() => seekTo(frame.timeMs)}>
                                         <span className="block text-[var(--fs-micro)] opacity-45">画面 {index + 1}</span>
                                         <span className="block truncate font-mono text-xs font-medium">{formatVideoFrameTime(frame.timeMs)}</span>

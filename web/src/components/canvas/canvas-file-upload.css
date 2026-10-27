@@ -8,8 +8,22 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
+    border-radius: inherit;
     background: var(--upload-surface);
     color: var(--upload-text);
+}
+
+/* 本地预览：模糊与放大量由组件按真实进度给出，这里只负责把每次进度变化平滑过渡。 */
+.canvas-file-upload-preview {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+    transition: filter 480ms var(--motion-ease-out), transform 480ms var(--motion-ease-out);
+    animation: canvas-file-upload-preview-in var(--motion-dur-slow) var(--motion-ease-out) both;
 }
 
 .canvas-file-upload-glow {
@@ -28,6 +42,13 @@
     background: color-mix(in srgb, var(--upload-surface) 24%, transparent);
     backdrop-filter: blur(20px) saturate(0.8);
     pointer-events: none;
+}
+
+/* 有预览时模糊已作用在图片本身，遮罩只保留一层很淡的雾面提亮，不再叠加 backdrop-filter。 */
+.canvas-file-upload[data-preview] .canvas-file-upload-frost {
+    background: color-mix(in srgb, var(--upload-surface) 18%, transparent);
+    backdrop-filter: none;
+    transition: opacity 480ms var(--motion-ease-out);
 }
 
 .canvas-file-upload-frost::after {
@@ -57,15 +78,49 @@
 .canvas-file-upload-retry:hover { background: color-mix(in srgb, var(--upload-text) 12%, transparent); }
 .canvas-file-upload-retry:focus-visible { outline: 2px solid var(--control-focus-ring); outline-offset: 2px; }
 
+/* 角落进度标签：只显示百分比，不遮挡画面主体。 */
+.canvas-file-upload-chip {
+    position: absolute;
+    right: var(--space-2);
+    bottom: var(--space-2);
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--upload-surface) 62%, transparent);
+    color: var(--upload-text);
+    font-size: var(--fs-tiny);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+    backdrop-filter: blur(8px);
+    pointer-events: none;
+}
+
+.canvas-file-upload-chip-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: var(--r-full);
+    background: currentColor;
+    opacity: 0.7;
+    animation: canvas-file-upload-pulse 1.2s ease-in-out infinite;
+}
+
 @keyframes canvas-file-upload-drift { from { transform: translate(-8%, -4%) rotate(-8deg); } to { transform: translate(8%, 4%) rotate(12deg); } }
 @keyframes canvas-file-upload-sheen { from { transform: translateX(-35%); } to { transform: translateX(35%); } }
+@keyframes canvas-file-upload-preview-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes canvas-file-upload-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.9; } }
 
 .canvas-file-upload[data-static] .canvas-file-upload-glow,
-.canvas-file-upload[data-static] .canvas-file-upload-frost::after { animation: none; }
+.canvas-file-upload[data-static] .canvas-file-upload-frost::after,
+.canvas-file-upload[data-static] .canvas-file-upload-preview,
+.canvas-file-upload[data-static] .canvas-file-upload-chip-dot { animation: none; }
 .canvas-file-upload[data-static] .canvas-file-upload-glow,
-.canvas-file-upload[data-static] .canvas-file-upload-frost { transition: none; }
+.canvas-file-upload[data-static] .canvas-file-upload-frost,
+.canvas-file-upload[data-static] .canvas-file-upload-preview { transition: none; }
 
 @media (prefers-reduced-motion: reduce) {
-    .canvas-file-upload-glow, .canvas-file-upload-frost::after { animation: none; }
-    .canvas-file-upload-glow, .canvas-file-upload-frost { transition: none; }
+    .canvas-file-upload-glow, .canvas-file-upload-frost::after, .canvas-file-upload-preview, .canvas-file-upload-chip-dot { animation: none; }
+    .canvas-file-upload-glow, .canvas-file-upload-frost, .canvas-file-upload-preview { transition: none; }
 }

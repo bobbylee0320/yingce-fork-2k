@@ -27,7 +27,7 @@ export function AdminStatTile({ label, value, detail, trend }: { label: string; 
             {trend || detail ? (
                 <div className="admin-stat-tile-detail">
                     {trend ? <AdminStatusBadge label={trend.value} tone={trend.tone || "neutral"} /> : null}
-                    {trend && detail ? <span className="mx-1.5">·</span> : null}
+                    {trend && detail ? <span className="mx-2">·</span> : null}
                     {detail ? <span>{detail}</span> : null}
                 </div>
             ) : null}

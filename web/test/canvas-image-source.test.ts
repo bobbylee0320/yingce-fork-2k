@@ -57,9 +57,9 @@ describe("上传图片是输入素材", () => {
         expect(portrait).not.toContain("current.map");
         expect(mediaTools).toContain("payload.generationConfig");
         expect(mediaTools).toContain("imageBatchExpanded: requestedCount > 1 ? true : undefined");
-        const dialog = read("components/canvas/canvas-node-mask-edit-dialog.tsx");
+        const dialog = read("components/canvas/canvas-node-region-edit-dialog.tsx");
         expect(dialog).toContain("ModelPicker");
-        expect(dialog).toContain("ImageSettingsPanel");
+        expect(dialog).toContain("CanvasImageSettingsPopover");
     });
 });
 

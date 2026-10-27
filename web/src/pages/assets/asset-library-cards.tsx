@@ -88,7 +88,7 @@ export function AssetCard({
     return (
         <AssetLibraryCard selected={selected}>
             <AssetCover asset={asset} selected={selected} isTrash={isTrash} onSelect={onSelect} onOpen={handleCardClick} menuItems={menuItems} />
-            <button type="button" className="asset-collection-body block w-full px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={handleCardClick}>
+            <button type="button" className="asset-collection-body block w-full px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={handleCardClick}>
                 <div className="flex min-w-0 items-center justify-between gap-2">
                     <h2 className="truncate text-[var(--fs-body)] font-semibold text-foreground" title={asset.title}>
                         {asset.title}
@@ -105,7 +105,7 @@ export function AssetCard({
                         {summary}
                     </div>
                 )}
-                <div className="asset-collection-source mt-1 flex min-w-0 items-center gap-1.5">
+                <div className="asset-collection-source mt-1 flex min-w-0 items-center gap-2">
                     <span className="truncate">{asset.source || "未标注来源"}</span>
                     <span aria-hidden="true">·</span>
                     <span className="truncate">{assetProjectLabel(asset)}</span>

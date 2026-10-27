@@ -238,7 +238,7 @@ export function CanvasAudioPlayer({ node, theme }: CanvasAudioPlayerProps) {
                     <button
                         type="button"
                         aria-label={isPlaying ? `暂停${label}` : `播放${label}`}
-                        className="grid size-8 place-items-center rounded-full border border-white/10 bg-[#2c2c2e] text-white shadow-md transition-all hover:scale-105 hover:bg-[#38383a] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="grid size-8 place-items-center rounded-full border border-white/10 bg-[#2c2c2e] text-white shadow-md transition-[background-color,opacity] duration-150 hover:bg-[#38383a] disabled:cursor-not-allowed disabled:opacity-40"
                         disabled={isLoading || (!source.content && !source.storageKey)}
                         onPointerDown={stopCanvasEvent}
                         onMouseDown={stopCanvasEvent}

@@ -1,3 +1,4 @@
+import { recordCommittedMediaVersion } from "@/lib/canvas/canvas-media-versions";
 import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
 
 const completedTaskObservationKeys = [
@@ -61,8 +62,10 @@ export function commitCanvasGenerationResult(current: CanvasNodeData[], before: 
         metadata,
     };
     const versionRootId = merged.metadata?.versionOfNodeId;
+    // 原位结果同时写入节点内版本历史，旧媒体在生成开始前已登记。
+    const recorded = recordCommittedMediaVersion(merged);
     const committed = current.map((node) => {
-        if (node.id === merged.id) return versionRootId ? { ...merged, metadata: { ...merged.metadata, versionPrimary: true } } : merged;
+        if (node.id === merged.id) return versionRootId ? { ...recorded, metadata: { ...recorded.metadata, versionPrimary: true } } : recorded;
         if (!versionRootId || (node.metadata?.versionOfNodeId || node.id) !== versionRootId) return node;
         return { ...node, metadata: { ...node.metadata, versionPrimary: false } };
     });

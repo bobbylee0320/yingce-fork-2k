@@ -5,25 +5,85 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
-## 生成提交回执（Schema 58）
+## 存储空间套餐（Schema 69）
 
-迁移 `task_submission_receipts` 新增 `task_submission_receipts`：`user_id` 与 `key_hash` 组成主键，保存 `operation_hash`、请求摘要 `request_hash`、`task_id`、`retry_of` 和创建时间。不保存提示词、参考媒体或渠道密钥。回执、任务和积分预占在同一事务提交；失败全部回滚，唯一键冲突返回已有任务，相同操作改变请求内容返回 409。
+版本 69 `storage_products` 让充值商品可以售卖账号文件容量，并新增扩容记录和超额状态两张表。账号有效文件容量 = `runtime_policy.resource.storedFileGB`（全局基础容量）+ 当前生效的扩容之和，上限 1 PiB。上传、分片上传、生成资源落库、媒体生成任务准入和 `GET /api/resources/storage-usage` 都使用同一计算。
 
-普通提交按用户与操作编号去重；重试按用户与原任务 ID 去重。原任务排队、运行或已成功时返回原任务；作品保存失败走保存恢复，费用未确认或恢复租约有效时禁止新建付费任务。回执保留独立于任务历史删除，避免响应丢失后再次扣费；查找回执必须校验当前用户。
+`topup_products` 与 `payment_orders` 新增列（已有行通过默认值成为积分商品/订单）：
 
-Schema 58 只新增表，不修改已有任务、账单或 Schema 1–57 的迁移。发布先迁移再启动新后端；回退旧后端需核对其支持的 schema 版本，不能直接恢复旧数据库覆盖发布后的业务数据。
+| 字段 | 说明 |
+| --- | --- |
+| `kind` / `product_kind` | `credits`（默认）或 `storage`；商品创建后不能修改类型 |
+| `storage_bytes` | 扩容容量，必须是整 GB，1–100000 GB；积分商品为 0 |
+| `storage_duration_days` | 有效天数，0 表示永久，最长 3650 天 |
 
-## Agent 记忆审批与恢复（Schema 59）
+订单在创建时快照这三列，发放只读订单快照。积分功能关闭时只隐藏、拒绝积分商品，存储空间商品仍可下单。
 
-迁移 `agent_memory_proposals`（Schema 59）保留既有记忆内容，给 `agent_lessons` 增加 `origin_run_id`（来源运行、带索引）和 `evidence_json`（事件序号、调用 ID、工具名数组）；给 `agent_memory_settings` 增加 `compact_proposal_id` 和 `compact_cursor`，并创建下列两张表。新库初始化、正式迁移和 SQLite → PostgreSQL 搬迁均注册这些模型。
+`user_storage_grants`（每笔扩容一行，多笔容量叠加、各自到期）：
 
-## 用户反馈收件箱（Schema 61）
+| 字段 | 说明 |
+| --- | --- |
+| `user_id`、`expires_at` | 联合索引 `idx_user_storage_grant_active`；`expires_at` 为空表示永久 |
+| `source` | `payment` 或 `admin` |
+| `payment_order_id`、`product_id`、`product_name` | 支付来源快照 |
+| `bytes`、`duration_days`、`starts_at` | 容量与有效期，从发放时刻起算 |
+| `revoked_at`、`revoked_by`、`revoke_reason` | 管理员撤销；撤销后不再计入容量 |
+| `reference_key`（唯一） | 支付发放为 `payment:<providerId>:<merchantOrderNo>`，与积分流水同一幂等口径 |
 
-Schema 61 新增 `user_feedbacks`，保存用户 ID、用户名/邮箱快照、联系方式、类型、标题、正文、附件与环境 JSON 字符串、处理状态、管理员答复、归档标志及创建/更新时间；用户 ID、类型、状态、归档标志和创建时间有索引。附件文件通过既有 `resources` 服务保存，反馈表只保存附件元数据，不存媒体正文。新库初始化、正式迁移及 SQLite → PostgreSQL 搬迁均包含该表。
+支付成功时 `CompletePaymentOrder` 在同一事务内按订单类型写积分流水或扩容记录，然后把订单置为 `credited`（表示“权益已发放”）。到期不需要后台任务，查询时按 `revoked_at IS NULL AND starts_at <= now AND (expires_at IS NULL OR expires_at > now)` 过滤。
 
-## 渠道模型协议标识扩展（Schema 60）
+`user_storage_states`（主键 `user_id`）只有 `over_limit_since`：首次观察到已用容量超过有效容量时写入，回落到容量以内时清空。观察点是用量接口和只读守卫，管理端查看不写入。超额后立即暂停上传和媒体生成；`over_limit_since` 起 7 天后账号进入只读，见 [HTTP API](/docs/backend/http-api) 的“存储容量与只读”。
 
-迁移 `channel_model_protocol_length`（Schema 60）将 `channel_models.protocol` 从 `varchar(32)` 扩展为 `varchar(64)`，以容纳新的声明式协议标识，不改写既有协议值。升级仍须先执行迁移并验证 schema，再启动后端。
+## 生成作品的本地兜底与对象存储补传（Schema 70）
+
+版本 70 `resource_offload_jobs` 新增 `resource_offload_jobs` 表。平台对象存储写入生成作品失败（或该存储位置处于熔断）时，作品先写入数据目录 `resources/`，同一 `resources` 行改为 `provider=local` 并标记 `ready`，任务照常成功并结算；该表记录补传到原定位置所需的信息。版本号 61–69 预留给并行开发的短剧与存储套餐迁移，跳号不影响按版本逐条执行。
+
+版本 71 `drama_segment_mode` 只改写 `drama_productions.settings_json`：旧的 `storyboard.segmentSeconds` 大于 0 的作品写为 `segmentMode=fixed` 并保留秒数，等于 0（按模型上限）的写为 `segmentMode=auto` 并删除该字段；不改表结构。
+
+| 字段 | 说明 |
+| --- | --- |
+| `resource_id`（唯一）、`user_id`、`task_id` | 兜底的资源及来源任务；同一资源只保留一条记录，再次兜底时覆盖并重新排队 |
+| `local_object_key`、`size` | 本地兜底文件，相对数据目录 `resources/` |
+| `target_provider`、`target_endpoint`、`target_bucket`、`target_storage_setting_id`、`target_object_key` | 首次直传时的存储位置与对象键；补传始终写同一对象，不产生孤儿对象 |
+| `status` | `pending`、`processing`、`done`、`cancelled`、`failed`（本地文件丢失，需人工处理） |
+| `attempts`、`next_attempt_at`、`lease_owner`、`lease_expires_at` | 领取与退避：1、5、15、30、60 分钟，之后每 2 小时一次，不设次数上限 |
+| `last_error_code`、`last_error` | 最近一次存储错误码（如 `SlowDownWrite/503`）与原始错误 |
+| `local_playback_key`、`local_delete_after`、`local_deleted_at` | 切换后延迟 15 分钟清理本地原文件和播放副本 |
+
+- 只覆盖平台存储（无 `storage_setting_id` 的系统存储，或 `storage_locations.scope=platform`）；用户自有对象存储失败时不兜底，保持“作品保存未完成”。
+- 兜底受总量 10 GiB（未补传与未清理的本地文件合计）和数据盘剩余 5 GiB 两个下限保护，不满足时不兜底。
+- 补传成功后按 `id + provider=local + object_key + ready` 条件更新 `resources` 的存储字段、`e_tag`，播放副本状态置为 `none`；资源 ID 和 `/api/resources/{id}/file` 不变。资源已删除时取消任务并删除可能已上传的目标对象；资源行仍引用目标对象时不删除。仍有其他资源行引用本地文件时保留本地文件。
+- 播放副本转码进行中时顺延补传。某个存储位置补传成功后，同位置等待退避的任务提前执行。
+
+## 短剧自动制作（Schema 61–67）
+
+短剧流水线把“上传小说 → 成片”放在服务端完成。章节仍是 `project_units`（`kind=chapter`），只保存小说原文；集（`drama_episodes`）是剧本、剧情段与成片的基石，与章节多对多，由 `chapter_ids_json` 回溯原文。视频生成单位是剧情段：一段一次调用视频模型，台词、音效与镜头切换都在这一个视频里生成，不再逐镜配音、出首帧或生成单镜视频。新库初始化、正式迁移和 SQLite → PostgreSQL 搬迁均包含这些表。
+
+| 表 | 用途 | 约束 |
+| --- | --- | --- |
+| `drama_productions` | 每个项目一行的控制面：`status`（draft/running/paused/completed）、全剧阶段 `stage`、作品设置 `settings_json`、作品圣经摘要 `bible_json`、预算与已用积分、分集游标 `plan_cursor` / `plan_done`、样片确认 `sample_approved`、参考图放行 `assets_released`、暂停原因 | 主键 `project_id`；用户操作只写状态、设置、预算与确认列；调度循环只写进度列，状态变更带 `status = running` 条件 |
+| `drama_casts` | 全剧设定：角色（`kind=character`，含别名、外貌与声线 `voice_instructions`）、关键道具（`kind=prop`）和场景（`kind=scene`），当前参考图 `image_resource_id` 与状态 | 作品圣经建档；剧本里首次出现的人物、道具或地点即时建档，按标准名与别名归并；锁定后不再重新生成 |
+| `drama_episodes` | 集标题、大纲、钩子、悬念、阶段（queued → script → prompts → review → video → render → done）、`approved`（逐集确认模式下已确认本集提示词）、`media_released`、错误、成片资源、`final_stale`、`revision` | `(project_id, number)` 唯一；用户修改递增 `revision`，调度写入以 `revision` 为条件 |
+| `drama_shots` | 镜头脚本：剧情段 `segment_index` / `segment_title`、场景与场景设定 `scene_cast_id`、出场角色 `cast_ids_json`、关键道具 `prop_ids_json`、说话人、台词、动作、景别、运镜、转场 `transition`、时长、起幅画面 `image_prompt`、运动描述 `video_prompt`、原文出处 | 镜头只是撰写段提示词的素材，不产出媒体；修改后所在段的提示词与视频标记过期 |
+| `drama_segments` | 剧情段：模型撰写的完整视频提示词 `video_prompt`、撰写状态 `prompt_status`（空串待撰写、`running`、`ready`、`stale`、`failed`）与 `prompt_error`、撰写时的秒数 `prompt_seconds`、用户改写 `video_prompt_override`、按段视频模型 `video_model_json`、视频状态 `video_status`、`video_resource_id`、`video_seconds`、`video_error`、本段视频最后一帧 `tail_frame_resource_id`、`revision` | `(episode_id, segment_index)` 唯一；剧本写入时建行，重新改编时重建；结果按 `revision` 条件写入，过期结果作废；某段视频变化会让后续已生成的段过期（它们承接的是旧最后一帧） |
+| `drama_takes` | 历史版本：设定参考图（`cast`）、剧情段视频（`video`，`owner_id` 为段 ID）与单集成片（`final`） | `(owner_id, kind)` 内递增 `version`；版本始终入库 |
+| `drama_jobs` | 调度队列：类型（bible/plan/cast_image/script/segment_prompt/segment_video/render）、目标、优先级、关联任务、重试次数、历次提交 `attempts_json`、错误、实际花费 | 任务在派发时才创建；`segment_prompt` / `segment_video` 的 `shot_id` 存放 `drama_segments.id` |
+
+剧情段按连续场景切分，并保证每段总时长不超过所选视频模型的单次上限；单个镜头超过上限时改编失败并提示调整分镜规则。第 2 段起的视频请求以上一段视频的最后一帧作为首帧（`image_to_video`），上一段未生成时本段排队等待；开场段使用参考图（`reference_to_video`），模型不支持时退回 `text_to_video`。参考图按“角色 → 道具 → 场景”编号，与提示词里的“参考图N”一致，提交时在提示词开头追加对应说明。最后一帧由后端用 ffmpeg 抽取，镜像需包含 ffmpeg。
+
+作品设置 `settings_json` 保存画幅、单集时长 `episodeSeconds`（30–1200 秒）、风格、对白语言、审阅方式 `reviewMode`（sample 先完整做出第 1 集样片 / every 每集确认提示词 / auto）、生成节奏 `mediaMode`（manual 新作品默认，先只跑文本 / auto）、参考图方案 `assets`、分镜规则 `storyboard`（剧情段切法 `segmentMode`：auto 智能，在场景切换处断开、单段不超过视频模型单次上限；fixed 固定，每段 `segmentSeconds` 秒、只按时长装箱；range 范围，每段 `segmentMinSeconds`–`segmentMaxSeconds` 秒，达到下限后在场景切换处断开。秒数 4–60，三种模式的数值都保存，任何模式实际都不超过视频模型单次上限；`pacing` fast/standard/slow 决定单镜 1.5–4 / 2–6 / 3–10 秒；`dialogue` dense/standard/sparse 约每 3 / 4.5 / 7 秒一句台词或旁白；`transition`、`transitionMs`）、视频提示词技能 `promptSkill`（`skillId`、`skillName`、`path`，撰写段提示词时把该技能文件全文交给文本模型；保存与撰写时都校验当前用户可读，不可读直接报错）、并发与 text/image/video 三类模型。旧版分镜规则字段 `durationMode`、`fixedSeconds`、`minSeconds`、`maxSeconds` 已删除，读取时忽略，下次保存设置即从 JSON 中去掉。
+
+Schema 67 `drama_segment_production` 从逐镜流程迁到剧情段流程：先把镜头上已有的配音/首帧/视频资源归档为历史版本，再删除 `drama_shots` 的 `video_model_json`、`speaker_cast_id`、`frame_prompt_override`、`video_prompt_override`、`audio_*`、`frame_*`、`video_resource_id`、`video_status`、`approved`、`locked`、`error`，删除 `drama_casts.voice_key` 与 `drama_episodes.frames_approved`，新增 `drama_episodes.approved`、`drama_shots.prop_ids_json` 与 `drama_segments` 的视频列。存在旧逐镜数据时，未完成的集回到剧本阶段、作品暂停并提示重新改编，排队中的旧工作取消，不会自动重发收费任务。Schema 62–66 是同一功能的中间版本（剧情段字段、工作历次提交、手动放行、转场、剧情段表）。
+
+旧的章节分镜工作流表（`shots`、`shot_revisions`、`shot_artifacts`、`workflow_*` 等）不再有页面入口，本次迁移不删除这些表和数据。
+
+## 用户反馈收件箱（Schema 60）
+
+Schema 60 新增 `user_feedbacks`，保存用户 ID、用户名/邮箱快照、联系方式、类型、标题、正文、附件与环境 JSON 字符串、处理状态、管理员答复、归档标志及创建/更新时间；用户 ID、类型、状态、归档标志和创建时间有索引。附件文件通过既有 `resources` 服务保存，反馈表只保存附件元数据，不存媒体正文。新库初始化、正式迁移及 SQLite → PostgreSQL 搬迁均包含该表。
+
+## Agent 记忆审批与恢复（Schema 58）
+
+迁移 `agent_memory_proposals`（Schema 58）保留既有记忆内容，给 `agent_lessons` 增加 `origin_run_id`（来源运行、带索引）和 `evidence_json`（事件序号、调用 ID、工具名数组）；给 `agent_memory_settings` 增加 `compact_proposal_id` 和 `compact_cursor`，并创建下列两张表。新库初始化、正式迁移和 SQLite → PostgreSQL 搬迁均注册这些模型。
 
 | 表 | 保存内容 | 并发与归属边界 |
 | --- | --- | --- |
@@ -36,7 +96,7 @@ Schema 61 新增 `user_feedbacks`，保存用户 ID、用户名/邮箱快照、�
 
 每批最多 80 条，模型输入最多 48 KiB；按稳定 ID 从 `compact_cursor` 继续并循环到库尾，游标只推进到实际进入输入的最后一条，不再固定读取 Hits 最高的 80 条。任务启动前原子保存输入快照和提案；旧设置版本不能重复认领任务，迟到的状态或回调不能覆盖新提案。`last_status` 区分 `queued`、`running`、`awaiting_review`、`applied`、`rejected`、`restored`、`succeeded`（无可应用修改）和 `failed`。
 
-升级先运行 `migrate-schema up` 与 `verify`。迁移 59 不修改版本 1–58 的名称和校验和；新增表及证据字段不等于已验证记忆质量，真实模型召回和创作效果仍需独立评测。
+升级先运行 `migrate-schema up` 与 `verify`。迁移 58 不修改版本 1–57 的名称和校验和；新增表及证据字段不等于已验证记忆质量，真实模型召回和创作效果仍需独立评测。
 
 ## 画布多端协作（Schema 57）
 
@@ -86,7 +146,7 @@ Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`ex
 
 `auth_sessions.reauthenticated_at` 记录当前会话的 Linux.do 重新核验时间，有效 5 分钟；`o_auth_states.reauth_user_id/reauth_session_id` 绑定发起重新核验的账号及会话。重新核验只允许原绑定的第三方身份，不创建账号或新登录会话。`auth_verifications.session_id/credential_hash` 将 `profile_email` 用途的验证码绑定到当前用户、当前会话和密码状态。密码、邮箱修改及旧会话撤销在同一事务提交；登录会话签发同时检查账号凭据，阻止并发旧密码登录在撤销之后再创建会话。升级执行 `migrate-schema up` / `verify`，禁止手工修改既有迁移记录。
 
-当前结构版本为 61；版本 60 `channel_model_protocol_length` 将 `channel_models.protocol` 从 `varchar(32)` 扩为 `varchar(64)`，保留既有记录并允许存储 33 字符的 MediaKit 协议 ID；版本 61 新增用户反馈收件箱。版本 58 的记忆提案与恢复结构见本页首节。版本 56 `sql_perf_indexes` 为 `api_call_logs` 与 `tasks` 增加 `created_at_epoch`（Unix 秒），回填既有 `created_at` 并分别创建 `idx_api_logs_created_epoch`、`idx_tasks_created_epoch`，SQLite 时间范围查询使用裸列以命中索引；新记录通过 `BeforeCreate` 从 `created_at` 派生该值。另增加 `api_call_logs(request_kind, status, created_at)` 与 `credit_ledger_entries(user_id, type)` 复合索引。版本 55 `provider_catalog_source` 为 `model_channels` 增加 `catalog_provider_id`（最长 64 字、非空、默认空字符串、带索引），为 `channel_models` 增加 `catalog_model_key`（最长 120 字、非空、默认空字符串），记录一键接入的目录服务商与推荐模型，仅用于来源展示和“已接入”计数，不参与路由、启停或计费。版本 53 新增独立登录日志表 `login_logs`，详见本页“用户登录日志”。版本 50 新增 `canvas_mutation_receipts`，按 `(user_id, canvas_id, mutation_id)` 唯一记录画布 operations 请求摘要、确定性结果和提交 revision，供响应丢失后的幂等重放使用；receipt 与画布内容、revision 在同一事务提交。版本 49 `banner_sort_order` 为 `banner_announcements` 增加可配置的 `sort_order` 展示顺序；版本 48 `channel_proxy_url` 为 `model_channels` 增加渠道级出站代理地址 `proxy_url`，支持 `socks5://`、`http://`、`https://`；留空时沿用全局代理。代理地址只返回管理员视图，普通用户目录不暴露渠道代理或其中的认证信息。版本 42 `cloud_agent_pi_sessions` 新增 `cloud_agent_pi_sessions` 表，按运行 ID 保存 Pi 原生 JSONL 会话快照、用户 ID、乐观并发 revision 和更新时间；会话正文由 Agent runtime 管理，Go 只将其作为不透明快照读写，不替代有界控制检查点、事件日志或任务记录。版本 41 `resource_thumbnail` 为 `resources` 增加缩略图元数据。版本 40 `builtin_skill_tombstones` 新增内置技能删除记录，管理员删除平台技能后，后续启动同步不会重新创建该技能；版本 39 `skill_library_categories` 新增 `skill_library_categories` 表，并为 `user_skill_states` 增加 `library_category_id`，保存个人技能库分类及每个用户对技能的归类；分类不改变 `skills.tag` 的技能广场共享分类。版本 38 `prefixed_id_sequence_reconcile` 创建（若缺失）并校准 `id_sequences`：`CHANNEL`、`MODEL`、`PTIER`、`ATTEMPT`、`LMODEL`、`REVISION`、`ROUTE` 按对应业务表的最大有效 ID 前移，包含软删除记录，不回退已有序列、不重写业务 ID。分配新 ID 时再次校准并检查冲突；SQLite → PostgreSQL 迁移完成后也校准序列。 `cloud_agent_gemini_cache` 创建 `cloud_agent_gemini_caches`，保存用户范围内的官方 Gemini 缓存元数据；版本 37 `cloud_agent_gemini_cache_identity` 将缓存标识约束修正为 `(user_id, cache_key)`，移除旧的全局 cache_key 唯一索引。版本 35 `auth_notifications` 为认证通知与组合验证补齐 `auth_verifications`、`notification_quotas`、`sms_channels`、`sms_records` 四张表，并为 `users` 增加 `phone`、`email_verified_at`、`phone_verified_at`，为 `email_verification_codes` 增加 `attempts`；同时创建非空手机号唯一索引。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。
+当前结构版本为 71，版本 61–67 的短剧自动制作表与版本 70 的作品补传表见本页首节；版本 59 `channel_model_protocol_length` 将 `channel_models.protocol` 从 `varchar(32)` 扩为 `varchar(64)`，保留既有记录并允许存储 33 字符的 MediaKit 协议 ID。版本 58 的记忆提案与恢复结构见本页首节。版本 56 `sql_perf_indexes` 为 `api_call_logs` 与 `tasks` 增加 `created_at_epoch`（Unix 秒），回填既有 `created_at` 并分别创建 `idx_api_logs_created_epoch`、`idx_tasks_created_epoch`，SQLite 时间范围查询使用裸列以命中索引；新记录通过 `BeforeCreate` 从 `created_at` 派生该值。另增加 `api_call_logs(request_kind, status, created_at)` 与 `credit_ledger_entries(user_id, type)` 复合索引。版本 55 `provider_catalog_source` 为 `model_channels` 增加 `catalog_provider_id`（最长 64 字、非空、默认空字符串、带索引），为 `channel_models` 增加 `catalog_model_key`（最长 120 字、非空、默认空字符串），记录一键接入的目录服务商与推荐模型，仅用于来源展示和“已接入”计数，不参与路由、启停或计费。版本 53 新增独立登录日志表 `login_logs`，详见本页“用户登录日志”。版本 50 新增 `canvas_mutation_receipts`，按 `(user_id, canvas_id, mutation_id)` 唯一记录画布 operations 请求摘要、确定性结果和提交 revision，供响应丢失后的幂等重放使用；receipt 与画布内容、revision 在同一事务提交。版本 49 `banner_sort_order` 为 `banner_announcements` 增加可配置的 `sort_order` 展示顺序；版本 48 `channel_proxy_url` 为 `model_channels` 增加渠道级出站代理地址 `proxy_url`，支持 `socks5://`、`http://`、`https://`；留空时沿用全局代理。代理地址只返回管理员视图，普通用户目录不暴露渠道代理或其中的认证信息。版本 42 `cloud_agent_pi_sessions` 新增 `cloud_agent_pi_sessions` 表，按运行 ID 保存 Pi 原生 JSONL 会话快照、用户 ID、乐观并发 revision 和更新时间；会话正文由 Agent runtime 管理，Go 只将其作为不透明快照读写，不替代有界控制检查点、事件日志或任务记录。版本 41 `resource_thumbnail` 为 `resources` 增加缩略图元数据。版本 40 `builtin_skill_tombstones` 新增内置技能删除记录，管理员删除平台技能后，后续启动同步不会重新创建该技能；版本 39 `skill_library_categories` 新增 `skill_library_categories` 表，并为 `user_skill_states` 增加 `library_category_id`，保存个人技能库分类及每个用户对技能的归类；分类不改变 `skills.tag` 的技能广场共享分类。版本 38 `prefixed_id_sequence_reconcile` 创建（若缺失）并校准 `id_sequences`：`CHANNEL`、`MODEL`、`PTIER`、`ATTEMPT`、`LMODEL`、`REVISION`、`ROUTE` 按对应业务表的最大有效 ID 前移，包含软删除记录，不回退已有序列、不重写业务 ID。分配新 ID 时再次校准并检查冲突；SQLite → PostgreSQL 迁移完成后也校准序列。 `cloud_agent_gemini_cache` 创建 `cloud_agent_gemini_caches`，保存用户范围内的官方 Gemini 缓存元数据；版本 37 `cloud_agent_gemini_cache_identity` 将缓存标识约束修正为 `(user_id, cache_key)`，移除旧的全局 cache_key 唯一索引。版本 35 `auth_notifications` 为认证通知与组合验证补齐 `auth_verifications`、`notification_quotas`、`sms_channels`、`sms_records` 四张表，并为 `users` 增加 `phone`、`email_verified_at`、`phone_verified_at`，为 `email_verification_codes` 增加 `attempts`；同时创建非空手机号唯一索引。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。
 
 版本 54 `workbench_tools_and_presets` 新增 `workbench_tools` 与 `workbench_presets`：工具记录生图/视频类型、分类、名称、说明、资源 ID、排序、能力/指南 JSON、启用状态、版本和操作人；预设记录工具外键、名称、说明、提示词模板、默认参数 JSON、排序、启用状态、版本和操作人。普通用户目录只返回启用工具与预设；管理写入均做管理员校验和审计。工具图标/封面必须引用管理员名下就绪图片资源，发布后的引用进入资源删除保护；用户目录通过服务端授权的短期 display 资源地址展示，不放宽资源所有者访问边界。工作台任务使用专属 DTO，由服务端确认工具/预设仍启用、参考资源归属与媒体类型，并从逻辑模型目录解析执行配置后复用现有任务 admission、计费和队列。`imageWorkbenchEnabled` 与 `videoWorkbenchEnabled` 位于 `feature_availability` JSON，默认关闭；分别保护目录读取和新任务提交。版本 48 `channel_proxy_url` 为 `model_channels` 增加渠道级出站代理地址 `proxy_url`，支持 `socks5://`、`http://`、`https://`；留空时沿用全局代理。代理地址只返回管理员视图，普通用户目录不暴露渠道代理或其中的认证信息。版本 42 `cloud_agent_pi_sessions` 新增 `cloud_agent_pi_sessions` 表，按运行 ID 保存 Pi 原生 JSONL 会话快照、用户 ID、乐观并发 revision 和更新时间；会话正文由 Agent runtime 管理，Go 只将其作为不透明快照读写，不替代有界控制检查点、事件日志或任务记录。版本 41 `resource_thumbnail` 为 `resources` 增加缩略图元数据。版本 40 `builtin_skill_tombstones` 新增内置技能删除记录，管理员删除平台技能后，后续启动同步不会重新创建该技能；版本 39 `skill_library_categories` 新增 `skill_library_categories` 表，并为 `user_skill_states` 增加 `library_category_id`，保存个人技能库分类及每个用户对技能的归类；分类不改变 `skills.tag` 的技能广场共享分类。版本 38 `prefixed_id_sequence_reconcile` 创建（若缺失）并校准 `id_sequences`：`CHANNEL`、`MODEL`、`PTIER`、`ATTEMPT`、`LMODEL`、`REVISION`、`ROUTE` 按对应业务表的最大有效 ID 前移，包含软删除记录，不回退已有序列、不重写业务 ID。分配新 ID 时再次校准并检查冲突；SQLite → PostgreSQL 迁移完成后也校准序列。 `cloud_agent_gemini_cache` 创建 `cloud_agent_gemini_caches`，保存用户范围内的官方 Gemini 缓存元数据；版本 37 `cloud_agent_gemini_cache_identity` 将缓存标识约束修正为 `(user_id, cache_key)`，移除旧的全局 cache_key 唯一索引。版本 35 `auth_notifications` 为认证通知与组合验证补齐 `auth_verifications`、`notification_quotas`、`sms_channels`、`sms_records` 四张表，并为 `users` 增加 `phone`、`email_verified_at`、`phone_verified_at`，为 `email_verification_codes` 增加 `attempts`；同时创建非空手机号唯一索引。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。
 
@@ -97,6 +157,7 @@ Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`ex
 - 使用原任务主键、计费订单及现有 worker 租约，不新增执行批次或第二套队列。`media_stage` 为 `download | upload | local_save | register | checkpoint | completed`，表示当前结果的保存阶段，不改变上游生成日志的成功状态。
 - `media_recovery_json` 使用已有 settings-key 加密，记录媒体地址、暂存文件名、资源 ID 和有界重试计数；不保存媒体 base64，不向任务 JSON/摘要返回该字段。数据库与 `.settings-key` 必须一起备份；该字段计入任务存储用量。
 - 下载前写入恢复记录，下载后记录暂存文件，上传后记录资源。通过任务 ID 和输出索引生成稳定的资源上传键、素材 ID；任务成功、结果记录及素材登记在同一数据库事务提交，登记失败则不发布任务成功。
+- 暂存文件默认 24 小时后清理；仍被未完成恢复记录（排队、运行或失败任务）引用的暂存文件最长保留 7 天，避免上游地址过期后丢失唯一副本。
 - 记录保留在终态任务中，成功后清理对应暂存文件；任务的既有保留/删除策略不变。结构迁移只增加列，不扫描日志，不修改历史任务、结果或账单。没有恢复记录的历史失败任务不会自动变为可恢复。
 
 ### 云端 Agent 运行时
@@ -277,9 +338,9 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 
 | 表 | 用途 | 关键边界 |
 | --- | --- | --- |
-| `topup_products` | 保存服务端维护的充值商品、金额和积分快照 | 客户端只能提交商品 ID；金额和积分由 service 读取，不能由请求覆盖 |
+| `topup_products` | 保存服务端维护的充值商品、金额，以及积分或存储空间权益 | 客户端只能提交商品 ID；金额和权益由 service 读取，不能由请求覆盖 |
 | `payment_provider_configs` | 保存支付插件某个渠道配置的不可变版本 | `provider_id + version` 唯一；密钥只保存加密密文；`plugin_id` / `plugin_version` 记录配置对应的插件版本 |
-| `payment_orders` | 保存充值订单、幂等键、渠道交易号和入账状态 | 创建订单时固定 `plugin_id`、`plugin_version`、配置 ID 与配置版本；回调、查单、关单必须使用同一运行时版本 |
+| `payment_orders` | 保存充值订单、幂等键、渠道交易号、权益快照和入账状态 | 创建订单时固定 `plugin_id`、`plugin_version`、配置 ID 与配置版本；回调、查单、关单必须使用同一运行时版本 |
 | `payment_notifications` | 保存已验签的支付通知收件箱 | 以渠道事件 ID 幂等；只保存用于异步入账的标准化证据，重复通知不会重复发放积分 |
 | `payment_reconciliation_runs` / `payment_reconciliation_items` | 保存渠道账单下载和对账结果 | 账单只能作为发现线索，金额、币种和交易号仍需由插件查单确认；历史订单继续绑定原插件版本 |
 
@@ -343,6 +404,7 @@ schema v27 为 `channel_model_price_tiers` 和 `billing_orders` 添加 `cost_con
 | `resources` | 保存资源元数据和实际存储位置引用 | `user_id + upload_key` 唯一约束保证逻辑上传幂等；S3 资源必须通过 `storage_setting_id` 固定绑定创建时的位置；浏览器默认经同源接口读取 |
 | `storage_locations` | 保存平台或个人 S3 位置版本、加密凭据和连接测试摘要 | Endpoint、Bucket、Region、PathStyle、PathPrefix、Provider 组成不可变位置；同位置只轮换凭据，位置变化创建新记录 |
 | `resource_deletion_jobs` | 在业务记录删除后可靠清理物理对象 | 固化资源的存储位置与对象键；删除失败保留任务并重试，S3 404 按幂等成功处理 |
+| `resource_offload_jobs` | 平台对象存储写入失败后本地兜底的生成作品补传 | 固化目标位置与对象键；切换条件更新，资源 ID 与访问链接不变，详见本页首节 |
 
 `storage_locations.value_json` 中的 Secret Key 和 Session Token 使用后端设置密钥加密。启用 S3 前，关键位置字段和凭据摘要必须与最近一次 Put、Range Get、Delete 连接测试结果一致；历史资源继续按绑定的位置读取和删除，不随当前配置切换。
 
@@ -350,7 +412,7 @@ schema v27 为 `channel_model_price_tiers` 和 `billing_orders` 添加 `cost_con
 
 个人画布中的图片、视频和音频采用 `Asset -> Resource` 所有权约束：前端先提交素材，再提交带 `assetId` 的画布节点或时间线直连媒体；后端保存画布前校验资源属于当前用户、状态为 `ready`、素材存在且引用同一资源。素材更新、全量替换和删除也会反向检查已有画布，不能把仍在使用的资源从素材库中移除或替换成其他资源。登录历史账号时，前端会按资源键补建缺失素材并回写 `assetId`。这项修复复用现有表和 Outbox，不新增结构迁移。
 
-账号文件容量只统计 `ready` 资源，并按 Provider、Endpoint、Bucket、ObjectKey 对同一物理对象去重。上传中或失败记录不占用已存储容量。后台每小时检查资源生命周期：超过 1 小时的 `pending/failed` 记录，以及超过 24 小时仍没有任何素材、画布、任务或其他业务引用的 `ready` 记录，会在再次校验引用后删除数据库记录并写入 `resource_deletion_jobs`，由幂等 Worker 清理物理对象。
+账号文件容量上限为全局基础容量加生效扩容（见“存储空间套餐”）。已用容量只统计 `ready` 资源，并按 Provider、Endpoint、Bucket、ObjectKey 对同一物理对象去重。上传中或失败记录不占用已存储容量。后台每小时检查资源生命周期：超过 1 小时的 `pending/failed` 记录，以及超过 24 小时仍没有任何素材、画布、任务或其他业务引用的 `ready` 记录，会在再次校验引用后删除数据库记录并写入 `resource_deletion_jobs`，由幂等 Worker 清理物理对象。
 
 素材状态为 `archived` 时进入回收站。后台按“资源与请求策略”中的 `recycleBinRetentionDays` 定期扫描过期项；`0` 表示永久保留。自动清理与用户手动彻底删除复用同一 service 引用校验和 `resource_deletion_jobs` Outbox，仍被画布、项目、任务或其他业务记录引用的素材不会被删除。
 

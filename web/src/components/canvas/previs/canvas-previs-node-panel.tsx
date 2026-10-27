@@ -76,7 +76,7 @@ function PrevisPreviewState({ kind, theme }: { kind: "loading" | "empty"; theme:
                 <Clapperboard className="size-4" style={{ color: theme.node.muted }} aria-hidden />
             </span>
             <span className="max-w-full truncate text-xs font-semibold" style={{ color: theme.node.text }}>{loading ? "正在准备场景" : "尚未生成预览"}</span>
-            <span className="max-w-full text-[11px] leading-4" style={{ color: theme.node.muted }}>{loading ? "场景数据加载完成后显示" : "进入预演台并回写构图后显示"}</span>
+            <span className="max-w-full text-[var(--fs-label)] leading-4" style={{ color: theme.node.muted }}>{loading ? "场景数据加载完成后显示" : "进入预演台并回写构图后显示"}</span>
         </div>
     );
 }

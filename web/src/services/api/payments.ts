@@ -14,12 +14,18 @@ export type PaymentProvider = {
 
 export type TopupSaleStrategy = "unlimited" | "periodic" | "inventory" | "timed";
 
+/** credits 发放积分；storage 扩容账号文件容量，storageDurationDays 为 0 表示永久。 */
+export type TopupProductKind = "credits" | "storage";
+
 export type TopupProduct = {
     id: string;
     name: string;
     description?: string;
+    kind: TopupProductKind;
     amountFen: number;
     creditsMicrocredits: number;
+    storageBytes: number;
+    storageDurationDays: number;
     enabled: boolean;
     sortOrder: number;
     saleStrategy: TopupSaleStrategy;
@@ -45,10 +51,13 @@ export type PaymentOrder = {
     merchantOrderNo: string;
     productId: string;
     productName: string;
+    productKind: TopupProductKind;
     providerId: string;
     amountFen: number;
     currency: "CNY" | string;
     creditsMicrocredits: number;
+    storageBytes?: number;
+    storageDurationDays?: number;
     status: PaymentOrderStatus;
     providerStatus?: string;
     providerTradeNo?: string;
@@ -126,7 +135,7 @@ export function listAdminTopupProducts() {
     return http.get<{ products: TopupProduct[] }>("/admin/payments/products");
 }
 
-export type TopupProductInput = Pick<TopupProduct, "name" | "amountFen" | "creditsMicrocredits" | "enabled" | "sortOrder" | "saleStrategy"> & {
+export type TopupProductInput = Pick<TopupProduct, "name" | "kind" | "amountFen" | "creditsMicrocredits" | "storageBytes" | "storageDurationDays" | "enabled" | "sortOrder" | "saleStrategy"> & {
     description?: string;
     periodDays?: number;
     periodPurchaseLimit?: number;

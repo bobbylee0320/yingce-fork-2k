@@ -31,16 +31,16 @@ const PLACEMENT_MAP: Record<TooltipPlacement, Placement> = {
 export interface TooltipProps {
     title?: ReactNode;
     placement?: TooltipPlacement;
-    /** 悬停延迟 ms（默认 350，贴近 AntD mouseEnterDelay） */
+    /** 首次悬停延迟 ms（默认 500）。RAC 在一个提示刚关闭后的短窗口内切换相邻提示不再等待。 */
     delay?: number;
     className?: string;
     children: ReactNode;
 }
 
-export function Tooltip({ title, placement = "top", delay = 350, className, children }: TooltipProps) {
-    if (!title) return <>{children}</>;
-
+export function Tooltip({ title, placement = "top", delay = 500, className, children }: TooltipProps) {
+    // Hook 必须在提前返回之前调用：title 由空变为非空时，Hook 数量不能变化。
     const triggerRef = useRef<HTMLSpanElement>(null);
+    if (!title) return <>{children}</>;
     const child = isValidElement<{ disabled?: boolean; loading?: boolean; tabIndex?: number }>(children) ? children : null;
     const directTrigger =
         child && child.type !== Fragment && !child.props.disabled && !child.props.loading && (typeof child.type !== "string" || ["button", "a", "input", "select", "textarea", "summary"].includes(child.type) || child.props.tabIndex !== undefined);
@@ -65,8 +65,8 @@ export function Tooltip({ title, placement = "top", delay = 350, className, chil
             <RACTooltip
                 triggerRef={triggerRef}
                 placement={PLACEMENT_MAP[placement]}
-                offset={6}
-                className={cn("z-50 max-w-64 rounded-md border border-border bg-surface-strong px-2 py-1 text-xs leading-relaxed text-foreground shadow-md", "ra-pop-in", className)}
+                offset={8}
+                className={cn("z-[var(--z-tooltip)] max-w-64 rounded-md border border-border bg-surface-strong px-2 py-1 text-xs leading-relaxed text-foreground shadow-md", "ra-pop-in", className)}
             >
                 {title}
             </RACTooltip>

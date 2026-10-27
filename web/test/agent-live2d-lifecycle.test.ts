@@ -21,8 +21,9 @@ test("launcher waits for appearance configuration and avatar manifest before dis
     expect(partsSource).toContain("正在加载助手形象");
 });
 
-test("Live2D fallback is reserved for load or render failures, not initial loading", () => {
-    expect(avatarSource).toContain("{failed ? (");
+test("Live2D fallback is reserved for load or render failures and yielded render slots, not initial loading", () => {
+    // 让出渲染权（另一个 Live2D 实例占用着 Cubism 着色器单例）时也显示回退形象。
+    expect(avatarSource).toContain("{suspended || failed ? (");
     expect(avatarSource).toContain(") : !ready ? (");
     expect(avatarSource).not.toContain("{failed || !ready ? <span");
     expect(avatarSource).toContain("setFailed(true)");

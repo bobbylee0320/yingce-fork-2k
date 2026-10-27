@@ -1,16 +1,16 @@
 .workbench-count-picker {
     display: grid;
-    gap: 10px;
+    gap: 8px;
 }
 .workbench-count-picker > span {
     font-size: 12px;
-    font-weight: 580;
+    font-weight: 600;
     color: var(--wb-text);
 }
 .workbench-count-picker > div {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
+    gap: 8px;
     align-items: center;
 }
 .workbench-count-picker button {
@@ -25,7 +25,10 @@
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 120ms ease;
+    transition:
+        color 150ms var(--motion-ease-out),
+        background-color 150ms var(--motion-ease-out),
+        border-color 150ms var(--motion-ease-out);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -35,9 +38,9 @@
     background: var(--wb-hover);
 }
 .workbench-count-picker button.is-active {
-    border-color: var(--user-primary, #5b5fc7);
-    background: var(--user-primary, #5b5fc7);
-    color: white;
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
 }
 
 .workbench-count-stepper {
@@ -52,7 +55,10 @@
     background: var(--wb-surface);
     color: var(--wb-text);
     overflow: hidden;
-    transition: all 120ms ease;
+    transition:
+        color 150ms var(--motion-ease-out),
+        background-color 150ms var(--motion-ease-out),
+        border-color 150ms var(--motion-ease-out);
     cursor: pointer;
 }
 .workbench-count-stepper:hover {
@@ -60,9 +66,9 @@
     background: var(--wb-hover);
 }
 .workbench-count-stepper.is-active {
-    border-color: var(--user-primary, #5b5fc7);
-    background: var(--user-primary, #5b5fc7);
-    color: white;
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
 }
 .workbench-count-stepper input {
     width: 100%;
@@ -109,7 +115,7 @@
     padding: 0 !important;
     color: inherit;
     cursor: pointer;
-    transition: background-color 100ms ease;
+    transition: background-color 150ms ease;
 }
 .workbench-count-stepper-btn:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.15) !important;

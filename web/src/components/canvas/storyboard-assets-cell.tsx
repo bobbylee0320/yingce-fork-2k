@@ -31,7 +31,7 @@ export function StoryboardAssetsCell({ bindings, nodes, limit = 4, onEdit, disab
     if (!assets.length && !onEdit) return <span className="text-[var(--fs-caption)] text-foreground/35">未关联</span>;
     return (
         <>
-            <div className="storyboard-assets-cell flex min-w-0 max-w-full items-center gap-1.5" aria-label={`已关联 ${assets.length} 个资产`}>
+            <div className="storyboard-assets-cell flex min-w-0 max-w-full items-center gap-2" aria-label={`已关联 ${assets.length} 个资产`}>
                 {visible.map(({ binding, node }) => (
                     <Tooltip key={binding.nodeId} title={`${node?.title || "资产已失效"} · ${STORYBOARD_ASSET_ROLE_LABELS[binding.role]}`}>
                         <button
@@ -48,7 +48,7 @@ export function StoryboardAssetsCell({ bindings, nodes, limit = 4, onEdit, disab
                             }}
                         >
                             {node ? <AssetThumbnail node={node} /> : <ImageIcon className="size-4" />}
-                            <span className="absolute bottom-0.5 right-0.5 rounded bg-black/65 px-1 text-[8px] leading-3 text-white">{STORYBOARD_ASSET_ROLE_LABELS[binding.role].slice(0, 1)}</span>
+                            <span className="absolute bottom-0.5 right-0.5 rounded bg-black/65 px-1 text-[var(--fs-label)] leading-3 text-white">{STORYBOARD_ASSET_ROLE_LABELS[binding.role].slice(0, 1)}</span>
                         </button>
                     </Tooltip>
                 ))}

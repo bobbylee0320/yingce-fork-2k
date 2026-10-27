@@ -321,6 +321,26 @@ export function getSkillBundle(id: string) {
     return http.get<{ bundle: SkillPackageBundle }>(`/skills/${encodeURIComponent(id)}/bundle`);
 }
 
+export type SkillFileOperationInput =
+    | { op: "write"; path: string; content: string }
+    | { op: "rename"; path: string; to: string }
+    | { op: "delete"; path: string };
+
+export type SaveSkillFilesInput = {
+    /** 编辑开始时的 versionId；服务端版本已前进时返回 409 skill_version_conflict。 */
+    baseVersionId: string;
+    operations: SkillFileOperationInput[];
+};
+
+export type SaveSkillFilesResult = { skill: Skill; files: SkillPackageFile[]; changed: boolean };
+
+export const SKILL_VERSION_CONFLICT_REASON = "skill_version_conflict";
+
+/** 作者批量保存技能包文件：后端按顺序应用操作并原子生成新版本。 */
+export function saveSkillFiles(id: string, input: SaveSkillFilesInput) {
+    return http.put<SaveSkillFilesResult>(`/skills/${encodeURIComponent(id)}/files`, input).finally(invalidateAddedSkillsCache);
+}
+
 export function searchSkillFiles(id: string, query: string) {
     return http.get<{ results: SkillFileSearchResult[] }>(`/skills/${encodeURIComponent(id)}/search`, { params: { q: query } });
 }

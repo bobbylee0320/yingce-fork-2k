@@ -1,0 +1,36 @@
+/* Agent 镜头跟随：镜头落定后在被操作的节点外圈轻闪一次，提示"刚才动的是这里"。 */
+[data-node-id][data-agent-focus-pulse="true"]::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: calc(var(--radius) * 2);
+    border: 2px solid color-mix(in srgb, var(--cn-active-stroke) 80%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--cn-active-stroke) 35%, transparent);
+    pointer-events: none;
+    opacity: 0;
+    animation: canvas-agent-focus-pulse 1.3s var(--motion-ease-out) forwards;
+}
+
+@keyframes canvas-agent-focus-pulse {
+    0% {
+        opacity: 0;
+        transform: scale(0.98);
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--cn-active-stroke) 35%, transparent);
+    }
+    25% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.015);
+        box-shadow: 0 0 0 14px color-mix(in srgb, var(--cn-active-stroke) 0%, transparent);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-node-id][data-agent-focus-pulse="true"]::after {
+        animation: none;
+        opacity: 0.85;
+    }
+}

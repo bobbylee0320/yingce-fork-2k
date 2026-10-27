@@ -1,71 +1,40 @@
-import { useId } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { cn } from "@/lib/utils";
 
 export type WorkspaceSignalIconVariant = "home" | "canvas" | "projects" | "assets" | "skills" | "tasks" | "wallet" | "settings" | "empty" | "error" | "loading";
 
-const palettes: Record<WorkspaceSignalIconVariant, [string, string, string]> = {
-    home: ["#2563eb", "#06b6d4", "#f59e0b"],
-    canvas: ["#2563eb", "#14b8a6", "#f97316"],
-    projects: ["#f59e0b", "#f97316", "#2563eb"],
-    assets: ["#06b6d4", "#2563eb", "#ec4899"],
-    skills: ["#ec4899", "#f97316", "#2563eb"],
-    tasks: ["#2563eb", "#22c55e", "#f59e0b"],
-    wallet: ["#f59e0b", "#eab308", "#14b8a6"],
-    settings: ["#2563eb", "#64748b", "#14b8a6"],
-    empty: ["#64748b", "#2563eb", "#06b6d4"],
-    error: ["#ef4444", "#f97316", "#f59e0b"],
-    loading: ["#2563eb", "#06b6d4", "#14b8a6"],
-};
-
+/**
+ * 页面空态、加载与错误的统一图标：单色低饱和线条 + 一个强调点（主色；错误为危险色）。
+ * 不使用多色渐变，不在悬停时缩放；入场总时长不超过 300ms，减少动态效果时直接显示。
+ */
 export function WorkspaceSignalIcon({ variant, size = "md", className }: { variant: WorkspaceSignalIconVariant; size?: "sm" | "md" | "lg"; className?: string }) {
-    const instanceId = useId().replace(/:/g, "");
     const reducedMotion = useReducedMotion();
-    const [primary, secondary, accent] = palettes[variant];
-    const gradientId = `workspace-signal-${variant}-${instanceId}`;
-    const dimension = size === "sm" ? 32 : size === "lg" ? 56 : 42;
-    const initial = reducedMotion ? false : { opacity: 0, scale: 0.86, rotate: -4 };
+    const dimension = size === "sm" ? 32 : size === "lg" ? 64 : 44;
+    const dotColor = variant === "error" ? "var(--status-error)" : "var(--workspace-accent)";
 
     return (
         <motion.span
-            initial={initial}
-            animate={{ opacity: 1, scale: 1, rotate: 0 }}
-            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-            className={cn("workspace-signal-icon group/signal relative grid shrink-0 place-items-center", className)}
+            initial={reducedMotion ? false : { opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className={cn("workspace-signal-icon relative grid shrink-0 place-items-center", className)}
             style={{ width: dimension, height: dimension }}
             aria-hidden="true"
         >
             <svg viewBox="0 0 48 48" className="h-full w-full overflow-visible" fill="none">
-                <defs>
-                    <linearGradient id={gradientId} x1="8" y1="7" x2="40" y2="41" gradientUnits="userSpaceOnUse">
-                        <stop stopColor={primary} />
-                        <stop offset="0.55" stopColor={secondary} />
-                        <stop offset="1" stopColor={accent} />
-                    </linearGradient>
-                </defs>
-                <rect x="3.5" y="3.5" width="41" height="41" rx="11.5" className="fill-background/92 stroke-border" />
+                <rect x="3.5" y="3.5" width="41" height="41" rx="12" className="fill-[var(--library-icon-surface,var(--background))] stroke-border" />
                 <motion.path
                     d={signalPath(variant)}
-                    stroke={`url(#${gradientId})`}
-                    strokeWidth="2.4"
+                    stroke="var(--text-tertiary)"
+                    strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     initial={reducedMotion ? false : { pathLength: 0, opacity: 0 }}
                     animate={{ pathLength: 1, opacity: 1 }}
-                    transition={{ duration: 0.48, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
-                    className="origin-center transition-transform duration-200 ease-out group-hover/signal:scale-[1.04]"
+                    transition={{ duration: 0.25, delay: 0.04, ease: [0.22, 1, 0.36, 1] }}
                 />
-                <motion.circle
-                    cx={signalDot(variant)[0]}
-                    cy={signalDot(variant)[1]}
-                    r="2.7"
-                    fill={accent}
-                    initial={reducedMotion ? false : { scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.24, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                    className="origin-center transition-transform duration-150 group-hover/signal:scale-125"
-                />
+                <motion.circle cx={signalDot(variant)[0]} cy={signalDot(variant)[1]} r="2.5" fill={dotColor} initial={reducedMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15, delay: 0.15, ease: "easeOut" }} />
             </svg>
         </motion.span>
     );

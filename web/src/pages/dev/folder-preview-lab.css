@@ -21,14 +21,14 @@
 .folder-preview-lab-kicker {
     color: var(--muted-foreground);
     font-size: var(--fs-label);
-    font-weight: 650;
+    font-weight: 600;
     letter-spacing: 0.12em;
 }
 
 .folder-preview-lab-header h1 {
     margin: var(--space-2) 0 0;
     font-size: var(--fs-display);
-    font-weight: 620;
+    font-weight: 600;
     letter-spacing: -0.04em;
 }
 
@@ -150,7 +150,7 @@
 .folder-preview-lab-section-heading h2 {
     margin: 0;
     font-size: var(--fs-title);
-    font-weight: 620;
+    font-weight: 600;
     letter-spacing: -0.02em;
 }
 
@@ -180,7 +180,7 @@
 
 .folder-preview-lab-item-copy strong {
     font-size: var(--fs-heading);
-    font-weight: 620;
+    font-weight: 600;
 }
 
 .folder-preview-lab-item-copy span {

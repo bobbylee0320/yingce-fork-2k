@@ -1,0 +1,469 @@
+/* 积分中心 · 充值：按“积分 / 存储空间”分类展示，结算栏固定在底部。
+   外壳沿用 .workspace-wallet-*；类型色只用于字形与图标底，不做整卡染色。 */
+.wallet-topup {
+    --wallet-topup-credits-ink: var(--status-warning);
+    --wallet-topup-storage-ink: var(--status-loading);
+    --wallet-topup-card-surface: var(--user-surface-muted);
+    --wallet-topup-card-hover: var(--user-surface-hover);
+    --wallet-topup-selected-stroke: var(--library-selected-stroke, color-mix(in srgb, var(--user-accent) 52%, transparent));
+}
+
+.workspace-wallet-content.wallet-topup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.wallet-topup .is-credits {
+    --wallet-topup-kind-ink: var(--wallet-topup-credits-ink);
+}
+
+.wallet-topup .is-storage {
+    --wallet-topup-kind-ink: var(--wallet-topup-storage-ink);
+}
+
+.wallet-topup-kind-icon {
+    display: inline-grid;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    place-items: center;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--wallet-topup-kind-ink, var(--user-ink)) 14%, transparent);
+    color: var(--wallet-topup-kind-ink, var(--user-ink));
+}
+
+.wallet-topup-kind-icon svg {
+    width: 15px;
+    height: 15px;
+    stroke-width: 1.9;
+}
+
+.wallet-topup-kind-icon.is-small {
+    width: 22px;
+    height: 22px;
+    border-radius: 8px;
+}
+
+.wallet-topup-kind-icon.is-small svg {
+    width: 13px;
+    height: 13px;
+}
+
+/* 分组不再套边框盒子：一行标题 + 网格，把高度留给商品列表。 */
+.wallet-topup-groups {
+    display: grid;
+    flex: 1;
+    min-height: 0;
+    align-content: start;
+    gap: 20px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding-right: 2px;
+}
+
+.wallet-topup-group-head {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.wallet-topup-group-head > div {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.wallet-topup-group-head h3 {
+    flex-shrink: 0;
+    margin: 0;
+    color: var(--user-ink);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.wallet-topup-group-head p {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wallet-topup-group-empty {
+    border-radius: 12px;
+    background: var(--wallet-topup-card-surface);
+    padding: 16px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    text-align: center;
+}
+
+.wallet-topup-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: 8px;
+}
+
+/* 卡片三行：类型字形 + 名称 / 权益数值 / 限购标签 + 价格。 */
+.wallet-topup-card {
+    display: grid;
+    min-width: 0;
+    gap: 8px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--wallet-topup-card-surface);
+    padding: 8px 12px;
+    color: var(--user-ink);
+    text-align: left;
+    outline: 1px solid transparent;
+    outline-offset: -1px;
+    transition:
+        background-color 180ms ease,
+        outline-color 180ms ease;
+}
+
+.wallet-topup-card:hover:not(:disabled) {
+    background: var(--wallet-topup-card-hover);
+}
+
+.wallet-topup-card:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+.wallet-topup-card.is-selected {
+    background: var(--wallet-topup-card-hover);
+    outline-color: var(--wallet-topup-selected-stroke);
+}
+
+.wallet-topup-card:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.wallet-topup-card-head {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+}
+
+.wallet-topup-card-name {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wallet-topup-card-check {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    color: var(--user-accent);
+}
+
+.wallet-topup-card-value {
+    color: var(--user-ink);
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+
+.wallet-topup-card-foot {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.wallet-topup-card-meta {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    gap: 4px;
+    overflow: hidden;
+}
+
+.wallet-topup-chip {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--wallet-topup-kind-ink, var(--user-ink)) 12%, transparent);
+    padding: 1px 8px;
+    color: var(--user-ink);
+    font-size: 11px;
+    line-height: 18px;
+}
+
+.wallet-topup-chip.is-muted {
+    background: var(--user-surface);
+    color: var(--user-ink-muted);
+}
+
+.wallet-topup-card-price {
+    flex-shrink: 0;
+    color: var(--user-ink);
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.wallet-topup-card-price small {
+    margin-right: 2px;
+    color: var(--user-ink-muted);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+/* 存储分类头部：当前容量、超额提示与生效中的扩容。 */
+.wallet-topup-storage {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.wallet-topup-storage-usage {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+}
+
+.wallet-topup-storage-usage b {
+    color: var(--user-ink);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.wallet-topup-storage-split {
+    color: var(--user-ink-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.wallet-topup-storage-track {
+    display: block;
+    min-width: 80px;
+    flex: 1 1 120px;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--user-surface);
+}
+
+.wallet-topup-storage-track > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--wallet-topup-storage-ink);
+}
+
+.wallet-topup-storage-track.is-warn > span {
+    background: var(--status-warning);
+}
+
+.wallet-topup-storage-track.is-critical > span {
+    background: var(--status-error);
+}
+
+.wallet-topup-storage-alert {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--status-warning) 12%, transparent);
+    padding: 8px 12px;
+    color: var(--user-ink);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.wallet-topup-storage-alert.is-read-only {
+    background: color-mix(in srgb, var(--status-error) 10%, transparent);
+}
+
+.wallet-topup-storage-alert > svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.wallet-topup-storage-alert > span {
+    min-width: 0;
+    flex: 1;
+}
+
+/* 生效中的扩容：一行横排标签，超出部分在 title 中给出。 */
+.wallet-topup-grants {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.wallet-topup-grants li {
+    border-radius: 8px;
+    background: var(--wallet-topup-card-surface);
+    padding: 1px 8px;
+    color: var(--user-ink-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 18px;
+    white-space: nowrap;
+}
+
+/* 结算栏：选中商品摘要 + 支付方式 + 主操作。 */
+.wallet-topup-checkout {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--user-surface-muted);
+    padding: 8px 8px 8px 12px;
+}
+
+.wallet-topup-checkout-summary {
+    display: flex;
+    min-width: 200px;
+    flex: 1 1 220px;
+    align-items: center;
+    gap: 8px;
+}
+
+.wallet-topup-checkout-summary > span:not(.wallet-topup-kind-icon) {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+}
+
+.wallet-topup-checkout-summary strong {
+    overflow: hidden;
+    color: var(--user-ink);
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wallet-topup-checkout-summary small {
+    color: var(--user-ink-muted);
+    font-size: 11px;
+}
+
+.wallet-topup-checkout-summary b {
+    color: var(--user-ink);
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.wallet-topup-checkout-hint {
+    color: var(--user-ink-muted);
+    font-size: 12px;
+}
+
+.wallet-topup-checkout .workspace-wallet-providers {
+    flex: 0 1 auto;
+}
+
+/* 头部：积分余额与存储容量两张摘要卡。 */
+.workspace-wallet-stats {
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
+}
+
+.workspace-wallet-stats .workspace-wallet-balance {
+    min-width: 168px;
+    text-align: left;
+}
+
+.workspace-wallet-balance.is-storage {
+    cursor: pointer;
+    transition: background-color 180ms ease;
+}
+
+.workspace-wallet-balance.is-storage:hover {
+    background: var(--user-surface-hover);
+}
+
+.workspace-wallet-balance.is-storage:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+.workspace-wallet-balance .wallet-topup-storage-track {
+    margin: 8px 0 2px;
+    background: var(--user-surface-muted);
+}
+
+.workspace-wallet-balance .wallet-topup-storage-track > span {
+    background: var(--status-loading);
+}
+
+/* 素材页容量条上的入口按钮。 */
+.assets-storage-usage-action {
+    flex-shrink: 0;
+    border: 0;
+    border-radius: 8px;
+    background: var(--user-accent-soft, color-mix(in srgb, var(--foreground) 7%, transparent));
+    padding: 2px 8px;
+    color: var(--user-accent, var(--foreground));
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.assets-storage-usage-action:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+    .workspace-wallet-stats {
+        width: 100%;
+    }
+
+    .workspace-wallet-stats > * {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .wallet-topup-checkout .ant-btn {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wallet-topup-card {
+        transition: none;
+    }
+}

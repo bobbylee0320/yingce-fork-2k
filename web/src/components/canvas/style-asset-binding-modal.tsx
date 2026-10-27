@@ -188,7 +188,7 @@ function AssetEditor({ asset, onChange, onDelete }: { asset: StyleAssetBinding; 
             </div>
 
             {validationMessage ? (
-                <div className="flex gap-2 border-l-2 border-red-500 bg-red-500/5 px-3 py-2 text-[var(--fs-label)] leading-5 text-foreground/65">
+                <div className="flex gap-2 rounded-md bg-red-500/8 px-3 py-2 text-[var(--fs-label)] leading-5 text-foreground/65">
                     <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-500" />
                     <span>{validationMessage}</span>
                 </div>
@@ -238,7 +238,7 @@ function AssetEditor({ asset, onChange, onDelete }: { asset: StyleAssetBinding; 
             <LicenseFields asset={asset} onChange={onChange} />
 
             {asset.enabled !== false && (asset.kind === "lora" || asset.kind === "reference") ? (
-                <div className="flex gap-2 border-l-2 border-amber-500 bg-amber-500/5 px-3 py-2 text-[var(--fs-label)] leading-5 text-foreground/60">
+                <div className="flex gap-2 rounded-md bg-amber-500/8 px-3 py-2 text-[var(--fs-label)] leading-5 text-foreground/60">
                     <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
                     <span>当前通用生成协议尚未启用{asset.kind === "lora" ? " LoRA" : "参考图组自动注入"}适配器。兼容降级会继续执行项目 Prompt；严格策略会在生成前阻止任务。</span>
                 </div>
@@ -348,5 +348,5 @@ function assetStatusLabel(status: StyleAssetStatus) {
 }
 
 function Field({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) {
-    return <label className={`grid gap-1.5 text-xs ${className}`}><span className="font-medium text-foreground/60">{label}</span>{children}</label>;
+    return <label className={`grid gap-2 text-xs ${className}`}><span className="font-medium text-foreground/60">{label}</span>{children}</label>;
 }

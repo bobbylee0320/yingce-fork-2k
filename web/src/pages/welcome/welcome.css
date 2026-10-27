@@ -79,7 +79,7 @@ body:has(.welcome-page) {
     z-index: var(--welcome-z-navigation);
     display: flex;
     align-items: center;
-    gap: 42px;
+    gap: 40px;
     padding: 0 var(--welcome-gutter);
     background: linear-gradient(#080808cc, #08080800);
 }
@@ -87,7 +87,7 @@ body:has(.welcome-page) {
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 500;
     white-space: nowrap;
 }
@@ -106,12 +106,12 @@ body:has(.welcome-page) {
     margin-left: auto;
     display: flex;
     align-items: center;
-    gap: 34px;
+    gap: 32px;
 }
 .welcome-nav a {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     color: var(--welcome-paper);
     font-size: 13px;
     transition: opacity 180ms;
@@ -125,7 +125,7 @@ body:has(.welcome-page) {
     justify-content: center;
     gap: 24px;
     height: 40px;
-    padding: 0 19px;
+    padding: 0 20px;
     border-radius: var(--welcome-radius);
     color: var(--welcome-black) !important;
     font-size: 12px;
@@ -171,20 +171,20 @@ body:has(.welcome-page) {
     align-items: center;
     justify-content: flex-end;
     gap: 4px;
-    padding: 7px 0;
-    font-size: 10px;
+    padding: 8px 0;
+    font-size: 11px;
     color: var(--welcome-muted);
     text-shadow: 0 1px 4px var(--welcome-black);
 }
 .welcome-media-credit {
-    padding: 0 var(--welcome-gutter) 26px;
+    padding: 0 var(--welcome-gutter) 24px;
     color: var(--welcome-muted);
     font-size: 11px;
 }
 .welcome-media-credit a {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
 }
 .welcome-icon {
     display: grid;
@@ -255,8 +255,8 @@ body:has(.welcome-page) {
     transform: translateY(25px);
     pointer-events: none;
     transition:
-        opacity 0.6s,
-        transform 0.8s;
+        opacity 250ms,
+        transform 250ms;
     text-align: left;
     visibility: hidden;
 }
@@ -269,7 +269,7 @@ body:has(.welcome-page) {
     font-size: var(--welcome-display);
     font-weight: 400;
     line-height: 1.12;
-    margin-bottom: 26px;
+    margin-bottom: 24px;
 }
 .welcome-chapter h2 {
     font-size: var(--welcome-heading);
@@ -283,7 +283,7 @@ body:has(.welcome-page) {
     bottom: 15%;
 }
 .welcome-subtitle {
-    font-size: 19px;
+    font-size: 16px;
     color: var(--welcome-paper);
 }
 .chapter-1 .welcome-chapter {
@@ -312,9 +312,9 @@ body:has(.welcome-page) {
     bottom: 0;
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 16px;
     height: auto;
-    padding: 10px 0 10px 16px;
+    padding: 8px 0 8px 16px;
     color: var(--welcome-paper);
     font-size: 12px;
     pointer-events: auto;
@@ -406,13 +406,13 @@ body:has(.welcome-page) {
 }
 .welcome-workbench {
     position: relative;
-    padding: 100px var(--welcome-gutter) 70px;
+    padding: 100px var(--welcome-gutter) 72px;
     max-width: calc(var(--welcome-content) + var(--welcome-gutter) * 2);
     margin: auto;
     scroll-margin-top: var(--welcome-header-height);
 }
 .welcome-section-heading {
-    margin-bottom: 50px;
+    margin-bottom: 48px;
 }
 .welcome-section-heading h2 {
     font-size: 56px;
@@ -423,7 +423,7 @@ body:has(.welcome-page) {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 26px;
+    margin-bottom: 24px;
 }
 .welcome-workbench-bar .ant-tabs,
 .welcome-workbench-bar .ant-tabs-nav {
@@ -449,7 +449,7 @@ body:has(.welcome-page) {
 }
 .welcome-workbench-bar > .ant-btn {
     display: flex;
-    gap: 9px;
+    gap: 8px;
     align-items: center;
     height: auto;
     padding: 0;
@@ -479,21 +479,21 @@ body:has(.welcome-page) {
 }
 .welcome-ending {
     text-align: center;
-    padding: 120px 24px 125px;
+    padding: 120px 24px 124px;
 }
 .welcome-ending h2 {
     font-weight: 400;
     font-size: 92px;
     line-height: 1.2;
-    margin-bottom: 42px;
+    margin-bottom: 40px;
 }
 .welcome-primary.ant-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 42px;
+    gap: 40px;
     height: 52px;
-    padding: 0 27px;
+    padding: 0 28px;
     border-radius: var(--welcome-radius);
     color: var(--welcome-black) !important;
     font-size: 14px;
@@ -509,8 +509,8 @@ body:has(.welcome-page) {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    margin-top: 27px;
+    gap: 8px;
+    margin-top: 28px;
     font-size: 12px;
     color: var(--welcome-muted) !important;
 }
@@ -547,12 +547,12 @@ body:has(.welcome-page) {
     align-items: center;
     gap: 8px;
     color: var(--welcome-muted);
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
 }
 .welcome-contributors-heading h3 {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 500;
     line-height: 1.35;
 }
@@ -564,7 +564,7 @@ body:has(.welcome-page) {
 .welcome-contributors-heading > a {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     color: var(--welcome-muted);
     font-size: 12px;
     transition: color 180ms;
@@ -575,7 +575,7 @@ body:has(.welcome-page) {
 .welcome-contributors-list {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 18px 24px;
+    gap: 16px 24px;
     margin: 28px 0 0;
     padding: 0;
     list-style: none;
@@ -584,7 +584,7 @@ body:has(.welcome-page) {
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     color: var(--welcome-muted);
     font-size: 12px;
     transition:
@@ -614,9 +614,9 @@ body:has(.welcome-page) {
     grid-column: 1 / -1;
     align-items: flex-start;
     gap: 16px;
-    padding: 18px 20px;
+    padding: 16px 20px;
     border: 1px solid #eee7d766;
-    border-radius: 10px;
+    border-radius: 8px;
     background: linear-gradient(120deg, #eee7d712, #ffffff04 62%);
     box-shadow:
         inset 0 1px 0 #ffffff12,
@@ -640,34 +640,34 @@ body:has(.welcome-page) {
     min-width: 0;
     align-items: center;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
 }
 .welcome-contributor-name {
     color: var(--welcome-paper);
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 500;
     letter-spacing: 0.01em;
 }
 .welcome-contributor-badge {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     padding: 4px 8px;
     color: var(--welcome-black);
     background: var(--welcome-accent);
     border-radius: 999px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.04em;
     white-space: nowrap;
 }
 .welcome-contributor-meta {
-    margin-top: 5px !important;
+    margin-top: 4px !important;
     color: var(--welcome-muted);
     font-size: 11px;
 }
 .welcome-contributor-signature {
-    margin-top: 9px !important;
+    margin-top: 8px !important;
     color: var(--welcome-paper);
     font-size: 12px;
     line-height: 1.7;
@@ -678,18 +678,18 @@ body:has(.welcome-page) {
     justify-content: space-between;
     gap: 20px;
     align-items: center;
-    padding: 25px var(--welcome-gutter);
+    padding: 24px var(--welcome-gutter);
     color: var(--welcome-muted);
     font-size: 11px;
 }
 .welcome-footer > a:first-child {
     color: var(--welcome-paper);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
 }
 .welcome-footer a:last-child {
     display: flex;
-    gap: 5px;
+    gap: 4px;
     align-items: center;
 }
 .welcome-film-dialog {
@@ -699,7 +699,7 @@ body:has(.welcome-page) {
     width: 100%;
     background: #111;
     color: #f3f2ef;
-    border-radius: 3px;
+    border-radius: 4px;
     overflow: visible;
 }
 .welcome-film-dialog::backdrop {
@@ -711,7 +711,7 @@ body:has(.welcome-page) {
 }
 .welcome-film-dialog p {
     font-size: 12px;
-    padding: 14px 20px;
+    padding: 16px 20px;
 }
 .welcome-film-dialog .welcome-icon {
     position: absolute;
@@ -749,13 +749,13 @@ body:has(.welcome-page) {
         --welcome-heading: 44px;
     }
     .welcome-header {
-        gap: 14px;
+        gap: 16px;
     }
     .welcome-look-picker {
         width: 148px;
     }
     .welcome-brand {
-        font-size: 15px;
+        font-size: 14px;
         gap: 8px;
     }
     .welcome-brand-logo {
@@ -764,8 +764,8 @@ body:has(.welcome-page) {
     }
     .welcome-header-cta {
         margin-left: auto;
-        padding: 9px 12px;
-        gap: 10px;
+        padding: 8px 12px;
+        gap: 8px;
         font-size: 11px;
     }
     .mobile-menu {
@@ -779,7 +779,7 @@ body:has(.welcome-page) {
         top: var(--welcome-header-height);
         left: 0;
         right: 0;
-        padding: 25px;
+        padding: 24px;
         background: var(--welcome-black);
     }
     .welcome-nav.is-open {
@@ -814,7 +814,7 @@ body:has(.welcome-page) {
         left: 0;
         padding: 0;
         font-size: 11px !important;
-        gap: 10px;
+        gap: 8px;
     }
     .welcome-play-mark {
         width: 38px;
@@ -864,7 +864,7 @@ body:has(.welcome-page) {
         font-size: 32px;
     }
     .welcome-workbench-bar .ant-tabs-nav-list {
-        gap: 21px;
+        gap: 20px;
     }
     .welcome-workbench-bar .ant-tabs-tab {
         font-size: 12px;
@@ -879,11 +879,11 @@ body:has(.welcome-page) {
         font-size: 12px;
     }
     .welcome-ending {
-        padding: 65px 24px 70px;
+        padding: 64px 24px 72px;
     }
     .welcome-ending h2 {
         font-size: 58px;
-        margin-bottom: 30px;
+        margin-bottom: 32px;
     }
     .welcome-contributors {
         margin-top: 40px;
@@ -929,7 +929,7 @@ body:has(.welcome-page) {
     .welcome-footer {
         flex-wrap: wrap;
         gap: 12px;
-        font-size: 10px;
+        font-size: 11px;
     }
     .welcome-footer > span {
         display: none;

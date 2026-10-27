@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { App, Button, Checkbox, Input, Modal, Popconfirm, Space, Tooltip } from "antd";
+import { App, Button, Checkbox, Input, Modal, Popconfirm, Space } from "antd";
+import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import type { ColumnsType } from "antd/es/table";
 import { Copy, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
@@ -196,7 +197,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
             title: "模型",
             width: 240,
             render: (_, item) => (
-                <div className="flex min-w-0 items-center gap-2.5">
+                <div className="flex min-w-0 items-center gap-2">
                     <span className="admin-channel-model-icon">
                         <ModelIcon model={item.modelKey} icon={item.icon} />
                     </span>

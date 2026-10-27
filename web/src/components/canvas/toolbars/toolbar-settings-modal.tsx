@@ -167,7 +167,7 @@ export function ToolbarSettingsModal({ open, onClose, toolbar }: ToolbarSettings
                 <button
                     type="button"
                     onClick={handleReset}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-[var(--dock-item-radius)] px-2 text-[var(--fs-tiny)] font-medium outline-none transition-colors hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 dark:hover:bg-white/8"
+                    className="inline-flex h-7 items-center gap-2 rounded-[var(--dock-item-radius)] px-2 text-[var(--fs-tiny)] font-medium outline-none transition-colors hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 dark:hover:bg-white/8"
                     style={{ color: theme.node.muted, outlineColor: theme.accent.primary }}
                     aria-label="恢复默认工具栏设置"
                 >

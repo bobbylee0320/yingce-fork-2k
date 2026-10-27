@@ -1,15 +1,16 @@
 import { applyAgentEvent } from "@/lib/canvas/cloud-agent-events";
 import type { CloudAgentChatMessage } from "@/components/canvas/canvas-cloud-agent-chat-ui";
 import { getActiveUserScope } from "@/lib/user-scope";
-import { getAgentRun, listAgentConversations, listAgentConversationRuns, type AgentEvent, type AgentRun, type AgentConversationSummary } from "@/services/api/agent";
+import { getAgentConversation, getAgentRun, listAgentConversations, listAgentConversationRuns, type AgentEvent, type AgentRun, type AgentConversationSummary } from "@/services/api/agent";
 import { cloudAgentConversationServerId, cloudAgentConversationTitle, type CloudAgentConversation } from "@/services/cloud-agent-conversations";
 
 export type CloudAgentHistoryClient = {
     listConversations: typeof listAgentConversations;
+    getConversation: typeof getAgentConversation;
     listRuns: typeof listAgentConversationRuns;
     getRun: typeof getAgentRun;
 };
-const defaultClient: CloudAgentHistoryClient = { listConversations: listAgentConversations, listRuns: listAgentConversationRuns, getRun: getAgentRun };
+const defaultClient: CloudAgentHistoryClient = { listConversations: listAgentConversations, getConversation: getAgentConversation, listRuns: listAgentConversationRuns, getRun: getAgentRun };
 const terminal = new Set<AgentRun["status"]>(["completed", "failed", "cancelled", "rejected"]);
 type HistoryOptions = { signal?: AbortSignal; scope?: string; client?: CloudAgentHistoryClient };
 
@@ -105,12 +106,25 @@ export function projectCloudAgentConversation(conversationId: string, sourceRuns
     };
 }
 
-async function restoreRun(run: AgentRun, client: CloudAgentHistoryClient, options: HistoryOptions, scope: string) {
-    const prefix = [...new Map((run.events || []).filter((event) => event.runId === run.id && Number.isSafeInteger(event.seq) && event.seq > 0).map((event) => [event.seq, event])).values()].sort((a, b) => a.seq - b.seq);
-    const events: AgentEvent[] = prefix.every((event, index) => event.seq === index + 1) ? prefix : [];
-    let seq = events.at(-1)?.seq || 0;
+/**
+ * 列表视图每轮只带尾部一窗（eventSeqBase 之后），单独看永远不是 1..N 的完整前缀。
+ * 本机已恢复过的同一轮事件按 seq 不可变，与尾部窗口合并后取从 1 连续的前缀：
+ * 追平 eventCount 就不发请求，否则只从前缀末尾增量读，不能把游标清零全量重拉。
+ */
+function knownRunPrefix(run: AgentRun, cached: AgentRun | undefined) {
+    const known = new Map<number, AgentEvent>();
+    for (const event of [...(cached?.id === run.id ? cached.events || [] : []), ...(run.events || [])]) if (event.runId === run.id && Number.isSafeInteger(event.seq) && event.seq > 0) known.set(event.seq, event);
+    const events: AgentEvent[] = [];
+    while (known.has(events.length + 1)) events.push(known.get(events.length + 1)!);
+    // 本机前缀比服务端计数还长说明缓存与服务端不一致，丢弃后从第一条重新读。
+    return typeof run.eventCount === "number" && events.length > run.eventCount ? [] : events;
+}
+
+async function restoreRun(run: AgentRun, cached: AgentRun | undefined, client: CloudAgentHistoryClient, options: HistoryOptions, scope: string) {
+    const events = knownRunPrefix(run, cached);
+    let seq = events.length;
     let snapshot = run;
-    if (seq > 0 && seq === run.eventCount && !run.eventsTruncated) return { ...run, events };
+    if (typeof run.eventCount === "number" && seq === run.eventCount) return { ...run, events, latestSeq: seq, eventsTruncated: false };
     do {
         checkRequest(options, scope);
         const { run: next } = await client.getRun(run.id, options.signal, { sinceSeq: seq, fromStart: seq === 0, eventLimit: 500 });
@@ -144,13 +158,16 @@ export async function loadCloudAgentConversation(conversationId: string, options
         if (after) cursors.add(after);
     } while (after);
     const ordered = orderRuns(runs);
+    // 只复用同一服务端对话的本机快照；旧缓存没有 conversationId 时 run.id 仍需逐条匹配。
+    const existingId = options.existing ? cloudAgentConversationServerId(options.existing) : undefined;
+    const cachedRuns = new Map(!existingId || existingId === conversationId ? (options.existing?.runs || []).map((run) => [run.id, run]) : []);
     const restored = new Array<AgentRun>(ordered.length);
     let index = 0;
     await Promise.all(
         Array.from({ length: Math.min(4, ordered.length) }, async () => {
             while (index < ordered.length) {
                 const current = index++;
-                restored[current] = await restoreRun(ordered[current], client, options, scope);
+                restored[current] = await restoreRun(ordered[current], cachedRuns.get(ordered[current].id), client, options, scope);
             }
         }),
     );
@@ -234,7 +251,15 @@ export async function refreshCloudAgentConversations(options: HistoryOptions & {
                 const current = index++;
                 const id = ids[current];
                 const cached = options.existing?.find((conversation) => cloudAgentConversationServerId(conversation) === id);
-                const summary = byId.get(id);
+                let summary = byId.get(id);
+                // 已选对话不在当前画布目录里时，先读单条摘要判断是否变化，不能每轮重读全部轮次。
+                if (!summary && cached) {
+                    checkRequest(options, scope);
+                    const observed = await client.getConversation(id, options.signal);
+                    checkRequest(options, scope);
+                    if (observed.id !== id) throw new Error("Agent 对话归属不一致，已停止恢复");
+                    summary = observed;
+                }
                 conversations[current] = summary && unchanged(summary, cached) ? cached! : await loadCloudAgentConversation(id, { ...options, scope, client, existing: cached });
             }
         }),

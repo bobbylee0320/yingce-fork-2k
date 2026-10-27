@@ -1,10 +1,11 @@
-import { AudioLines, Captions, Clapperboard, Download, FolderPlus, Images, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, RotateCcw, RotateCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video, WandSparkles } from "lucide-react";
+import { AudioLines, Captions, Clapperboard, Download, FolderPlus, History, Images, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, RotateCcw, RotateCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video, WandSparkles } from "lucide-react";
 
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { registerToolbarTools, type ToolContext, type ToolDefinition } from "@/lib/canvas/tool-registry";
 import { CanvasNodeType } from "@/types/canvas";
 import { isCanvasImageSourceNode } from "@/lib/canvas/canvas-image-source";
 import { canRotateCanvasImage, currentImageRotation } from "@/lib/canvas/canvas-image-rotation";
+import { hasMediaVersionHistory, listMediaVersions } from "@/lib/canvas/canvas-media-versions";
 
 // 节点状态判定辅助函数——从 ToolContext 派生
 function isImage(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Image; }
@@ -158,7 +159,7 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         icon: <WandSparkles className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 45,
-        nodeToolbar: { group: "primary", order: 11, description: "AI 提升清晰度，另存为新视频" },
+        nodeToolbar: { group: "process", order: 30, section: "画质", description: "AI 提升清晰度，另存为新视频" },
         applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx) && Boolean(ctx.handlers.onNodeEnhanceVideo) && ctx.nodeMetadata?.status !== "loading",
         disabled: (ctx) => !ctx.nodeMetadata?.storageKey && !ctx.nodeMetadata?.content,
         run: (ctx) => ctx.handlers.onNodeEnhanceVideo?.(ctx.node!),
@@ -305,6 +306,20 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         nodeToolbar: { group: "primary", order: 20 },
         applicable: (ctx) => hasVideo(ctx),
         run: (ctx) => ctx.handlers.onNodeSubtitles(ctx.node!),
+    },
+    {
+        id: "mediaVersions",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: "版本历史",
+        displayLabel: (ctx) => `版本 ${listMediaVersions(ctx.node).length}`,
+        icon: <History className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 147,
+        nodeToolbar: { group: "workspace", order: 10, section: "版本", description: "预览、对比并切换历史版本" },
+        // 只有一个版本时没有可回看的内容，不占工具条位置。
+        applicable: (ctx) => Boolean(ctx.handlers.onNodeVersions) && hasMediaVersionHistory(ctx.node),
+        run: (ctx) => ctx.handlers.onNodeVersions?.(ctx.node!),
     },
     {
         id: "timeline",

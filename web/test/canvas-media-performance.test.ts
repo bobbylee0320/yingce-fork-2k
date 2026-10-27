@@ -23,8 +23,7 @@ const canvasProjectGenerationSource = readFileSync(resolve(import.meta.dir, "../
 const browserDownloadSource = readFileSync(resolve(import.meta.dir, "../src/services/browser-download.ts"), "utf8");
 const canvasNodeEditorSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-node-editor.ts"), "utf8");
 const assetLibrarySource = moduleGroupSource("pages/assets/index.tsx");
-const projectAssetsSource = readFileSync(resolve(import.meta.dir, "../src/pages/projects/detail/assets.tsx"), "utf8");
-const workflowProductionSource = readFileSync(resolve(import.meta.dir, "../src/pages/projects/detail/workflow-production-workbench.tsx"), "utf8");
+const dramaSharedSource = readFileSync(resolve(import.meta.dir, "../src/pages/projects/drama-shared.tsx"), "utf8");
 const videoPlayerSource = readFileSync(resolve(import.meta.dir, "../src/components/video-player.tsx"), "utf8");
 const canvasProjectSource = moduleGroupSource("pages/canvas/project.tsx");
 const globalStylesSource = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
@@ -106,9 +105,9 @@ describe("large canvas media rendering", () => {
         expect(browserDownloadSource).not.toContain("new Blob(");
         expect(canvasNodeEditorSource).toContain("downloadBrowserMedia({ storageKey, url: content, fileName: downloadName })");
         expect(assetLibrarySource).toContain("downloadBrowserMedia({ storageKey: asset.data.storageKey");
-        expect(projectAssetsSource).toContain("downloadBrowserMedia({ storageKey: personal.data.storageKey");
-        expect(workflowProductionSource).toContain("storageKey: resourceStorageKey(artifact.resourceId)");
-        expect(workflowProductionSource).not.toContain("await response.blob()");
+        // 短剧成片下载走授权下载地址，不把大视频读进 Blob。
+        expect(dramaSharedSource).toContain('getResourceAccess(`resource:${resourceId}`, "download"');
+        expect(dramaSharedSource).not.toContain("response.blob()");
     });
 
     test("merges concurrent full Blob consumers before starting the download", () => {

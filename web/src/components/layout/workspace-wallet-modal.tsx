@@ -1,14 +1,18 @@
-import { createClientUUID } from "@/lib/client-id";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Input, Skeleton } from "antd";
-import { Check, ChevronLeft, ChevronRight, CircleAlert, Coins, CreditCard, History, RefreshCw, TicketCheck, WalletCards } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleAlert, Coins, CreditCard, HardDrive, History, RefreshCw, TicketCheck, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 
-import { PaymentCheckoutCode } from "@/components/payment-checkout-code";
+import { WalletTopupPanel, type TopupCategory } from "@/components/layout/workspace-wallet-topup";
+import { usePaymentOrderFlow } from "@/components/payment/use-payment-order-flow";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
+import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
+import { accountFileStorageUsageQueryKey, accountStorageMeter } from "@/lib/account-storage-usage";
 import { generationErrorMessage } from "@/lib/generation-error";
-import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
+import { listPaymentProviders, listTopupProducts, type PaymentOrder, type PaymentProvider, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
+import { listMyStorageGrants } from "@/services/api/storage-grants";
 import { getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
 import { cn } from "@/lib/utils";
 import { openWorkspaceWallet, WORKSPACE_WALLET_OPEN_EVENT, type WorkspaceWalletOpenDetail } from "@/lib/workspace-wallet";
@@ -17,18 +21,19 @@ import { useUserStore } from "@/stores/use-user-store";
 
 type WalletModalTab = "topup" | "redeem" | "history";
 
+const storageGrantsQueryKey = ["account-storage-grants"] as const;
+
 export function WorkspaceWalletHost() {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
+    const loggedIn = useUserStore((state) => Boolean(state.user));
     const { pathname, search } = useLocation();
     const navigate = useNavigate();
     const [open, setOpen] = useState(false);
-    const [pendingPaymentOrderId, setPendingPaymentOrderId] = useState("");
-    const [paymentInvalid, setPaymentInvalid] = useState(false);
+    const [openDetail, setOpenDetail] = useState<WorkspaceWalletOpenDetail>({});
 
+    // 积分关闭时仍要能打开充值页购买存储空间，只是隐藏积分余额、兑换和积分记录。
     const applyOpen = (detail: WorkspaceWalletOpenDetail = {}) => {
-        if (!useUserStore.getState().features.creditsEnabled) return;
-        setPendingPaymentOrderId(detail.paymentOrderId || "");
-        setPaymentInvalid(Boolean(detail.paymentInvalid));
+        setOpenDetail(detail);
         setOpen(true);
     };
 
@@ -50,25 +55,47 @@ export function WorkspaceWalletHost() {
         navigate("/", { replace: true });
     }, [navigate, pathname, search]);
 
-    if (!creditsEnabled) return null;
+    if (!loggedIn) return null;
     return (
         <WorkspaceWalletModal
             open={open}
-            pendingPaymentOrderId={pendingPaymentOrderId}
-            paymentInvalid={paymentInvalid}
+            creditsEnabled={creditsEnabled}
+            initialTab={openDetail.tab}
+            initialCategory={openDetail.category}
+            pendingPaymentOrderId={openDetail.paymentOrderId}
+            paymentInvalid={openDetail.paymentInvalid}
             onClose={() => {
                 setOpen(false);
-                setPendingPaymentOrderId("");
-                setPaymentInvalid(false);
+                setOpenDetail({});
             }}
         />
     );
 }
 
-export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, paymentInvalid }: { open: boolean; onClose: () => void; pendingPaymentOrderId?: string; paymentInvalid?: boolean }) {
+export function WorkspaceWalletModal({
+    open,
+    onClose,
+    creditsEnabled = true,
+    initialTab,
+    initialCategory,
+    pendingPaymentOrderId,
+    paymentInvalid,
+}: {
+    open: boolean;
+    onClose: () => void;
+    creditsEnabled?: boolean;
+    initialTab?: WalletModalTab;
+    initialCategory?: TopupCategory;
+    pendingPaymentOrderId?: string;
+    paymentInvalid?: boolean;
+}) {
     const { message } = App.useApp();
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const redeemPurchaseUrl = useAppearanceStore((state) => state.appearance.redeemPurchaseUrl);
     const [tab, setTab] = useState<WalletModalTab>("topup");
+    const [focusKind, setFocusKind] = useState<TopupProductKind | undefined>();
+    const [focusToken, setFocusToken] = useState(0);
     const [wallet, setWallet] = useState<WalletSummary | null>(null);
     const [walletLoading, setWalletLoading] = useState(false);
     const [walletError, setWalletError] = useState("");
@@ -80,19 +107,17 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
     const [selectedProviderId, setSelectedProviderId] = useState("");
     const [code, setCode] = useState("");
     const [redeeming, setRedeeming] = useState(false);
-    const [paymentCreating, setPaymentCreating] = useState(false);
-    const [paymentQuerying, setPaymentQuerying] = useState(false);
-    const [paymentOrder, setPaymentOrder] = useState<PaymentOrder | null>(null);
-    const [paymentOpen, setPaymentOpen] = useState(false);
-    const [clock, setClock] = useState(Date.now());
-    const idempotencyKey = useRef("");
-    const completedOrderId = useRef("");
     const requestSequence = useRef(0);
+    const storageQuery = useAccountFileStorageUsage(open);
+    const grantsQuery = useQuery({ queryKey: storageGrantsQueryKey, queryFn: listMyStorageGrants, enabled: open });
+    const storageMeter = accountStorageMeter(storageQuery.data);
 
     const selectedProduct = useMemo(() => products.find((item) => item.id === selectedProductId), [products, selectedProductId]);
     const selectedProvider = useMemo(() => providers.find((item) => item.id === selectedProviderId), [providers, selectedProviderId]);
+    const activeTab: WalletModalTab = creditsEnabled ? tab : "topup";
 
     const reloadWallet = async (targetPage = page) => {
+        if (!creditsEnabled) return;
         const sequence = ++requestSequence.current;
         setWalletLoading(true);
         setWalletError("");
@@ -108,15 +133,23 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
 
     useEffect(() => {
         if (!open) return;
+        setTab(initialTab || "topup");
+        setFocusKind(initialCategory && initialCategory !== "all" ? initialCategory : undefined);
         setPage(1);
         void reloadWallet(1);
         setPaymentsLoading(true);
         Promise.all([listTopupProducts(), listPaymentProviders()])
             .then(([productResult, providerResult]) => {
-                setProducts(productResult.products.filter((item) => item.enabled));
-                setProviders(providerResult.providers.filter((item) => item.enabled && item.pluginEnabled && item.configured));
-                setSelectedProductId((current) => current || productResult.products.find((item) => item.canPurchase)?.id || productResult.products.find((item) => item.enabled)?.id || "");
-                setSelectedProviderId((current) => current || providerResult.providers.find((item) => item.enabled && item.pluginEnabled && item.configured)?.id || "");
+                const enabledProducts = productResult.products.filter((item) => item.enabled);
+                const usableProviders = providerResult.providers.filter((item) => item.enabled && item.pluginEnabled && item.configured);
+                setProducts(enabledProducts);
+                setProviders(usableProviders);
+                // 从容量入口进入时优先选中存储空间套餐。
+                const preferred = enabledProducts.filter((item) => !initialCategory || initialCategory === "all" || item.kind === initialCategory);
+                setSelectedProductId((current) =>
+                    current && enabledProducts.some((item) => item.id === current) && !initialCategory ? current : preferred.find((item) => item.canPurchase)?.id || enabledProducts.find((item) => item.canPurchase)?.id || "",
+                );
+                setSelectedProviderId((current) => current || usableProviders[0]?.id || "");
             })
             .catch((error) => message.error(error instanceof Error ? error.message : "读取充值配置失败"))
             .finally(() => setPaymentsLoading(false));
@@ -124,44 +157,32 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
 
     useEffect(() => {
         if (!open || !paymentInvalid) return;
-        message.error("支付结果无效，未产生积分充值");
+        message.error("支付结果无效，未产生充值");
     }, [open, paymentInvalid]);
 
-    useEffect(() => {
-        idempotencyKey.current = "";
-    }, [selectedProductId, selectedProviderId]);
-
-    useEffect(() => {
-        if (!paymentOpen || !paymentOrder || !["created", "pending", "closing"].includes(paymentOrder.status)) return;
-        const interval = window.setInterval(() => {
-            void refreshPaymentStatus(paymentOrder.id, true);
-        }, 4_000);
-        return () => window.clearInterval(interval);
-    }, [paymentOpen, paymentOrder?.id, paymentOrder?.status]);
-
-    useEffect(() => {
-        if (!paymentOpen) return;
-        const interval = window.setInterval(() => setClock(Date.now()), 1_000);
-        return () => window.clearInterval(interval);
-    }, [paymentOpen]);
-
-    const announceWalletUpdated = async (orderId?: string) => {
-        if (orderId && completedOrderId.current === orderId) return;
-        if (orderId) completedOrderId.current = orderId;
+    const announceWalletUpdated = async () => {
         setPage(1);
         await reloadWallet(1);
         window.dispatchEvent(new CustomEvent("wallet:updated"));
     };
 
+    const announceGranted = async (order: PaymentOrder) => {
+        if (order.productKind === "storage") {
+            await Promise.all([queryClient.invalidateQueries({ queryKey: accountFileStorageUsageQueryKey }), queryClient.invalidateQueries({ queryKey: storageGrantsQueryKey })]);
+            return;
+        }
+        await announceWalletUpdated();
+    };
+
+    const payment = usePaymentOrderFlow({ onGranted: announceGranted });
+
+    useEffect(() => {
+        payment.resetIdempotency();
+    }, [selectedProductId, selectedProviderId]);
+
     useEffect(() => {
         if (!open || !pendingPaymentOrderId) return;
-        getPaymentOrder(pendingPaymentOrderId)
-            .then(async ({ order }) => {
-                setPaymentOrder(order);
-                setPaymentOpen(true);
-                if (order.status === "credited") await announceWalletUpdated(order.id);
-            })
-            .catch((error) => message.error(error instanceof Error ? error.message : "读取支付结果失败"));
+        void payment.showOrder(pendingPaymentOrderId);
     }, [open, pendingPaymentOrderId]);
 
     const redeem = async () => {
@@ -185,77 +206,24 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
 
     const startPayment = async () => {
         if (!selectedProduct || !selectedProvider) {
-            message.error("请选择充值商品和支付方式");
+            message.error("请选择套餐和支付方式");
             return;
         }
         if (!selectedProduct.canPurchase) {
-            message.error("该充值商品当前不可购买，请刷新后重试");
+            message.error("该套餐当前不可购买，请刷新后重试");
             return;
         }
-        setPaymentCreating(true);
-        try {
-            if (!idempotencyKey.current) idempotencyKey.current = createClientUUID();
-            const result = await createPaymentOrder({ productId: selectedProduct.id, providerId: selectedProvider.id, idempotencyKey: idempotencyKey.current });
-            idempotencyKey.current = "";
-            setPaymentOrder(result.order);
-            if (result.order.status === "credited") await announceWalletUpdated(result.order.id);
-            if (result.order.checkout.mode === "redirect" && result.order.checkout.url) {
-                window.location.assign(result.order.checkout.url);
-                return;
-            }
-            setPaymentOpen(true);
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "创建支付订单失败");
-        } finally {
-            setPaymentCreating(false);
-        }
+        await payment.start(selectedProduct.id, selectedProvider.id);
     };
 
-    async function refreshPaymentStatus(orderId = paymentOrder?.id, silent = false) {
-        if (!orderId || paymentQuerying) return;
-        setPaymentQuerying(true);
-        try {
-            const result = await queryPaymentOrder(orderId);
-            setPaymentOrder(result.order);
-            if (result.order.status === "credited") {
-                await announceWalletUpdated(result.order.id);
-                if (!silent) message.success("支付已确认，积分已到账");
-            } else if (!silent && result.order.status === "closed") message.warning("订单已关闭，未产生积分充值");
-            else if (!silent) message.info("渠道尚未确认支付，请稍后再试");
-        } catch (error) {
-            if (!silent) message.error(error instanceof Error ? error.message : "查询支付结果失败");
-        } finally {
-            setPaymentQuerying(false);
-        }
-    }
-
-    const cancelPayment = async () => {
-        if (!paymentOrder) return;
-        setPaymentQuerying(true);
-        try {
-            const result = await closePaymentOrder(paymentOrder.id);
-            setPaymentOrder(result.order);
-            if (result.order.status === "credited") await announceWalletUpdated(result.order.id);
-            else message.success("未支付订单已关闭");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "关闭订单失败");
-        } finally {
-            setPaymentQuerying(false);
-        }
-    };
-
-    const retryCheckout = async () => {
-        if (!paymentOrder) return;
-        setPaymentQuerying(true);
-        try {
-            const result = await refreshPaymentCheckout(paymentOrder.id);
-            setPaymentOrder(result.order);
-            if (result.order.checkout.mode === "redirect" && result.order.checkout.url) window.location.assign(result.order.checkout.url);
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "刷新支付入口失败");
-        } finally {
-            setPaymentQuerying(false);
-        }
+    // 定位到某类套餐：滚动到分组，并在当前选中项不属于该类时改选该类第一个可买套餐。
+    const focusProducts = (kind: TopupProductKind) => {
+        setTab("topup");
+        setFocusKind(kind);
+        setFocusToken((value) => value + 1);
+        if (selectedProduct?.kind === kind) return;
+        const next = products.find((item) => item.kind === kind && item.canPurchase);
+        if (next) setSelectedProductId(next.id);
     };
 
     const available = wallet?.account.availableMicrocredits ?? 0;
@@ -263,120 +231,84 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
 
     return (
         <>
-            <AppModal flush open={open} title={null} footer={null} centered width="min(880px, calc(100vw - 28px))" onCancel={onClose} rootClassName="workspace-wallet-modal">
+            <AppModal flush open={open} title={null} footer={null} centered width="min(920px, calc(100vw - 28px))" onCancel={onClose} rootClassName="workspace-wallet-modal">
                 <div className="workspace-wallet-shell">
                     <header className="workspace-wallet-header">
                         <div>
                             <span className="workspace-wallet-kicker">
                                 <Coins />
-                                积分中心
+                                {creditsEnabled ? "积分中心" : "充值中心"}
                             </span>
-                            <h2>充值、兑换与消费记录</h2>
-                            <p>为下一次创作补充积分，随时查看每一笔收支。</p>
+                            <h2>{creditsEnabled ? "充值、兑换与消费记录" : "购买存储空间"}</h2>
+                            <p>{creditsEnabled ? "补充积分或扩充存储空间，随时查看每一笔收支。" : "扩充素材文件与 Agent 会话附件的总容量。"}</p>
                         </div>
-                        <div className="workspace-wallet-balance">
-                            <span>可用积分</span>
-                            <strong>{wallet ? formatCredits(available, 6) : "--"}</strong>
-                            <small>冻结 {wallet ? formatCredits(wallet.account.reservedMicrocredits, 6) : "--"}</small>
+                        <div className="workspace-wallet-stats">
+                            {creditsEnabled ? (
+                                <div className="workspace-wallet-balance">
+                                    <span>可用积分</span>
+                                    <strong>{wallet ? formatCredits(available, 6) : "--"}</strong>
+                                    <small>冻结 {wallet ? formatCredits(wallet.account.reservedMicrocredits, 6) : "--"}</small>
+                                </div>
+                            ) : null}
+                            <button type="button" className="workspace-wallet-balance is-storage" aria-label="查看存储空间套餐" onClick={() => focusProducts("storage")}>
+                                <span>
+                                    <HardDrive className="inline size-3 align-[-1px]" aria-hidden="true" /> 存储空间
+                                </span>
+                                <strong>{storageQuery.data ? `${storageMeter.usedLabel} / ${storageMeter.totalLabel}` : "--"}</strong>
+                                <span className="wallet-topup-storage-track" aria-hidden="true">
+                                    <span style={{ width: `${storageMeter.percent}%` }} />
+                                </span>
+                                <small>
+                                    {storageMeter.state === "read_only"
+                                        ? "已超额 · 只读"
+                                        : storageMeter.state === "grace"
+                                          ? "已超额 · 暂停上传"
+                                          : storageMeter.purchasedLabel
+                                            ? `含已购 ${storageMeter.purchasedLabel}`
+                                            : `剩余 ${storageMeter.remainingLabel}`}
+                                </small>
+                            </button>
                         </div>
                     </header>
 
-                    <div className="workspace-wallet-tabs" role="tablist" aria-label="积分中心">
-                        <button type="button" role="tab" aria-selected={tab === "topup"} onClick={() => setTab("topup")}>
-                            <WalletCards />
-                            充值
-                        </button>
-                        <button type="button" role="tab" aria-selected={tab === "redeem"} onClick={() => setTab("redeem")}>
-                            <TicketCheck />
-                            兑换
-                        </button>
-                        <button type="button" role="tab" aria-selected={tab === "history"} onClick={() => setTab("history")}>
-                            <History />
-                            积分消耗历史
-                        </button>
-                    </div>
-
-                    {tab === "topup" ? (
-                        <div className="workspace-wallet-content is-topup">
-                            <section className="workspace-wallet-section">
-                                <div className="workspace-wallet-section-heading">
-                                    <div>
-                                        <h3>在线充值</h3>
-                                        <p>选择积分套餐和支付方式。</p>
-                                    </div>
-                                    <CreditCard />
-                                </div>
-                                {paymentsLoading ? (
-                                    <Skeleton active paragraph={{ rows: 4 }} />
-                                ) : products.length && providers.length ? (
-                                    <>
-                                        <div className="workspace-wallet-products">
-                                            {products.map((product) => {
-                                                const unavailableLabel =
-                                                    product.saleStatus === "upcoming"
-                                                        ? `发售时间：${product.saleStartAt ? new Date(product.saleStartAt).toLocaleString("zh-CN", { hour12: false }) : "待定"}`
-                                                        : product.saleStatus === "ended"
-                                                          ? "已结束"
-                                                          : product.saleStatus === "sold_out"
-                                                            ? `已售罄（库存 ${product.stockRemaining ?? 0}）`
-                                                            : product.saleStrategy === "inventory"
-                                                              ? `库存 ${product.stockRemaining ?? 0}`
-                                                              : product.saleStrategy === "periodic"
-                                                                ? `每 ${product.periodDays} 天限购 ${product.periodPurchaseLimit} 次`
-                                                                : "不限量";
-                                                return (
-                                                    <button
-                                                        key={product.id}
-                                                        type="button"
-                                                        className={cn("workspace-wallet-product", selectedProductId === product.id && "is-selected")}
-                                                        aria-pressed={selectedProductId === product.id}
-                                                        disabled={!product.canPurchase}
-                                                        onClick={() => setSelectedProductId(product.id)}
-                                                    >
-                                                        <span>{product.name}</span>
-                                                        <strong>{formatCredits(product.creditsMicrocredits, 6)} 积分</strong>
-                                                        <small>
-                                                            ¥ {(product.amountFen / 100).toFixed(2)} · {unavailableLabel}
-                                                            {product.description ? ` · ${product.description}` : ""}
-                                                        </small>
-                                                        {selectedProductId === product.id ? <Check /> : null}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                        <div className="workspace-wallet-provider-row">
-                                            <div className="workspace-wallet-providers" role="radiogroup" aria-label="支付方式">
-                                                {providers.map((provider) => (
-                                                    <button
-                                                        key={provider.id}
-                                                        type="button"
-                                                        role="radio"
-                                                        aria-checked={selectedProviderId === provider.id}
-                                                        className={selectedProviderId === provider.id ? "is-selected" : ""}
-                                                        onClick={() => setSelectedProviderId(provider.id)}
-                                                    >
-                                                        <CreditCard />
-                                                        {provider.name}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            <Button type="primary" size="large" loading={paymentCreating} disabled={!selectedProduct || !selectedProvider} onClick={() => void startPayment()}>
-                                                立即充值
-                                            </Button>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="workspace-wallet-inline-state">
-                                        <CircleAlert />
-                                        <div>
-                                            <strong>在线充值暂不可用</strong>
-                                            <span>当前没有已启用的充值商品或支付渠道，请使用兑换码或联系管理员。</span>
-                                        </div>
-                                    </div>
-                                )}
-                            </section>
+                    {creditsEnabled ? (
+                        <div className="workspace-wallet-tabs" role="tablist" aria-label="积分中心">
+                            <button type="button" role="tab" aria-selected={activeTab === "topup"} onClick={() => setTab("topup")}>
+                                <WalletCards />
+                                充值
+                            </button>
+                            <button type="button" role="tab" aria-selected={activeTab === "redeem"} onClick={() => setTab("redeem")}>
+                                <TicketCheck />
+                                兑换
+                            </button>
+                            <button type="button" role="tab" aria-selected={activeTab === "history"} onClick={() => setTab("history")}>
+                                <History />
+                                积分消耗历史
+                            </button>
                         </div>
-                    ) : tab === "redeem" ? (
+                    ) : null}
+
+                    {activeTab === "topup" ? (
+                        <WalletTopupPanel
+                            loading={paymentsLoading}
+                            products={products}
+                            providers={providers}
+                            focusKind={focusKind}
+                            focusToken={focusToken}
+                            selectedProduct={selectedProduct}
+                            onSelectProduct={setSelectedProductId}
+                            selectedProviderId={selectedProviderId}
+                            onSelectProvider={setSelectedProviderId}
+                            creating={payment.creating}
+                            onPay={() => void startPayment()}
+                            storageUsage={storageQuery.data}
+                            storageGrants={grantsQuery.data?.grants || []}
+                            onCleanAssets={() => {
+                                onClose();
+                                navigate("/assets");
+                            }}
+                        />
+                    ) : activeTab === "redeem" ? (
                         <div className="workspace-wallet-content is-redeem">
                             <section className="workspace-wallet-section is-redeem">
                                 <div className="workspace-wallet-section-heading">
@@ -472,33 +404,7 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
                 </div>
             </AppModal>
 
-            <AppModal
-                open={paymentOpen}
-                title={paymentOrder?.status === "credited" ? "充值完成" : paymentOrder?.checkout.mode === "qr_code" ? "扫码支付" : "确认支付结果"}
-                centered
-                width={430}
-                onCancel={() => setPaymentOpen(false)}
-                footer={paymentFooter(paymentOrder, paymentQuerying, () => setPaymentOpen(false), cancelPayment, refreshPaymentStatus, retryCheckout)}
-            >
-                {paymentOrder ? (
-                    <div className="workspace-wallet-payment">
-                        <span className="workspace-wallet-payment-icon">
-                            <CreditCard />
-                        </span>
-                        <strong>¥ {(paymentOrder.amountFen / 100).toFixed(2)}</strong>
-                        <p>
-                            {paymentOrder.productName} · {formatCredits(paymentOrder.creditsMicrocredits, 6)} 积分
-                        </p>
-                        {paymentOrder.status === "pending" && paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? (
-                            <>
-                                <PaymentCheckoutCode value={paymentOrder.checkout.value} />
-                                <span>请使用支付应用扫码完成支付</span>
-                            </>
-                        ) : null}
-                        <PaymentStatus order={paymentOrder} now={clock} />
-                    </div>
-                ) : null}
-            </AppModal>
+            {payment.dialog}
         </>
     );
 }
@@ -521,45 +427,4 @@ function WalletLedgerRow({ entry }: { entry: CreditLedgerEntry }) {
             </b>
         </article>
     );
-}
-
-function PaymentStatus({ order, now }: { order: PaymentOrder; now: number }) {
-    if (order.status === "credited") return <div className="workspace-wallet-payment-status is-success">支付已确认，积分已经到账</div>;
-    if (order.status === "closed") return <div className="workspace-wallet-payment-status">订单已关闭，未产生积分充值</div>;
-    if (order.status === "create_failed") return <div className="workspace-wallet-payment-status is-error">支付入口创建失败，请重新生成支付入口。</div>;
-    const remaining = Math.max(0, Math.floor((new Date(order.expiresAt).getTime() - now) / 1000));
-    const hours = Math.floor(remaining / 3600);
-    const minutes = Math.floor((remaining % 3600) / 60);
-    const seconds = remaining % 60;
-    return (
-        <div className="workspace-wallet-payment-status">
-            订单剩余 {String(hours).padStart(2, "0")}:{String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}，将自动确认支付结果
-        </div>
-    );
-}
-
-function paymentFooter(order: PaymentOrder | null, loading: boolean, close: () => void, cancel: () => Promise<void>, query: (id?: string, silent?: boolean) => Promise<void>, retry: () => Promise<void>) {
-    if (order?.status === "pending")
-        return [
-            <Button key="cancel" danger disabled={loading} onClick={() => void cancel()}>
-                关闭订单
-            </Button>,
-            <Button key="query" type="primary" loading={loading} onClick={() => void query()}>
-                我已完成支付
-            </Button>,
-        ];
-    if (order?.status === "create_failed")
-        return [
-            <Button key="close" onClick={close}>
-                稍后处理
-            </Button>,
-            <Button key="retry" type="primary" loading={loading} onClick={() => void retry()}>
-                重新生成支付入口
-            </Button>,
-        ];
-    return [
-        <Button key="done" type="primary" onClick={close}>
-            完成
-        </Button>,
-    ];
 }

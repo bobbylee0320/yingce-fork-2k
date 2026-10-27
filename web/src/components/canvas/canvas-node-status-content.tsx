@@ -7,6 +7,7 @@ import { useSyncExternalStore } from "react";
 import { formatTaskElapsed, idleTaskTickerSubscribe, subscribeTaskTicker, taskTickerSnapshot } from "@/lib/canvas/task-ticker";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import type { CanvasNodeContentProps } from "./canvas-node-content";
+import { progressFillStyle } from "@/lib/progress-fill";
 
 export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNodeContentProps, "node" | "theme" | "onOpenTaskDetails">) {
     const taskId = node.metadata?.taskId;
@@ -36,7 +37,7 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
         );
     }
     return (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 px-5 text-center" style={{ color: theme.node.activeStroke }}>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-5 text-center" style={{ color: theme.node.activeStroke }}>
             {submissionUncertain ? <AlertCircle className="size-10" /> : <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />}
             <span className="text-[var(--fs-tiny)] font-semibold">{stageLabel}</span>
             {workflow ? (
@@ -46,21 +47,21 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
                 </span>
             ) : null}
             {taskId ? (
-                <div className="flex w-full max-w-[210px] flex-col items-center gap-1.5">
+                <div className="flex w-full max-w-[210px] flex-col items-center gap-2">
                     <div className="max-w-full truncate text-[var(--fs-label)] font-medium" style={{ color: theme.node.text }}>
                         {statusLabel}
                         {progress !== null ? ` · ${progress}%` : ""}
                     </div>
                     {progress !== null ? (
                         <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: theme.node.stroke }}>
-                            <div className="h-full rounded-full transition-[width]" style={{ width: `${progress}%`, background: theme.node.activeStroke }} />
+                            <div className="h-full rounded-full transition-transform duration-200 ease-out motion-reduce:transition-none" style={progressFillStyle(progress, { background: theme.node.activeStroke })} />
                         </div>
                     ) : null}
                     <div className="max-w-full truncate text-[var(--fs-tiny)] tabular-nums" style={{ color: theme.node.muted }}>
                         <Clock3 className="mr-1 inline size-3" />
                         {workflow ? shortTaskId(taskId) : `${elapsed} · ${shortTaskId(taskId)}`}
                     </div>
-                    <div className="mt-0.5 flex items-center gap-1.5">
+                    <div className="mt-0.5 flex items-center gap-2">
                         <button
                             type="button"
                             className="inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium transition-colors"
@@ -125,7 +126,7 @@ export function ErrorContent({ node, theme, onRetry, onReloadResource }: Pick<Ca
                 <div className="flex flex-wrap justify-center gap-2">
                     <button
                         type="button"
-                        className="inline-flex h-8 items-center gap-1.5 rounded-[var(--r-md)] px-3 text-xs font-medium transition-colors"
+                        className="inline-flex h-8 items-center gap-2 rounded-[var(--r-md)] px-3 text-xs font-medium transition-colors"
                         style={{ background: theme.accent.primary, color: theme.accent.onPrimary }}
                         onClick={(event) => {
                             event.stopPropagation();
@@ -138,7 +139,7 @@ export function ErrorContent({ node, theme, onRetry, onReloadResource }: Pick<Ca
                     </button>
                     <button
                         type="button"
-                        className="inline-flex h-8 items-center gap-1.5 rounded-[var(--r-md)] px-3 text-xs font-medium transition-colors"
+                        className="inline-flex h-8 items-center gap-2 rounded-[var(--r-md)] px-3 text-xs font-medium transition-colors"
                         style={{ background: theme.toolbar.itemHover, color: theme.node.text }}
                         onClick={(event) => {
                             event.stopPropagation();
@@ -153,7 +154,7 @@ export function ErrorContent({ node, theme, onRetry, onReloadResource }: Pick<Ca
             ) : (
                 <button
                     type="button"
-                    className="inline-flex h-8 items-center gap-1.5 rounded-[var(--r-md)] px-3 text-xs font-medium transition-colors"
+                    className="inline-flex h-8 items-center gap-2 rounded-[var(--r-md)] px-3 text-xs font-medium transition-colors"
                     style={{ background: theme.toolbar.itemHover, color: theme.node.text }}
                     onClick={(event) => {
                         event.stopPropagation();

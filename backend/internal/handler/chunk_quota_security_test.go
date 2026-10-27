@@ -28,7 +28,7 @@ func TestChunkAdmissionReservesBeforeBody(t *testing.T) {
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.SystemSetting{}, &model.Resource{}, &model.UploadReservation{}, &model.UserDailyUploadUsage{}, &model.StorageLocation{}, &model.UserOSSSetting{}, &model.UserDailyActivity{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.SystemSetting{}, &model.Resource{}, &model.UploadReservation{}, &model.UserDailyUploadUsage{}, &model.UserStorageGrant{}, &model.UserStorageState{}, &model.StorageLocation{}, &model.UserOSSSetting{}, &model.UserDailyActivity{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&model.User{ID: "chunk-user", Username: "chunk-user", Status: model.UserStatusActive}).Error; err != nil {

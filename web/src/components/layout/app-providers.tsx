@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { lazy, Suspense, useEffect, useLayoutEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { App, ConfigProvider } from "antd";
+import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 
 import { AuthSessionHydrator } from "@/components/auth/auth-session-hydrator";
+import { AppFeedbackProvider } from "@/components/layout/app-feedback";
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { applySkinTheme } from "@/lib/skin-themes";
@@ -59,7 +60,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
     return (
         <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark, appearance.activeSkin)} wave={{ disabled: true }}>
-            <App message={{ duration: 3, maxCount: 3 }} notification={{ duration: 4.5, maxCount: 3, placement: "topRight" }}>
+            <AppFeedbackProvider>
                 <QueryClientProvider client={appQueryClient}>
                     {isolateDevRepro ? (
                         children
@@ -69,7 +70,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
                         </AuthSessionHydrator>
                     )}
                 </QueryClientProvider>
-            </App>
+            </AppFeedbackProvider>
         </ConfigProvider>
     );
 }

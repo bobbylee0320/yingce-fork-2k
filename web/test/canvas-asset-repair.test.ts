@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { collectCanvasMediaAssetIds, rebindInconsistentCanvasAssets, repairMissingCanvasAssets, repairMissingCanvasVideoPreviews } from "@/services/canvas-asset-repair";
 import { ApiError } from "@/services/api/request";
@@ -62,6 +62,11 @@ function timelineClip(assetId: string | undefined, storageKey: string): Timeline
 }
 
 beforeEach(() => {
+    useCanvasStore.setState({ projects: [] });
+    useAssetStore.setState({ assets: [] });
+});
+// 全局 store 在同一 bun 进程的测试文件间共享；残留画布会被后续文件的同步流程当成待保存数据。
+afterEach(() => {
     useCanvasStore.setState({ projects: [] });
     useAssetStore.setState({ assets: [] });
 });

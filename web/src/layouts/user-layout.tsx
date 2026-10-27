@@ -6,7 +6,6 @@ import { AppWorkspaceShell } from "@/components/layout/app-top-nav";
 import { cn } from "@/lib/utils";
 import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
 import { getWorkspaceAntThemeConfig } from "@/lib/app-theme";
-import { useWorkspaceButtonFeedback } from "@/hooks/use-workspace-button-feedback";
 import { useUserStore } from "@/stores/use-user-store";
 import "@/styles/workspace-product.css";
 import "@/styles/workspace-menus.css";
@@ -22,7 +21,6 @@ export default function UserLayout({ children }: { children: ReactNode }) {
     const canvasEditor = /^\/canvas\/[^/]+(?:\/|$)/.test(pathname);
     const productWorkspace = !adminWorkspace && !canvasEditor;
     const userId = useUserStore((state) => state.user?.id);
-    useWorkspaceButtonFeedback(productWorkspace);
 
     useLayoutEffect(() => {
         // Ant Design 浮层挂载在 body，必须用路由级标记隔离用户工作台与画布编辑器、运营后台。

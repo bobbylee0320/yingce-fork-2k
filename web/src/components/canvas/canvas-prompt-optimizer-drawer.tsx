@@ -500,7 +500,7 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
                     ) : activeReferences.length ? (
                         <div className="canvas-prompt-optimizer-chat-reference">
                             <span>将结合参考</span>
-                            <div className="flex min-w-0 flex-wrap gap-1.5">
+                            <div className="flex min-w-0 flex-wrap gap-2">
                                 {activeReferences.map((reference) => (
                                     <Tag key={reference.id}>{reference.title || reference.label}</Tag>
                                 ))}
@@ -606,7 +606,7 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
                                             onClick={() => setSelectedPrompt(variant.prompt)}
                                             aria-pressed={selected}
                                         >
-                                            <span className="mb-1 flex items-center gap-1.5 text-[var(--fs-micro)] font-medium text-foreground/72">
+                                            <span className="mb-1 flex items-center gap-2 text-[var(--fs-micro)] font-medium text-foreground/72">
                                                 {selected ? <Check className="size-3.5 text-primary" /> : null}
                                                 {variant.label}
                                             </span>

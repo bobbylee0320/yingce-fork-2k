@@ -165,14 +165,14 @@ export function ImageParameterFields({
                     return (
                         <div className="space-y-2" key="count">
                             <div className="text-xs font-medium">生成张数</div>
-                            <div className="grid grid-cols-4 gap-1.5">
+                            <div className="grid grid-cols-4 gap-2">
                                 {Array.from({ length: Math.min(3, max) }, (_, i) => i + 1).map((val) => (
                                     <button
                                         key={val}
                                         type="button"
                                         onClick={() => onChange("count", String(val))}
                                         className={cn(
-                                            "flex h-8 items-center justify-center rounded-full text-xs font-medium transition-all select-none",
+                                            "flex h-8 items-center justify-center rounded-full text-xs font-medium transition-colors duration-150 select-none",
                                             countVal === val
                                                 ? "bg-primary/20 text-primary border border-primary/40 font-semibold"
                                                 : "bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground border border-border/40",
@@ -195,7 +195,7 @@ export function ImageParameterFields({
                 }
 
                 return (
-                    <div className="space-y-1.5" key={field.name}>
+                    <div className="space-y-2" key={field.name}>
                         <div className="text-xs font-medium">{field.label}</div>
                         <ImageParameterInput
                             field={field}
@@ -258,8 +258,8 @@ export function ImageParameterSchemaEditor({ definitions, parameters, disabled, 
                         {field.enabled !== false ? (
                             <div className="grid gap-3 sm:grid-cols-2">
                                 {definition.values?.length || field.type === "string" ? (
-                                    <div className="space-y-1.5 text-xs">
-                                        <label className="block space-y-1.5">
+                                    <div className="space-y-2 text-xs">
+                                        <label className="block space-y-2">
                                             <span>支持值{!definition.values?.length ? "（留空允许自由输入）" : ""}</span>
                                             <Select
                                                 className="w-full"
@@ -301,7 +301,7 @@ export function ImageParameterSchemaEditor({ definitions, parameters, disabled, 
                                 ) : null}
                                 {(field.type === "number" || field.type === "integer") && !definition.values?.length ? (
                                     <div className="grid grid-cols-2 gap-2">
-                                        <label className="space-y-1.5 text-xs">
+                                        <label className="space-y-2 text-xs">
                                             <span>最小值</span>
                                             <InputNumber
                                                 className="w-full"
@@ -313,7 +313,7 @@ export function ImageParameterSchemaEditor({ definitions, parameters, disabled, 
                                                 onChange={(min) => update(field.name, { min: min ?? definition.min })}
                                             />
                                         </label>
-                                        <label className="space-y-1.5 text-xs">
+                                        <label className="space-y-2 text-xs">
                                             <span>最大值</span>
                                             <InputNumber
                                                 className="w-full"
@@ -327,7 +327,7 @@ export function ImageParameterSchemaEditor({ definitions, parameters, disabled, 
                                         </label>
                                     </div>
                                 ) : null}
-                                <div className="space-y-1.5 text-xs">
+                                <div className="space-y-2 text-xs">
                                     <span>默认值</span>
                                     <ImageParameterInput field={field} value={field.default} disabled={disabled} onChange={(value) => update(field.name, { default: value })} />
                                 </div>

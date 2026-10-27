@@ -194,7 +194,7 @@ function AuthField({ label, htmlFor, children }: { label: string; htmlFor: strin
 function BackToLogin({ to }: { to: string }) {
     return (
         <div className="text-center">
-            <Link to={to} className="auth-scene-link inline-flex min-h-8 items-center gap-1.5 rounded-sm text-xs transition-colors">
+            <Link to={to} className="auth-scene-link inline-flex min-h-8 items-center gap-2 rounded-sm text-xs transition-colors">
                 <ArrowLeft className="size-3.5" />
                 返回登录
             </Link>
@@ -204,7 +204,7 @@ function BackToLogin({ to }: { to: string }) {
 
 function Notice({ icon, children }: { icon: ReactNode; children: ReactNode }) {
     return (
-        <div className="auth-scene-notice flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs leading-5">
+        <div className="auth-scene-notice flex items-start gap-2 rounded-lg border px-3 py-2 text-xs leading-5">
             <span className="mt-0.5 shrink-0">{icon}</span>
             {children}
         </div>

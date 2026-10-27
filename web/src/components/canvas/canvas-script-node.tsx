@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { CheckboxGroup } from "@/components/ui/base/checkbox";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video } from "lucide-react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { StoryboardAssetsCell } from "@/components/canvas/storyboard-assets-cell";
@@ -199,8 +199,8 @@ export function CanvasScriptNodeContent({
             icon: <Film className="size-3.5" />,
             label: "视频输入模式",
             children: [
-                { key: "video-input-direct", label: videoInputMode === "direct" ? "✓ 直接生成" : "直接生成", onClick: () => onVideoInputModeChange("direct") },
-                { key: "video-input-keyframe", label: videoInputMode === "keyframe" ? "✓ 先做首帧" : "先做首帧", onClick: () => onVideoInputModeChange("keyframe") },
+                { key: "video-input-direct", icon: videoInputMode === "direct" ? <Check className="size-3.5" /> : <span aria-hidden="true" className="inline-block size-3.5" />, label: "直接生成", onClick: () => onVideoInputModeChange("direct") },
+                { key: "video-input-keyframe", icon: videoInputMode === "keyframe" ? <Check className="size-3.5" /> : <span aria-hidden="true" className="inline-block size-3.5" />, label: "先做首帧", onClick: () => onVideoInputModeChange("keyframe") },
             ],
         },
         ...(!simpleMode
@@ -237,7 +237,7 @@ export function CanvasScriptNodeContent({
 
     return (
         <div className="relative flex h-full w-full flex-col overflow-visible" style={{ color: theme.node.text }} onDoubleClick={(event) => event.stopPropagation()}>
-            <div className="relative flex h-10 shrink-0 items-center gap-2 rounded-t-[17px] border-b px-4" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
+            <div className="relative flex h-10 shrink-0 items-center gap-2 rounded-t-[16px] border-b px-4" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
                 <Clapperboard className="size-4" />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={node.title || "分镜脚本"}>
                     {node.title || "分镜脚本"}
@@ -362,8 +362,8 @@ export function CanvasScriptNodeContent({
                             onAddRow();
                         }}
                     >
-                        <span className="flex flex-col items-center gap-2.5">
-                            <span className="text-sm font-bold">＋ 添加第一个镜头</span>
+                        <span className="flex flex-col items-center gap-2">
+                            <span className="text-sm font-semibold">＋ 添加第一个镜头</span>
                             <span className="text-[var(--fs-label)] font-medium" style={{ color: theme.node.faint }}>
                                 可先连接「故事梗概 / 项目画风」节点，或在下方输入提示词一键生成分镜表
                             </span>
@@ -386,7 +386,7 @@ export function CanvasScriptNodeContent({
                     添加行
                 </button>
             </div>
-            <div className="relative grid shrink-0 grid-rows-[minmax(0,1fr)_28px] gap-1.5 rounded-b-[17px] p-2.5" style={{ height: composerHeight, background: theme.node.panel }}>
+            <div className="relative grid shrink-0 grid-rows-[minmax(0,1fr)_28px] gap-2 rounded-b-[16px] p-2" style={{ height: composerHeight, background: theme.node.panel }}>
                 <CanvasResourceMentionTextarea
                     rows={1}
                     references={mentionReferences}
@@ -648,7 +648,7 @@ export function CanvasScriptEditor({
 function CompactInput({ value, placeholder, borderColor, onChange }: { value: string; placeholder: string; borderColor: string; onChange: (value: string) => void }) {
     return (
         <textarea
-            className="thin-scrollbar h-full w-full resize-none overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words border-r bg-transparent px-4 py-2.5 text-xs leading-5 outline-none transition placeholder:opacity-35 focus:bg-black/[0.02] dark:focus:bg-white/[0.025]"
+            className="thin-scrollbar h-full w-full resize-none overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words border-r bg-transparent px-4 py-2 text-xs leading-5 outline-none transition placeholder:opacity-35 focus:bg-black/[0.02] dark:focus:bg-white/[0.025]"
             style={{ borderColor }}
             value={value}
             placeholder={placeholder}
@@ -761,7 +761,7 @@ function RowHandle({
             style={{ top, width: 32 * inverseHitScale, height: 32 * inverseHitScale, "--tw-ring-color": theme.accent.primary } as CSSProperties}
             onPointerDown={onPointerDown}
         >
-            <span className="block size-2.5 rounded-full border-2 shadow-sm transition-transform hover:scale-110" style={{ boxSizing: "border-box", borderColor: theme.node.panel, background: color }} />
+            <span className="block size-2.5 rounded-full border-2 shadow-sm transition-opacity duration-150 hover:opacity-80" style={{ boxSizing: "border-box", borderColor: theme.node.panel, background: color }} />
         </button>
     );
 }

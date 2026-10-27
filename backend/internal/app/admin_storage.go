@@ -53,6 +53,8 @@ type AdminStorageStats struct {
 	repository.ResourceStorageSummary
 	ByKind     []repository.ResourceKindStat     `json:"byKind"`
 	ByProvider []repository.ResourceProviderStat `json:"byProvider"`
+	// Offload 是对象存储写入失败后先保存在本地、等待补传的生成作品。
+	Offload repository.ResourceOffloadSummary `json:"offload"`
 }
 
 func (s *Service) AdminResourcePage(actor *model.User, query AdminResourceQuery) (*AdminResourcePage, error) {
@@ -110,7 +112,11 @@ func (s *Service) AdminStorageStats(actor *model.User) (*AdminStorageStats, erro
 	if err != nil {
 		return nil, err
 	}
-	return &AdminStorageStats{ResourceStorageSummary: summary, ByKind: byKind, ByProvider: byProvider}, nil
+	offload, err := s.repo.ResourceOffloadSummary()
+	if err != nil {
+		return nil, err
+	}
+	return &AdminStorageStats{ResourceStorageSummary: summary, ByKind: byKind, ByProvider: byProvider, Offload: offload}, nil
 }
 
 func (s *Service) OpenResourceRangeAsAdmin(actor *model.User, id string, rangeHeader string) (*ResourceStream, error) {

@@ -59,6 +59,19 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, page)
 	})
+	r.GET("/agent/conversations/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		summary, err := svc.CloudAgentConversationSummaryByID(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, summary)
+	})
 	r.GET("/agent/conversations/:id/runs", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -226,6 +239,19 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"accepted": true, "pending": pending})
+	})
+	// 撤回尚未送达的插话；只改待送队列，不停止本轮，也不取消已提交的生成任务。
+	r.DELETE("/agent/runs/:id/interjections/:messageId", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.WithdrawCloudAgentInterjection(user.ID, c.Param("id"), c.Param("messageId")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"withdrawn": true})
 	})
 	r.GET("/agent/runs/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

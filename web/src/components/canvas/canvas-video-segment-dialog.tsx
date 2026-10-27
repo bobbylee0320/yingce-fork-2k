@@ -207,7 +207,7 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
     };
 
     const title = (
-        <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2">
             <span className="grid size-8 shrink-0 place-items-center rounded-lg" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
                 {isVideoMode ? <Scissors className="size-4" /> : <AudioLines className="size-4" />}
             </span>
@@ -246,7 +246,7 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
                 </div>
 
                 {isVideoMode ? (
-                    <div className="space-y-2.5">
+                    <div className="space-y-2">
                         {createsGenerationNodes && !defaultModelSupported ? (
                             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs" style={{ background: theme.accent.primarySoft + "1a", borderColor: theme.accent.primarySoft, color: theme.node.muted }}>
                                 <span className="min-w-0 flex-1">
@@ -282,7 +282,7 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
                         {segments.length ? (
                             <div className="thin-scrollbar max-h-56 space-y-2 overflow-y-auto pr-1">
                                 {segments.map((segment, index) => (
-                                    <div key={segment.id} className="rounded-lg border px-2.5 py-2" style={{ borderColor: theme.toolbar.border }}>
+                                    <div key={segment.id} className="rounded-lg border px-2 py-2" style={{ borderColor: theme.toolbar.border }}>
                                         <div className="grid grid-cols-[auto_1fr_1fr_auto] items-center gap-2">
                                             <span className="w-14 shrink-0 text-xs font-medium">片段 {index + 1}</span>
                                             <div className="flex min-w-0 items-center gap-1">
@@ -322,7 +322,7 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
                             </div>
                         )}
 
-                        <div className="rounded-xl px-3 py-2.5" style={{ background: theme.toolbar.itemHover }}>
+                        <div className="rounded-xl px-3 py-2" style={{ background: theme.toolbar.itemHover }}>
                             <div className="mb-2 flex items-center justify-between gap-3">
                                 <div>
                                     <div className="text-sm font-medium">截取后</div>
@@ -336,17 +336,17 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
                             <>
                                 <div className="grid gap-3 md:grid-cols-2">
                                     <label className="block min-w-0">
-                                        <div className="mb-1.5 text-sm font-medium">生成节点模型</div>
+                                        <div className="mb-2 text-sm font-medium">生成节点模型</div>
                                         <ModelPicker config={config} value={resolvedModel} onChange={setModel} capability="video" requirements={modelRequirements} fullWidth onMissingConfig={() => message.warning("请先配置支持参考视频的视频模型")} />
                                     </label>
                                     <label className="block min-w-0">
-                                        <div className="mb-1.5 text-sm font-medium">生成模式</div>
+                                        <div className="mb-2 text-sm font-medium">生成模式</div>
                                         <Select className="w-full" size="small" value={operation} options={operationOptions} placeholder="选择生成模式" onChange={(value) => setOperation(value as CanvasVideoEditOperation)} />
                                     </label>
                                 </div>
 
                                 <label className="block">
-                                    <div className="mb-1.5 text-sm font-medium">生成提示词</div>
+                                    <div className="mb-2 text-sm font-medium">生成提示词</div>
                                     <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} value={prompt} placeholder="描述后续要生成的视频内容…" onChange={(event) => setPrompt(event.target.value)} />
                                     <div className="mt-1 text-xs opacity-45">每个片段会连接一个待生成视频节点，但不会自动提交任务。你可以继续调整参考素材、模型和提示词。</div>
                                 </label>

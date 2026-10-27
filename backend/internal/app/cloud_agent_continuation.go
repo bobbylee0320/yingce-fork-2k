@@ -33,15 +33,59 @@ type cloudAgentContinuationChange struct {
 // cloudAgentContinuationFrame is a bounded server-authored handoff. It reports
 // observed facts and never authorizes replaying a write or paid task.
 type cloudAgentContinuationFrame struct {
-	Source               string                         `json:"source"`
-	Kind                 string                         `json:"kind"`
-	ParentRunID          string                         `json:"parentRunId"`
-	Status               string                         `json:"status"`
-	FailureReason        string                         `json:"failureReason,omitempty"`
-	SubmittedTaskIDs     []string                       `json:"submittedTaskIds,omitempty"`
-	CanvasChanges        []cloudAgentContinuationChange `json:"canvasChanges,omitempty"`
-	OmittedCanvasChanges int                            `json:"omittedCanvasChanges,omitempty"`
-	Authority            string                         `json:"authority"`
+	Source               string                           `json:"source"`
+	Kind                 string                           `json:"kind"`
+	ParentRunID          string                           `json:"parentRunId"`
+	Status               string                           `json:"status"`
+	FailureReason        string                           `json:"failureReason,omitempty"`
+	SubmittedTaskIDs     []string                         `json:"submittedTaskIds,omitempty"`
+	CanvasChanges        []cloudAgentContinuationChange   `json:"canvasChanges,omitempty"`
+	OmittedCanvasChanges int                              `json:"omittedCanvasChanges,omitempty"`
+	RejectedAction       *cloudAgentContinuationRejection `json:"rejectedAction,omitempty"`
+	Authority            string                           `json:"authority"`
+}
+
+// cloudAgentContinuationRejection 记录上一轮被用户拒绝的操作。只有 status 时模型不知道拒绝了什么，
+// 下一轮常会原样再申请一次；带上工具、操作说明和用户理由，模型才能换方向。
+type cloudAgentContinuationRejection struct {
+	ToolName    string `json:"toolName,omitempty"`
+	Description string `json:"description,omitempty"`
+	UserReason  string `json:"userReason,omitempty"`
+	Instruction string `json:"instruction"`
+}
+
+const (
+	cloudAgentContinuationRejectionDescriptionRunes = 200
+	cloudAgentContinuationRejectionReasonRunes      = 300
+)
+
+func cloudAgentContinuationRejectedAction(run *CloudAgentRun) *cloudAgentContinuationRejection {
+	if run == nil || run.Status != "rejected" {
+		return nil
+	}
+	approvalID, reason := "", ""
+	for index := len(run.Events) - 1; index >= 0; index-- {
+		event := run.Events[index]
+		if event.Type == "approval_decided" && stringValue(event.Payload["decision"]) == "reject" {
+			approvalID = stringValue(event.Payload["approvalId"])
+			reason = strings.TrimSpace(stringValue(event.Payload["reason"]))
+			break
+		}
+	}
+	if approvalID == "" {
+		return nil
+	}
+	rejection := &cloudAgentContinuationRejection{
+		UserReason:  truncateRunes(reason, cloudAgentContinuationRejectionReasonRunes),
+		Instruction: "用户拒绝了这次操作，它没有执行。不要原样再次申请；先按用户新的要求调整方案，必要时询问用户。",
+	}
+	for _, event := range run.Events {
+		if event.Type == "approval_requested" && stringValue(event.Payload["approvalId"]) == approvalID {
+			rejection.ToolName = truncateRunes(stringValue(event.Payload["toolName"]), 80)
+			rejection.Description = truncateRunes(strings.TrimSpace(stringValue(event.Payload["text"])), cloudAgentContinuationRejectionDescriptionRunes)
+		}
+	}
+	return rejection
 }
 
 // cloudAgentContinuationReply 生成「上一轮接着聊」用的两段内容：
@@ -100,6 +144,7 @@ func cloudAgentContinuationContext(run *CloudAgentRun, submitted []string) strin
 	if failed {
 		frame.FailureReason = cloudAgentContinuationFailureReason(run)
 	}
+	frame.RejectedAction = cloudAgentContinuationRejectedAction(run)
 	if len(submitted) > 0 {
 		if len(submitted) > 8 {
 			submitted = submitted[:8]
@@ -107,6 +152,42 @@ func cloudAgentContinuationContext(run *CloudAgentRun, submitted []string) strin
 		frame.SubmittedTaskIDs = append([]string(nil), submitted...)
 	}
 	return cloudAgentRuntimeContextMarker + cloudAgentEncodeContinuationFrame(frame)
+}
+
+// cloudAgentInheritablePiSession 决定新一轮能否沿用上一轮的运行时会话，不能沿用时返回空串。
+//
+// 只沿用正常完成的上一轮。失败、取消或被拒绝的会话常停在半批工具调用或「等待审批」占位上：
+// 原样沿用会让之后每一轮都带着同一处断裂，模型还可能把占位当成仍待执行的操作再发一次。
+// 不沿用时新一轮从文本历史和 run_handoff 事实帧开始，帧里有上一轮的状态、失败原因和已提交的任务，
+// 这些事实足以避免重复提交。完成的会话也必须能修复成合法历史，修不好同样不沿用。
+func cloudAgentInheritablePiSession(parentStatus, sessionJSONL string) string {
+	if parentStatus != "completed" || strings.TrimSpace(sessionJSONL) == "" {
+		return ""
+	}
+	var messages []map[string]any
+	for _, line := range strings.Split(sessionJSONL, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var entry struct {
+			Type    string         `json:"type"`
+			Message map[string]any `json:"message"`
+		}
+		if json.Unmarshal([]byte(line), &entry) != nil {
+			return ""
+		}
+		if entry.Type == "message" && entry.Message != nil {
+			messages = append(messages, entry.Message)
+		}
+	}
+	repaired := repairRuntimeUnansweredCalls(messages, nil)
+	if _, err := canonicalFromRuntimeMessages(repaired, nil, ""); err != nil {
+		return ""
+	}
+	if validateRuntimeMessagesForModel(repaired) != nil {
+		return ""
+	}
+	return sessionJSONL
 }
 
 // cloudAgentContinuationFailureReason 沿用既有脱敏口径：失败原因会进入下一轮的提示词，
@@ -144,6 +225,10 @@ func cloudAgentEncodeContinuationFrame(frame cloudAgentContinuationFrame) string
 	encoded, _ = json.Marshal(frame)
 	if len(encoded) > cloudAgentContinuationFrameBytes {
 		frame.FailureReason = truncateRunes(frame.FailureReason, 120)
+		if frame.RejectedAction != nil {
+			frame.RejectedAction.Description = truncateRunes(frame.RejectedAction.Description, 80)
+			frame.RejectedAction.UserReason = truncateRunes(frame.RejectedAction.UserReason, 120)
+		}
 		encoded, _ = json.Marshal(frame)
 	}
 	return string(encoded)

@@ -94,6 +94,9 @@ export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyM
     delete metadata.versionLabel;
     delete metadata.versionPrimary;
 
+    // 副本从当前媒体重新开始自己的版本历史。
+    delete metadata.mediaVersions;
+    delete metadata.currentMediaVersionId;
     metadata.copiedFromNodeId = node.id;
     if (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) {
         metadata.generationResultPlacement = "replace-node";

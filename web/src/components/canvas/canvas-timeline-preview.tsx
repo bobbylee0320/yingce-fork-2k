@@ -125,7 +125,7 @@ export function CanvasTimelinePreview({ clips, nodes, playheadMs, playing, theme
     }, [videoSize]);
 
     return (
-        <div className="flex items-center gap-3 border-b px-4 py-2.5" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel }}>
+        <div className="flex items-center gap-3 border-b px-4 py-2" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel }}>
             <div className="relative grid shrink-0 place-items-center overflow-hidden rounded-lg bg-black" style={{ width: PREVIEW_WIDTH, height: PREVIEW_HEIGHT }} data-canvas-no-zoom>
                 {videoUrl && activeVideoClip ? (
                     <>
@@ -142,7 +142,7 @@ export function CanvasTimelinePreview({ clips, nodes, playheadMs, playing, theme
                                 onTogglePlay();
                             }}
                         >
-                            <span className="grid size-10 place-items-center rounded-full bg-black/45 text-white backdrop-blur transition hover:scale-105 hover:bg-black/60">
+                            <span className="grid size-10 place-items-center rounded-full bg-black/45 text-white backdrop-blur transition-colors duration-150 hover:bg-black/60">
                                 {playing ? <Pause className="size-4 fill-current" /> : <Play className="size-4 fill-current" />}
                             </span>
                         </button>
@@ -158,7 +158,7 @@ export function CanvasTimelinePreview({ clips, nodes, playheadMs, playing, theme
                     </span>
                     <span className="opacity-45 tabular-nums">{activeVideoClip ? `${formatTimelineTime(activeVideoClip.startMs)} ~ ${formatTimelineTime(activeVideoClip.startMs + activeVideoClip.durationMs)}` : ""}</span>
                 </div>
-                <div className="mt-1.5 max-h-16 min-h-10 overflow-y-auto rounded-lg border px-2.5 py-1.5 text-xs leading-5" style={{ borderColor: theme.toolbar.border, background: theme.node.fill }}>
+                <div className="mt-2 max-h-16 min-h-10 overflow-y-auto rounded-lg border px-2 py-2 text-xs leading-5" style={{ borderColor: theme.toolbar.border, background: theme.node.fill }}>
                     {activeSubtitleClip ? activeSubtitleClip.text : <span className="opacity-40">此处无字幕，点选字幕片段后在下方编辑</span>}
                 </div>
             </div>

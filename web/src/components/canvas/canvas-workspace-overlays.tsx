@@ -88,7 +88,7 @@ export function CanvasSelectionToolbar({ anchorRef, containerRef, count, childre
                 className="flex items-center gap-2"
             >
                 <span
-                    className="aceternity-floating-panel shrink-0 rounded-full border px-2.5 py-1.5 text-[var(--fs-tiny)] font-semibold tabular-nums backdrop-blur-2xl"
+                    className="aceternity-floating-panel shrink-0 rounded-full border px-2 py-2 text-[var(--fs-tiny)] font-semibold tabular-nums backdrop-blur-2xl"
                     style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.accent.primary }}
                 >
                     已选 {count}
@@ -414,7 +414,7 @@ function ConnectionCreateOption({
             data-create-option={title}
             data-expanded={expanded}
             data-motion={motionEnabled ? "enabled" : "reduced"}
-            className="canvas-connection-create-option group flex min-h-10 w-full cursor-pointer items-start gap-2 rounded-[var(--dock-item-radius)] px-2 py-1.5 text-left outline-none focus-visible:ring-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
+            className="canvas-connection-create-option group flex min-h-10 w-full cursor-pointer items-start gap-2 rounded-[var(--dock-item-radius)] px-2 py-2 text-left outline-none focus-visible:ring-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
             style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted, background: expanded ? theme.toolbar.itemHover : undefined } as CSSProperties}
             onClick={() => {
                 if (!disabledReason) onClick();
@@ -423,7 +423,7 @@ function ConnectionCreateOption({
             <span className="grid size-7 shrink-0 place-items-center rounded-[var(--r-md)] opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5" style={{ background: theme.toolbar.itemHover }}>
                 {icon}
             </span>
-            <span className="min-w-0 flex-1 pt-1.5">
+            <span className="min-w-0 flex-1 pt-2">
                 <span className="flex items-center gap-2 text-[var(--fs-tiny)] font-semibold leading-4">{title}</span>
                 <span aria-hidden="true" className="canvas-connection-create-description" style={{ color: theme.node.muted }}>
                     <span className="min-h-0 overflow-hidden">

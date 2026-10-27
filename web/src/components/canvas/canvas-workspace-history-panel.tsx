@@ -8,7 +8,7 @@ import { TaskListItem } from "./canvas-workspace-task-list-item";
 export function CanvasWorkspaceHistoryPanel({ tasks, refreshing, onRefresh, onCancelTask }: { tasks: GenerationTask[]; refreshing?: boolean; onRefresh?: () => void; onCancelTask?: (task: GenerationTask) => void }) {
     return (
         <>
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2.5">
+            <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
                 <History className="size-3.5 shrink-0" />
                 <span className="truncate text-xs font-semibold">历史 · 最近 30 条（含 Agent）</span>
                 <span className="tabular-nums text-foreground/32">{tasks.length.toLocaleString("zh-CN")}</span>

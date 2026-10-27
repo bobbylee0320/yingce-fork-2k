@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type SVGProps } from "react";
-import { Button, Input, Modal } from "antd";
-import { Cpu, Search, X } from "lucide-react";
+import { Button, Input, Tooltip, type InputRef } from "antd";
+import { AudioLines, Check, Cpu, Film, Grid2X2, Image, Layers3, MessageSquare, Search, X } from "lucide-react";
 
 import { toc } from "@lobehub/icons/es/toc";
 
 import { cn } from "@/lib/utils";
 import { createModelLogoResolver } from "@/lib/model-logo-id";
+import { createModelLogoOption, MODEL_LOGO_CATEGORIES, MODEL_LOGO_FEATURED, type ModelLogoCategory } from "@/lib/model-logo-catalog";
+import { AppModal } from "@/components/ui/product/app-modal";
 
 type LobeIconComponent = ComponentType<SVGProps<SVGSVGElement> & { size?: number | string }>;
 
@@ -23,8 +25,13 @@ const iconRegistry = new Map<string, LobeIconComponent>();
 const iconLoadPromises = new Map<string, Promise<LobeIconComponent | undefined>>();
 const iconOptions = toc
     .filter((item) => item.group === "model" || item.group === "provider" || item.group === "application")
-    .map((item) => ({ id: item.id, title: item.fullTitle || item.title }))
+    .map(createModelLogoOption)
     .filter((item) => Boolean(iconLoaders[item.id]));
+
+const logoFilters = [{ id: "all", label: "全部" } as const, ...MODEL_LOGO_CATEGORIES];
+type ModelLogoFilter = ModelLogoCategory | "all";
+const categoryIcons = { all: Layers3, image: Image, video: Film, llm: MessageSquare, audio: AudioLines, platform: Grid2X2 };
+const pickerFocusClassName = "focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2";
 
 function loadIcon(icon?: string) {
     if (!icon) return Promise.resolve(undefined);
@@ -69,124 +76,181 @@ export function ModelLogo({ icon: rawIcon, size = 18, className }: { icon?: stri
 export function ModelIconPicker({ value, onChange }: { value?: string; onChange?: (value: string) => void }) {
     const [open, setOpen] = useState(false);
     const [keyword, setKeyword] = useState("");
-    const searchInputRef = useRef<any>(null);
+    const [category, setCategory] = useState<ModelLogoFilter>("all");
+    const searchInputRef = useRef<InputRef>(null);
+    const resultsRef = useRef<HTMLDivElement>(null);
+    const query = keyword.trim().toLowerCase();
 
     useEffect(() => {
-        if (open) {
-            const timer = setTimeout(() => searchInputRef.current?.focus(), 100);
-            return () => clearTimeout(timer);
-        } else {
-            setKeyword("");
-        }
-    }, [open]);
+        if (resultsRef.current) resultsRef.current.scrollTop = 0;
+    }, [category, query]);
 
     const filteredIcons = useMemo(() => {
-        const query = keyword.trim().toLowerCase();
-        return query ? iconOptions.filter((item) => `${item.id} ${item.title}`.toLowerCase().includes(query)) : iconOptions;
-    }, [keyword]);
+        if (query) return iconOptions.filter((item) => item.searchText.includes(query));
+        if (category === "all") return iconOptions;
+        const featured = MODEL_LOGO_FEATURED[category];
+        const rank = (id: string) => {
+            const index = featured.indexOf(id);
+            return index === -1 ? featured.length : index;
+        };
+        return iconOptions.filter((item) => item.categories.includes(category)).sort((a, b) => rank(a.id) - rank(b.id));
+    }, [query, category]);
 
-    const selectedOption = useMemo(() => (value ? iconOptions.find((item) => item.id === resolveIconId(value)) : undefined), [value]);
+    const selectedId = resolveIconId(value);
+    const selectedOption = iconOptions.find((item) => item.id === selectedId);
+    const categoryLabel = logoFilters.find((item) => item.id === category)?.label;
+
+    const close = () => setOpen(false);
+    const clear = () => {
+        onChange?.("");
+        close();
+    };
 
     return (
         <>
-            <button
-                type="button"
-                className="flex min-h-9 w-full items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 text-left text-sm transition-colors hover:border-border hover:bg-muted/20 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
-                aria-label="选择模型 Logo"
-                onClick={() => setOpen(true)}
-            >
-                <ModelLogo icon={value} size={20} />
-                <span className="min-w-0 flex-1 truncate text-foreground/70">{selectedOption?.title || value || "选择 Logo"}</span>
+            <div className="flex min-w-0 items-center rounded-md border border-border bg-background">
+                <button
+                    type="button"
+                    className={cn("flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors duration-150 hover:bg-surface-hover motion-reduce:transition-none pointer-coarse:min-h-11", pickerFocusClassName)}
+                    aria-label="选择模型 Logo"
+                    aria-haspopup="dialog"
+                    aria-expanded={open}
+                    onClick={() => {
+                        setKeyword("");
+                        setCategory(selectedOption?.categories[0] ?? "all");
+                        setOpen(true);
+                    }}
+                >
+                    <ModelLogo icon={value} size={18} />
+                    <span className="min-w-0 flex-1 truncate">{selectedOption?.label || value || "选择 Logo"}</span>
+                    {!value ? <span className="text-xs text-muted-foreground">浏览</span> : null}
+                </button>
                 {value ? (
-                    <span
-                        className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded text-foreground/40 hover:bg-muted hover:text-foreground"
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onChange?.("");
-                        }}
-                        title="清除 Logo"
-                    >
-                        <X className="size-3" />
-                    </span>
-                ) : (
-                    <span className="text-xs text-foreground/35">浏览</span>
-                )}
-            </button>
+                    <button type="button" className={cn("mr-1 grid size-6 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-surface-hover pointer-coarse:size-11", pickerFocusClassName)} onClick={clear} aria-label="清除 Logo">
+                        <X size={12} aria-hidden />
+                    </button>
+                ) : null}
+            </div>
 
-            <Modal
-                title="选择模型 Logo"
+            <AppModal
+                flush
+                title={null}
+                aria-label="选择模型 Logo"
                 open={open}
-                onCancel={() => setOpen(false)}
-                width={540}
+                onCancel={close}
+                width={640}
                 centered
-                destroyOnClose
-                footer={
-                    <div className="flex items-center justify-between py-1 text-xs text-foreground/45">
-                        <span>共 {filteredIcons.length} 个可用 Logo</span>
-                        <div className="flex items-center gap-2">
-                            {value ? (
-                                <Button
-                                    size="small"
-                                    onClick={() => {
-                                        onChange?.("");
-                                        setOpen(false);
-                                    }}
-                                >
-                                    清除 Logo
-                                </Button>
-                            ) : null}
-                            <Button type="primary" size="small" onClick={() => setOpen(false)}>
-                                完成
-                            </Button>
-                        </div>
-                    </div>
-                }
+                closable={false}
+                footer={null}
+                afterOpenChange={(visible) => {
+                    if (visible) searchInputRef.current?.focus({ preventScroll: true });
+                }}
             >
-                <div className="space-y-3 pt-2">
-                    <Input
-                        ref={searchInputRef}
-                        prefix={<Search className="size-4 text-foreground/40" />}
-                        value={keyword}
-                        onChange={(event) => setKeyword(event.target.value)}
-                        placeholder="搜索品牌或模型名称（如 OpenAI, Claude, Google, Flux...）"
-                        allowClear
-                    />
-                    <div
-                        className="grid max-h-[380px] grid-cols-8 gap-2 overflow-y-auto pr-1 sm:grid-cols-9"
-                        role="listbox"
-                        aria-label="模型 Logo 列表"
-                    >
-                        {filteredIcons.length ? (
-                            filteredIcons.map((item) => {
-                                const selected = value === item.id;
+                <section className="bg-surface text-foreground" aria-label="选择模型 Logo">
+                    <header className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
+                        <h2 className="m-0 text-base font-semibold">选择模型 Logo</h2>
+                        <Button type="text" size="small" icon={<X size={16} aria-hidden />} onClick={close} aria-label="关闭 Logo 选择器" />
+                    </header>
+                    <div className="px-5 pb-4">
+                        <Input
+                            ref={searchInputRef}
+                            prefix={<Search size={14} className="text-muted-foreground" aria-hidden />}
+                            value={keyword}
+                            onChange={(event) => setKeyword(event.target.value)}
+                            placeholder="搜索模型 Logo"
+                            aria-label="搜索全部模型 Logo"
+                            allowClear
+                        />
+                    </div>
+                    <div className="grid grid-cols-[calc(var(--space-10)*3)_minmax(0,1fr)] border-t border-border max-[520px]:grid-cols-1">
+                        <nav className="flex flex-col gap-1 border-r border-border px-2 py-3 max-[520px]:flex-row max-[520px]:border-r-0 max-[520px]:border-b max-[520px]:py-2" aria-label="Logo 分类">
+                            {logoFilters.map((item) => {
+                                const Icon = categoryIcons[item.id];
                                 return (
                                     <button
                                         key={item.id}
                                         type="button"
-                                        role="option"
-                                        aria-selected={selected}
-                                        title={item.title}
                                         className={cn(
-                                            "group relative flex size-12 flex-col items-center justify-center rounded-lg border border-border/50 bg-surface text-foreground/75 transition-all hover:scale-105 hover:border-primary/60 hover:bg-surface-active hover:text-foreground",
-                                            selected && "border-primary bg-primary/10 text-primary shadow-xs ring-1 ring-primary"
+                                            "flex min-h-10 items-center gap-2.5 rounded-md px-3 py-2 text-left text-[length:var(--typ-caption)] text-muted-foreground transition-colors duration-150 hover:bg-surface-hover hover:text-foreground aria-pressed:bg-[var(--control-selected-bg)] aria-pressed:text-[var(--control-selected-fg)] max-[520px]:flex-1 max-[520px]:justify-center max-[520px]:gap-1 max-[520px]:px-1 motion-reduce:transition-none pointer-coarse:min-h-11",
+                                            pickerFocusClassName,
                                         )}
+                                        aria-pressed={query ? item.id === "all" : category === item.id}
                                         onClick={() => {
-                                            onChange?.(item.id);
-                                            setOpen(false);
+                                            setCategory(item.id);
+                                            setKeyword("");
                                         }}
                                     >
-                                        <ModelLogo icon={item.id} size={24} />
+                                        <Icon size={15} className="shrink-0 max-[520px]:hidden" aria-hidden />
+                                        <span>{item.label}</span>
                                     </button>
                                 );
-                            })
-                        ) : (
-                            <div className="col-span-full py-12 text-center text-xs text-foreground/45">
-                                未找到与 “{keyword}” 相关的 Logo
+                            })}
+                        </nav>
+                        <div className="h-[min(360px,48dvh)] min-w-0 overflow-y-auto overscroll-contain p-3 [scrollbar-color:var(--control-selected-border)_transparent] [scrollbar-width:thin] max-[520px]:h-[min(320px,44dvh)]" ref={resultsRef}>
+                            <div className="mb-2 flex items-center justify-between gap-2 text-[length:var(--typ-caption)] font-medium">
+                                <span>{query ? "搜索结果" : categoryLabel}</span>
+                                <span className="text-xs font-normal text-muted-foreground" role="status">
+                                    {query ? "全部分类 · " : ""}
+                                    {filteredIcons.length} 个 Logo
+                                </span>
                             </div>
-                        )}
+                            {filteredIcons.length ? (
+                                <ul className="m-0 grid list-none grid-cols-4 gap-1 p-0 max-[520px]:grid-cols-3" aria-label={query ? "Logo 搜索结果" : `${categoryLabel} Logo`}>
+                                    {filteredIcons.map((item) => {
+                                        const selected = selectedId === item.id;
+                                        return (
+                                            <li key={item.id} className="min-w-0">
+                                                <Tooltip title={item.title} trigger={["hover", "focus"]}>
+                                                    <button
+                                                        type="button"
+                                                        aria-pressed={selected}
+                                                        aria-label={`选择 ${item.label}`}
+                                                        className={cn(
+                                                            "relative flex h-full min-h-16 w-full flex-col items-center justify-center gap-1 rounded-md border border-transparent px-1 py-2 transition-colors duration-150 hover:bg-surface-hover aria-pressed:border-[var(--control-selected-border)] aria-pressed:bg-[var(--control-selected-bg)] aria-pressed:text-[var(--control-selected-fg)] motion-reduce:transition-none",
+                                                            pickerFocusClassName,
+                                                        )}
+                                                        onClick={() => {
+                                                            onChange?.(item.id);
+                                                            close();
+                                                        }}
+                                                    >
+                                                        <ModelLogo icon={item.id} size={22} />
+                                                        <span className="line-clamp-2 min-h-4 max-w-full text-xs leading-4 [overflow-wrap:anywhere]">{item.label}</span>
+                                                        {selected ? <Check size={12} className="absolute top-1 right-1" aria-hidden /> : null}
+                                                    </button>
+                                                </Tooltip>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            ) : (
+                                <div className="flex flex-col items-center gap-3 px-2 py-10 text-center text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                                    <Search size={20} aria-hidden />
+                                    <span>未找到与“{keyword.trim()}”相关的 Logo</span>
+                                    <Button type="text" size="small" onClick={() => setKeyword("")}>
+                                        清空搜索
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
-            </Modal>
+                    <footer className="flex items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs max-[520px]:flex-wrap max-[520px]:px-3">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <ModelLogo icon={value} size={16} />
+                            <span className="shrink-0 text-muted-foreground">{value ? "当前" : "尚未设置 Logo"}</span>
+                            {value ? <span className="min-w-0 flex-1 truncate">{selectedOption?.label || value}</span> : null}
+                        </div>
+                        <div className="flex min-w-0 shrink-0 items-center gap-2">
+                            <span className="text-muted-foreground max-[520px]:hidden">单击图标即选用</span>
+                            {value ? (
+                                <Button type="text" size="small" onClick={clear}>
+                                    清除 Logo
+                                </Button>
+                            ) : null}
+                        </div>
+                    </footer>
+                </section>
+            </AppModal>
         </>
     );
 }

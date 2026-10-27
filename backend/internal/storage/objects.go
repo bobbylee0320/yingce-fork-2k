@@ -51,21 +51,30 @@ func errorBodyLimit(setting Settings) int64 {
 	return setting.Runtime.ErrorBodyLimit
 }
 func PutOSSObject(setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
+	return PutOSSObjectContext(context.Background(), setting, objectKey, mimeType, size, body)
+}
+
+// PutOSSObjectContext 与 PutOSSObject 相同，但整个写入（含 SDK 内部重试）受 ctx 约束。
+func PutOSSObjectContext(ctx context.Context, setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
 	setting = NormalizeSettings(setting)
 	if setting.Provider == tencentCOSProvider {
-		return PutCOSObject(setting, objectKey, mimeType, size, body)
+		return putCOSObject(ctx, setting, objectKey, mimeType, size, body)
 	}
 	if setting.Provider == qiniuKodoProvider {
-		return PutQiniuObject(setting, objectKey, mimeType, size, body)
+		return putQiniuObject(ctx, setting, objectKey, mimeType, size, body)
 	}
 	if setting.Provider == s3Provider {
-		return PutS3Object(setting, objectKey, mimeType, size, body)
+		return putS3Object(ctx, setting, objectKey, mimeType, size, body)
 	}
-	return PutAliyunOSSObject(setting, objectKey, mimeType, size, body)
+	return putAliyunOSSObject(ctx, setting, objectKey, mimeType, size, body)
 }
 
 // 阿里云 OSS 继续沿用原有 V1 签名和请求路径，避免已有部署行为发生变化。
 func PutAliyunOSSObject(setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
+	return putAliyunOSSObject(context.Background(), setting, objectKey, mimeType, size, body)
+}
+
+func putAliyunOSSObject(ctx context.Context, setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
@@ -73,6 +82,7 @@ func PutAliyunOSSObject(setting Settings, objectKey string, mimeType string, siz
 	if err != nil {
 		return "", err
 	}
+	req = req.WithContext(ctx)
 	if size > 0 {
 		req.ContentLength = size
 	}
@@ -83,7 +93,7 @@ func PutAliyunOSSObject(setting Settings, objectKey string, mimeType string, siz
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit(setting)))
-		return "", fmt.Errorf("OSS 上传失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
+		return "", newHTTPStatusError(setting.Provider, resp, detail)
 	}
 	return strings.Trim(resp.Header.Get("ETag"), `"`), nil
 }
@@ -338,6 +348,10 @@ func signedAliyunOSSObjectURL(setting Settings, objectKey string, signing object
 }
 
 func PutCOSObject(setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
+	return putCOSObject(context.Background(), setting, objectKey, mimeType, size, body)
+}
+
+func putCOSObject(ctx context.Context, setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
 	setting = NormalizeSettings(setting)
 	client, err := NewCOSClient(setting, transferTimeout(setting))
 	if err != nil {
@@ -347,7 +361,7 @@ func PutCOSObject(setting Settings, objectKey string, mimeType string, size int6
 		mimeType = "application/octet-stream"
 	}
 	options := &cos.ObjectPutOptions{ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{ContentType: mimeType, ContentLength: size}}
-	resp, err := client.Object.Put(context.Background(), objectKey, body, options)
+	resp, err := client.Object.Put(ctx, objectKey, body, options)
 	if err != nil {
 		return "", fmt.Errorf("COS 上传失败：%w", err)
 	}
@@ -355,6 +369,10 @@ func PutCOSObject(setting Settings, objectKey string, mimeType string, size int6
 }
 
 func PutQiniuObject(setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
+	return putQiniuObject(context.Background(), setting, objectKey, mimeType, size, body)
+}
+
+func putQiniuObject(ctx context.Context, setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
 	setting = NormalizeSettings(setting)
 	if setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
 		return "", errors.New("七牛云 Kodo 访问密钥不可用")
@@ -373,7 +391,7 @@ func PutQiniuObject(setting Settings, objectKey string, mimeType string, size in
 	if size < 0 {
 		size = 0
 	}
-	if err := uploader.Put(context.Background(), &ret, token, strings.TrimLeft(objectKey, "/"), body, size, extra); err != nil {
+	if err := uploader.Put(ctx, &ret, token, strings.TrimLeft(objectKey, "/"), body, size, extra); err != nil {
 		return "", fmt.Errorf("七牛云 Kodo 上传失败：%w", err)
 	}
 	return ret.Hash, nil

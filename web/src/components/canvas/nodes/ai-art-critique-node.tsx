@@ -68,7 +68,7 @@ export function ArtCritiqueNodeContent({ node }: ArtCritiqueNodeProps) {
 
             {status === "stale" ? (
                 <div
-                    className="flex min-h-9 items-center gap-2 rounded-[var(--r-md)] border px-2.5 py-2 text-[var(--fs-micro)]"
+                    className="flex min-h-9 items-center gap-2 rounded-[var(--r-md)] border px-2 py-2 text-[var(--fs-micro)]"
                     style={{ borderColor: "color-mix(in oklch, var(--status-warning) 50%, transparent)", background: "color-mix(in oklch, var(--status-warning) 9%, transparent)", color: "var(--status-warning)" }}
                 >
                     <RefreshCw className="size-3.5 shrink-0" aria-hidden="true" />
@@ -77,14 +77,14 @@ export function ArtCritiqueNodeContent({ node }: ArtCritiqueNodeProps) {
             ) : null}
             {status === "failed" && state.errorMessage ? (
                 <div
-                    className="line-clamp-2 rounded-[var(--r-md)] border px-2.5 py-2 text-[var(--fs-micro)]"
+                    className="line-clamp-2 rounded-[var(--r-md)] border px-2 py-2 text-[var(--fs-micro)]"
                     style={{ borderColor: "color-mix(in oklch, var(--status-error) 50%, transparent)", background: "color-mix(in oklch, var(--status-error) 9%, transparent)", color: "var(--status-error)" }}
                 >
                     {state.errorMessage}
                 </div>
             ) : null}
             {state.report && status === "completed" ? (
-                <div className="flex min-h-9 items-center gap-2 rounded-[var(--r-md)] border px-2.5 py-2 text-[var(--fs-micro)]" style={{ borderColor: theme.node.edge, background: theme.node.fill }}>
+                <div className="flex min-h-9 items-center gap-2 rounded-[var(--r-md)] border px-2 py-2 text-[var(--fs-micro)]" style={{ borderColor: theme.node.edge, background: theme.node.fill }}>
                     <CheckCircle2 className="size-3.5 shrink-0" style={{ color: "var(--status-success)" }} aria-hidden="true" />
                     <span className="truncate">{state.report.summary || `已完成 ${issueCount} 项批改`}</span>
                 </div>

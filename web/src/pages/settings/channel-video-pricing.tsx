@@ -82,7 +82,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                     const capability = cost?.capability || modelProtocolCapability(protocol, availableProtocols) || inferCapabilityFromModel(model);
                     const displayName = cost?.displayName?.trim() || model;
                     return (
-                        <div key={model} className="flex min-w-0 items-center gap-3 rounded-md bg-surface-active px-3 py-2.5 transition-colors hover:bg-surface-hover">
+                        <div key={model} className="flex min-w-0 items-center gap-3 rounded-md bg-surface-active px-3 py-2 transition-colors hover:bg-surface-hover">
                             <span className="grid size-8 shrink-0 place-items-center rounded-md bg-foreground/[.045] text-foreground/65">
                                 <Settings2 className="size-4" />
                             </span>
@@ -90,7 +90,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                 <div className="truncate text-xs font-medium" title={displayName === model ? model : `${displayName} (${model})`}>
                                     {displayName}
                                 </div>
-                                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
                                     <Tag className="mr-0 text-[var(--fs-tiny)]" bordered={false}>
                                         {capabilityLabel(capability)}
                                     </Tag>

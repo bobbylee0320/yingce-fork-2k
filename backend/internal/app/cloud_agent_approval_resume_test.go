@@ -162,7 +162,7 @@ func TestUnansweredCallPlaceholderIsStructuredError(t *testing.T) {
 			map[string]interface{}{"type": "toolCall", "id": "call_a", "name": "generate_media", "arguments": map[string]interface{}{}},
 		}},
 	}
-	repaired := repairRuntimeUnansweredCalls(messages)
+	repaired := repairRuntimeUnansweredCalls(messages, nil)
 	if len(repaired) != 2 {
 		t.Fatalf("应补齐 1 条占位结果：got %d messages", len(repaired))
 	}

@@ -125,7 +125,7 @@ test("style contract: 正文 / 工具调用 / 模型思考三档不再制造左�
     const reasoning = block(".agent-reasoning");
     expect(reasoning).not.toContain("margin-left");
     expect(reasoning).not.toContain("border-left");
-    expect(block(".agent-reasoning-summary")).toContain("padding: 6px 0");
+    expect(block(".agent-reasoning-summary")).toContain("padding: 8px 0");
 
     // ③ 操作流是轻量文本收据，不再绘制竖线或额外左缩进。
     const feed = block(".agent-operation-feed");

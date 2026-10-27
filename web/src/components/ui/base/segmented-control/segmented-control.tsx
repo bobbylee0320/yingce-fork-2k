@@ -12,6 +12,8 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode }
  * - API 对齐 AntD Segmented（value/onChange/options/block/size/disabled），
  *   可直接置于 antd Form.Item（Form 注入 value/onChange，props 同名兼容）。
  * - icon 节点尺寸由调用方控制（与 AntD options.icon 行为一致），用 currentColor 跟随文字色。
+ * - 稳定类名 app-segmented / app-segmented-thumb / app-segmented-item / is-sm 供用户工作台
+ *   内容库工具栏统一几何（workspace-product.css），其他场景仍只用 token 工具类。
  */
 
 export type SegmentedSize = "sm" | "md";
@@ -44,7 +46,7 @@ const SIZE_CLASS: Record<SegmentedSize, { track: string; thumb: string; item: st
     sm: {
         track: "h-7 rounded-md p-0.5",
         thumb: "rounded-sm",
-        item: "px-2.5 text-xs",
+        item: "px-2 text-xs",
     },
     md: {
         track: "h-8 rounded-lg p-0.5",
@@ -113,14 +115,20 @@ export function SegmentedControl<V extends string = string>({ value, onChange, o
     };
 
     const itemBase =
-        "relative z-10 inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap font-medium outline-none transition-colors motion-reduce:transition-none " + "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ";
+        "app-segmented-item relative z-10 inline-flex select-none items-center justify-center gap-2 whitespace-nowrap font-medium outline-none transition-colors motion-reduce:transition-none " +
+        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ";
 
     return (
-        <div ref={trackRef} role="radiogroup" aria-label={ariaLabel} className={["relative inline-flex bg-surface-tertiary", SIZE_CLASS[size].track, block ? "flex w-full" : "", disabled ? "opacity-60" : "", className].join(" ")}>
+        <div
+            ref={trackRef}
+            role="radiogroup"
+            aria-label={ariaLabel}
+            className={["app-segmented relative inline-flex bg-surface-tertiary", size === "sm" ? "is-sm" : "", SIZE_CLASS[size].track, block ? "flex w-full" : "", disabled ? "opacity-60" : "", className].join(" ")}
+        >
             {thumb !== null && !disabled && (
                 <span
                     aria-hidden="true"
-                    className={["pointer-events-none absolute inset-y-0.5 z-0 bg-surface-strong transition-[left,width] duration-200 ease-out motion-reduce:transition-none", SIZE_CLASS[size].thumb].join(" ")}
+                    className={["app-segmented-thumb pointer-events-none absolute inset-y-0.5 z-0 bg-surface-strong transition-[left,width] duration-200 ease-out motion-reduce:transition-none", SIZE_CLASS[size].thumb].join(" ")}
                     style={{ left: thumb.left, width: thumb.width }}
                 />
             )}

@@ -37,6 +37,35 @@ func (r *Repository) AddSkillVersion(skill *model.Skill, version *model.SkillVer
 	})
 }
 
+// AddSkillVersionIfCurrent 以 current_version_id 做乐观锁：只有技能当前版本仍是 baseVersionID 时
+// 才写入新版本、文件清单和技能行；返回 false 表示已被并发修改，事务内不做任何写入。
+func (r *Repository) AddSkillVersionIfCurrent(skill *model.Skill, version *model.SkillVersion, files []model.SkillFile, baseVersionID string) (bool, error) {
+	applied := false
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.Skill{}).Where("id = ? AND current_version_id = ?", skill.ID, baseVersionID).Update("current_version_id", version.ID)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return nil
+		}
+		if err := tx.Create(version).Error; err != nil {
+			return err
+		}
+		if len(files) > 0 {
+			if err := tx.Create(&files).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Save(skill).Error; err != nil {
+			return err
+		}
+		applied = true
+		return nil
+	})
+	return applied, err
+}
+
 func (r *Repository) SkillVersion(id string) (*model.SkillVersion, error) {
 	var version model.SkillVersion
 	if err := r.db.First(&version, "id = ?", id).Error; err != nil {

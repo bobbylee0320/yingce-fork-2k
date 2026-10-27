@@ -11,6 +11,7 @@ import type { GenerationTask } from "@/services/api/task-center";
 import type { AiConfig } from "@/stores/use-config-store";
 import { formatModelName, getTaskCanvasContext, isTaskFailed, statusDotClassName, taskAttentionReason, TaskBilling, TaskDate } from "./task-shared";
 import { TaskVideoThumbnail } from "./task-video-thumbnail";
+import { progressFillStyle } from "@/lib/progress-fill";
 
 export function TaskListRow({
     task,
@@ -67,7 +68,7 @@ export function TaskListRow({
                         <span>{stageLabel}</span>
                         <span>{task.progress || 0}%</span>
                         <i>
-                            <b style={{ width: `${task.progress || 0}%` }} />
+                            <b style={progressFillStyle(task.progress || 0)} />
                         </i>
                     </div>
                 ) : null}

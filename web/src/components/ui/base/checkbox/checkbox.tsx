@@ -31,7 +31,7 @@ export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement
 }
 
 const BOX_SIZE: Record<"sm" | "md", string> = {
-    sm: "size-3.5 rounded-[3px]",
+    sm: "size-3.5 rounded-[4px]",
     md: "size-4 rounded",
 };
 

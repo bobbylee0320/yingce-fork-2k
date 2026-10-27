@@ -1,6 +1,7 @@
 import type { Editor } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { Button, ColorPicker, Tooltip } from "antd";
+import { Button, ColorPicker } from "antd";
+import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import { Eraser, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -194,7 +195,7 @@ export function BannerNoticePreview({ runs, hasLink, noticeType }: { runs: Banne
                             className={`relative flex min-h-10 w-full items-center justify-center px-4 py-2 text-white ${theme.className}`}
                             style={bannerAnnouncementBarStyle(noticeType)}
                         >
-                            <span className="flex w-full min-w-0 items-center justify-center gap-2.5 px-8">
+                            <span className="flex w-full min-w-0 items-center justify-center gap-2 px-8">
                                 <span className="min-w-0 truncate font-semibold">
                                     <BannerAnnouncementTitle runs={runs} fallbackText="通知标题预览" />
                                 </span>

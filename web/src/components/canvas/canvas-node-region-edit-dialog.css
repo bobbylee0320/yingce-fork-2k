@@ -1,0 +1,641 @@
+/*
+ * 区域标注弹窗。
+ * 左：沉浸式看图区（点阵底 + 悬浮工具坞）；右：区域缩略图 + 带引用胶囊的提示词编辑器。
+ * 框色 --rgn-color 与导出给模型的标注图一致，不跟随主题；其余颜色全部取语义 token。
+ */
+.rgn {
+    --rgn-panel-width: 420px;
+    --rgn-stage-bg: color-mix(in srgb, var(--foreground) 5%, var(--background));
+    --rgn-line: color-mix(in srgb, var(--foreground) 9%, transparent);
+    --rgn-soft: color-mix(in srgb, var(--foreground) 4%, transparent);
+    --rgn-softer: color-mix(in srgb, var(--foreground) 7%, transparent);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--rgn-panel-width);
+    height: min(860px, calc(100dvh - 48px));
+    color: var(--foreground);
+}
+
+/* ---------------- 看图区 ---------------- */
+.rgn-stage {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    overflow: hidden;
+    background-color: var(--rgn-stage-bg);
+    background-image: radial-gradient(color-mix(in srgb, var(--foreground) 10%, transparent) 1px, transparent 1.4px);
+    background-size: 20px 20px;
+    background-position: 10px 10px;
+}
+
+.rgn-stage-hint {
+    position: absolute;
+    top: var(--space-4);
+    left: 50%;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 30px;
+    padding: 0 var(--space-3);
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--popover) 82%, transparent);
+    box-shadow:
+        0 0 0 1px var(--rgn-line),
+        var(--shadow-sm);
+    color: var(--muted-foreground);
+    font-size: var(--fs-tiny);
+    white-space: nowrap;
+    transform: translateX(-50%);
+    backdrop-filter: blur(12px);
+    pointer-events: none;
+}
+
+.rgn-stage-hint kbd {
+    padding: 0 5px;
+    border-radius: var(--r-xs);
+    background: var(--rgn-softer);
+    color: var(--foreground);
+    font: inherit;
+    font-size: var(--fs-micro);
+}
+
+.rgn-canvas {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    place-items: center;
+    padding: 64px var(--space-8) 92px;
+}
+
+.rgn-frame {
+    position: relative;
+    max-width: 100%;
+    line-height: 0;
+}
+
+.rgn-frame > img {
+    display: block;
+    max-width: 100%;
+    max-height: calc(min(860px, 100dvh - 48px) - 156px);
+    border-radius: var(--r-lg);
+    box-shadow:
+        0 0 0 1px var(--rgn-line),
+        0 24px 60px -24px rgb(0 0 0 / 0.55);
+    user-select: none;
+}
+
+.rgn-surface {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--r-lg);
+    cursor: crosshair;
+    outline: none;
+    touch-action: none;
+}
+
+.rgn-surface:focus-visible {
+    box-shadow: 0 0 0 2px var(--ring);
+}
+
+.rgn-loading {
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+}
+
+/* 框：深色描边托底，保证亮图和暗图上都看得清 */
+.rgn-box {
+    position: absolute;
+    border: 1.5px dashed var(--rgn-color);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--rgn-color) 10%, transparent);
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.22);
+    cursor: move;
+    transition:
+        background-color var(--motion-dur-fast) var(--motion-ease-out),
+        box-shadow var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.rgn-box:hover {
+    background: color-mix(in srgb, var(--rgn-color) 16%, transparent);
+}
+
+.rgn-box.is-active {
+    border-style: solid;
+    border-width: 2px;
+    background: color-mix(in srgb, var(--rgn-color) 18%, transparent);
+    box-shadow:
+        0 0 0 1px rgb(0 0 0 / 0.25),
+        0 0 0 5px color-mix(in srgb, var(--rgn-color) 24%, transparent);
+}
+
+.rgn-box.is-draft {
+    pointer-events: none;
+}
+
+.rgn-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    display: grid;
+    min-width: 22px;
+    height: 22px;
+    place-items: center;
+    padding: 0 6px;
+    border-radius: var(--r-full);
+    background: var(--rgn-color);
+    box-shadow:
+        0 0 0 2px rgb(255 255 255 / 0.92),
+        0 2px 6px rgb(0 0 0 / 0.3);
+    color: #fff;
+    font-size: var(--fs-tiny);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.rgn-handle {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--rgn-color);
+    border-radius: var(--r-full);
+    background: #fff;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+}
+
+.rgn-handle[data-corner="nw"] {
+    top: -7px;
+    left: -7px;
+    cursor: nwse-resize;
+}
+.rgn-handle[data-corner="ne"] {
+    top: -7px;
+    right: -7px;
+    cursor: nesw-resize;
+}
+.rgn-handle[data-corner="sw"] {
+    bottom: -7px;
+    left: -7px;
+    cursor: nesw-resize;
+}
+.rgn-handle[data-corner="se"] {
+    right: -7px;
+    bottom: -7px;
+    cursor: nwse-resize;
+}
+
+.rgn-box-delete {
+    position: absolute;
+    top: -12px;
+    right: 16px;
+    display: grid;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    border: 0;
+    border-radius: var(--r-full);
+    background: var(--popover);
+    box-shadow:
+        0 0 0 1px var(--rgn-line),
+        var(--shadow-md);
+    color: var(--foreground);
+    cursor: pointer;
+}
+
+.rgn-box-delete:hover {
+    color: var(--destructive);
+}
+
+.rgn-box-delete:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+
+/* 悬浮工具坞 */
+.rgn-dock {
+    position: absolute;
+    bottom: var(--space-6);
+    left: 50%;
+    z-index: 2;
+    display: flex;
+    height: 46px;
+    align-items: center;
+    gap: 2px;
+    padding: 0 6px;
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--popover) 90%, transparent);
+    box-shadow:
+        0 0 0 1px var(--rgn-line),
+        var(--shadow-lg);
+    transform: translateX(-50%);
+    backdrop-filter: blur(16px);
+}
+
+.rgn-dock-mode {
+    display: inline-flex;
+    height: 34px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 var(--space-3) 0 10px;
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--rgn-color) 16%, transparent);
+    color: var(--rgn-color);
+    font-size: var(--fs-label);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.rgn-dock-button {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 0;
+    border-radius: var(--r-full);
+    background: transparent;
+    color: var(--foreground);
+    cursor: pointer;
+    transition: background-color var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.rgn-dock-button:hover:not(:disabled) {
+    background: var(--rgn-softer);
+}
+
+.rgn-dock-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.3;
+}
+
+.rgn-dock-button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+}
+
+.rgn-dock-divider {
+    width: 1px;
+    height: 18px;
+    margin: 0 6px;
+    background: var(--rgn-line);
+}
+
+.rgn-dock-count {
+    padding: 0 10px 0 4px;
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.rgn-dock-count strong {
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+/* ---------------- 右侧面板 ---------------- */
+.rgn-panel {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    border-left: 1px solid var(--rgn-line);
+}
+
+.rgn-panel-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-5) var(--space-5) var(--space-4) var(--space-6);
+}
+
+.rgn-panel-heading {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.rgn-panel-heading h2 {
+    margin: 0;
+    font-size: var(--fs-section-title);
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.rgn-panel-heading p {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+}
+
+.rgn-close {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    place-items: center;
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+}
+
+.rgn-close:hover {
+    background: var(--rgn-softer);
+    color: var(--foreground);
+}
+
+.rgn-close:focus-visible {
+    outline: 2px solid var(--ring);
+}
+
+.rgn-body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: 0 var(--space-6) var(--space-4);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.rgn-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--muted-foreground);
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.rgn-label-count {
+    display: grid;
+    min-width: 18px;
+    height: 18px;
+    place-items: center;
+    padding: 0 5px;
+    border-radius: var(--r-full);
+    background: var(--rgn-softer);
+    color: var(--foreground);
+    font-size: var(--fs-micro);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 区域缩略图网格 */
+.rgn-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+    gap: var(--space-2);
+}
+
+.rgn-tile {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rgn-tile-select {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--r-lg);
+    background: var(--rgn-soft);
+    box-shadow: 0 0 0 1px var(--rgn-line);
+    cursor: pointer;
+    transition:
+        box-shadow var(--motion-dur-fast) var(--motion-ease-out),
+        transform var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.rgn-tile-select:hover {
+    transform: translateY(-1px);
+}
+
+.rgn-tile-select[aria-pressed="true"] {
+    box-shadow:
+        0 0 0 2px var(--rgn-color),
+        0 0 0 5px color-mix(in srgb, var(--rgn-color) 22%, transparent);
+}
+
+.rgn-tile-select:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+
+.rgn-tile-select img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.rgn-tile-badge {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    display: grid;
+    min-width: 18px;
+    height: 18px;
+    place-items: center;
+    padding: 0 5px;
+    border-radius: var(--r-full);
+    background: var(--rgn-color);
+    box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.9);
+    color: #fff;
+    font-size: var(--fs-micro);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.rgn-tile-name {
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-size: var(--fs-tiny);
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rgn-tile-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    display: grid;
+    width: 20px;
+    height: 20px;
+    place-items: center;
+    border: 0;
+    border-radius: var(--r-full);
+    background: var(--popover);
+    box-shadow:
+        0 0 0 1px var(--rgn-line),
+        var(--shadow-sm);
+    color: var(--muted-foreground);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.rgn-tile:hover .rgn-tile-remove,
+.rgn-tile-remove:focus-visible {
+    opacity: 1;
+}
+
+.rgn-tile-remove:hover {
+    color: var(--destructive);
+}
+
+.rgn-tile-remove:focus-visible {
+    outline: 2px solid var(--ring);
+}
+
+.rgn-empty {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border: 1px dashed var(--rgn-line);
+    border-radius: var(--r-lg);
+    background: var(--rgn-soft);
+}
+
+.rgn-empty-icon {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    place-items: center;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--rgn-color) 14%, transparent);
+    color: var(--rgn-color);
+}
+
+.rgn-empty strong {
+    display: block;
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+
+.rgn-empty span {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted-foreground);
+    font-size: var(--fs-tiny);
+    line-height: 1.5;
+}
+
+/* 提示词编辑器：复用画布 @ 引用胶囊 */
+.rgn-editor {
+    display: flex;
+    min-height: 200px;
+    flex: 1;
+    flex-direction: column;
+    border-radius: var(--r-xl);
+    background: var(--rgn-soft);
+    box-shadow: inset 0 0 0 1px var(--rgn-line);
+    transition: box-shadow var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.rgn-editor:focus-within {
+    box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--rgn-color) 60%, transparent),
+        0 0 0 3px color-mix(in srgb, var(--rgn-color) 16%, transparent);
+}
+
+.rgn-editor-input {
+    min-height: 0;
+    flex: 1;
+}
+
+.rgn-editor-tip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0 var(--space-4) var(--space-3);
+    color: var(--muted-foreground);
+    font-size: var(--fs-micro);
+}
+
+.rgn-editor-tip kbd {
+    padding: 0 5px;
+    border-radius: var(--r-xs);
+    background: var(--rgn-softer);
+    font: inherit;
+}
+
+.rgn-error {
+    margin: 0 var(--space-6) var(--space-2);
+    color: var(--destructive);
+    font-size: var(--fs-label);
+}
+
+.rgn-footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-6) var(--space-5);
+    border-top: 1px solid var(--rgn-line);
+}
+
+.rgn-footer-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.rgn-footer-spacer {
+    flex: 1;
+}
+
+.rgn-submit.ant-btn {
+    height: 36px;
+    padding-inline: var(--space-5);
+    font-weight: 600;
+}
+
+@media (max-width: 960px) {
+    .rgn {
+        --rgn-panel-width: 100%;
+        height: auto;
+        max-height: calc(100dvh - 32px);
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(340px, 56dvh) auto;
+        overflow-y: auto;
+    }
+
+    .rgn-frame > img {
+        max-height: calc(56dvh - 156px);
+    }
+
+    .rgn-panel {
+        border-top: 1px solid var(--rgn-line);
+        border-left: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rgn-box,
+    .rgn-dock-button,
+    .rgn-tile-select,
+    .rgn-tile-remove,
+    .rgn-editor {
+        transition: none;
+    }
+
+    .rgn-tile-select:hover {
+        transform: none;
+    }
+}

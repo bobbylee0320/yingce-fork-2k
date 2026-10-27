@@ -6,6 +6,7 @@ import { formatCredits } from "@/constant/credits";
 import { canCancelGenerationTask, formatTaskKind, generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
 import { useUserStore } from "@/stores/use-user-store";
+import { progressFillStyle } from "@/lib/progress-fill";
 
 // 任务列表项：任务面板与历史面板共用；进度、时长、计费与取消菜单都在这里渲染。
 export const TaskListItem = memo(function TaskListItem({ task, onCancelTask }: { task: GenerationTask; onCancelTask?: (task: GenerationTask) => void }) {
@@ -32,7 +33,7 @@ export const TaskListItem = memo(function TaskListItem({ task, onCancelTask }: {
 
     return (
         <div
-            className="group relative rounded-[var(--r-md)] px-2 py-1.5 text-left transition-[background-color] hover:bg-[var(--surface-hover)] focus-within:ring-2 focus-within:ring-primary/35"
+            className="group relative rounded-[var(--r-md)] px-2 py-2 text-left transition-[background-color] hover:bg-[var(--surface-hover)] focus-within:ring-2 focus-within:ring-primary/35"
             style={{ contentVisibility: "auto", containIntrinsicSize: "48px" }}
         >
             <button type="button" className="flex w-full min-w-0 items-start gap-2 text-left" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
@@ -52,21 +53,21 @@ export const TaskListItem = memo(function TaskListItem({ task, onCancelTask }: {
                         <span className="truncate text-xs font-medium leading-4 text-foreground" title={`${formatTaskKind(task)}:${task.prompt}`}>
                             {task.prompt}
                         </span>
-                        <span className="shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none" style={{ borderColor: `color-mix(in srgb, ${statusColor} 30%, transparent)`, color: statusColor }}>
+                        <span className="shrink-0 rounded-full border px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none" style={{ borderColor: `color-mix(in srgb, ${statusColor} 30%, transparent)`, color: statusColor }}>
                             {generationTaskStatusLabel(task)}
                         </span>
                     </span>
 
                     {showsProgress && progress !== undefined && isActive ? (
-                        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-foreground/10">
-                            <div className="h-full rounded-full transition-[width] duration-300 ease-out" style={{ width: `${progress}%`, background: statusColor }} />
+                        <div className="mt-2 h-1 overflow-hidden rounded-full bg-foreground/10">
+                            <div className="h-full rounded-full transition-transform duration-200 ease-out motion-reduce:transition-none" style={progressFillStyle(progress, { background: statusColor })} />
                         </div>
                     ) : null}
-                    <span className="mt-1.5 flex min-w-0 items-center gap-1 text-[10px] leading-3 text-foreground/40">
+                    <span className="mt-2 flex min-w-0 items-center gap-1 text-[var(--fs-label)] leading-3 text-foreground/40">
                         <Clock3 className="size-2.5 shrink-0" />
                         <span className="truncate">{durationLabel}</span>
                         {creditsEnabled && billingLabel ? <span className="truncate">· {billingLabel}</span> : null}
-                        <span className="mt-0.5 block truncate text-[10px] leading-3 text-foreground/45" title={generationTaskStageLabel(task)}>
+                        <span className="mt-0.5 block truncate text-[var(--fs-label)] leading-3 text-foreground/45" title={generationTaskStageLabel(task)}>
                             {generationTaskStageLabel(task)}
                         </span>
                     </span>
@@ -75,7 +76,7 @@ export const TaskListItem = memo(function TaskListItem({ task, onCancelTask }: {
             </button>
 
             {expanded ? (
-                <div className="mt-1.5 border-t border-border/50 px-1 pt-1.5 text-[10px] leading-3 text-foreground/50">
+                <div className="mt-2 border-t border-border/50 px-1 pt-2 text-[var(--fs-label)] leading-3 text-foreground/50">
                     <div className="flex items-center justify-between gap-2">
                         <span>当前阶段</span>
                         <span className="max-w-[200px] truncate text-right text-foreground/70">{generationTaskStageLabel(task)}</span>

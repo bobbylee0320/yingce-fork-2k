@@ -22,9 +22,9 @@ type InstallFormValues = {
 };
 
 const modeOptions = [
-    { value: "markdown", label: <span className="inline-flex items-center gap-1.5"><FileText className="size-3.5" />Markdown</span> },
-    { value: "zip", label: <span className="inline-flex items-center gap-1.5"><FileArchive className="size-3.5" />ZIP 技能包</span> },
-    { value: "github", label: <span className="inline-flex items-center gap-1.5"><GitBranch className="size-3.5" />GitHub</span> },
+    { value: "markdown", label: <span className="inline-flex items-center gap-2"><FileText className="size-3.5" />Markdown</span> },
+    { value: "zip", label: <span className="inline-flex items-center gap-2"><FileArchive className="size-3.5" />ZIP 技能包</span> },
+    { value: "github", label: <span className="inline-flex items-center gap-2"><GitBranch className="size-3.5" />GitHub</span> },
 ];
 
 export function SkillInstallModal({ open, onClose, onInstalled, onManualCreate }: { open: boolean; onClose: () => void; onInstalled: (skill: Skill) => void; onManualCreate: () => void }) {

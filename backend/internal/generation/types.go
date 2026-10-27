@@ -284,6 +284,8 @@ func (e HTTPError) Error() string {
 		return "模型服务拒绝了请求，请检查模型和参数"
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return "模型服务鉴权失败，请检查 API Key 和模型权限"
+	case http.StatusPaymentRequired:
+		return "模型服务余额不足（HTTP 402），请到渠道供应商充值或更换渠道后重试"
 	case http.StatusNotFound:
 		return "模型或模型接口不存在，请检查渠道配置"
 	case http.StatusRequestTimeout, http.StatusGatewayTimeout:

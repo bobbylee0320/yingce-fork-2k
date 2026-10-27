@@ -20,7 +20,7 @@
     padding-inline: 4px;
     color: color-mix(in srgb, var(--foreground) 38%, transparent);
     font-size: var(--fs-tiny);
-    font-weight: 650;
+    font-weight: 600;
     letter-spacing: .06em;
     text-transform: uppercase;
 }
@@ -57,7 +57,7 @@
     flex: 1;
     align-items: center;
     border-radius: var(--r-md);
-    padding: 6px 4px;
+    padding: 8px 4px;
     transition: background-color var(--motion-state) ease-out, color var(--motion-state) ease-out;
 }
 
@@ -78,7 +78,6 @@
 .eagle-library-page .eagle-folder-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
     background: var(--control-selected-bg);
     color: var(--control-selected-fg);
-    font-weight: 560;
 }
 
 .eagle-library-page .eagle-folder-tree .ant-tree-node-content-wrapper:focus-visible {

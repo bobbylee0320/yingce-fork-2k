@@ -23,13 +23,21 @@ export type BrowserMediaDownload = {
  * and can accidentally turn the platform into a media relay.
  */
 export async function downloadBrowserMedia({ fileName, storageKey, url, variant = "original" }: BrowserMediaDownload) {
+    startBrowserDownload(await resolveBrowserMediaDownloadHref({ fileName, storageKey, url, variant }), fileName);
+}
+
+/** 换取浏览器下载地址。批量下载先并发换取（资源访问请求会合并），再逐个交给浏览器。 */
+export async function resolveBrowserMediaDownloadHref({ fileName, storageKey, url, variant = "original" }: BrowserMediaDownload) {
     const normalizedStorageKey = storageKey?.trim();
     const normalizedUrl = url?.trim();
     const href = normalizedStorageKey && resourceIdFromStorageKey(normalizedStorageKey)
         ? resolveResourceAccessURL((await getResourceAccess(normalizedStorageKey, "download", variant, fileName)).url)
         : normalizedUrl;
     if (!href) throw new Error("媒体资源不存在");
+    return href;
+}
 
+export function startBrowserDownload(href: string, fileName: string) {
     const anchor = document.createElement("a");
     anchor.href = href;
     anchor.download = fileName;

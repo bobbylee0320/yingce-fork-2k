@@ -21,10 +21,10 @@ export function TaskStatusFilterBar({ stats, value, onChange }: { stats: TaskSta
                 options={options.map((option) => ({
                     value: option.value,
                     label: (
-                        <span>
-                            {option.label}
-                            <b>{option.count}</b>
-                        </span>
+                        <>
+                            <span>{option.label}</span>
+                            <span className="app-segmented-count">{option.count}</span>
+                        </>
                     ),
                 }))}
                 onChange={onChange}

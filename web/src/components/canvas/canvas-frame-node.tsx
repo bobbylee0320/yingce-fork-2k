@@ -211,7 +211,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
                     />
                 ) : (
                     <>
-                <div className="pointer-events-auto absolute inset-x-0 top-0 z-10 flex items-center gap-1.5 px-1.5" style={{ height: FRAME_HEADER_HEIGHT, color: theme.node.text }}>
+                <div className="pointer-events-auto absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-2" style={{ height: FRAME_HEADER_HEIGHT, color: theme.node.text }}>
                     <button
                         type="button"
                         className="grid size-8 shrink-0 place-items-center rounded-md transition-colors hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 dark:hover:bg-white/10"
@@ -228,7 +228,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
                     {editing ? (
                         <input
                             autoFocus
-                            className="h-7 min-w-0 flex-1 rounded border bg-transparent px-1.5 text-sm font-semibold outline-none"
+                            className="h-7 min-w-0 flex-1 rounded border bg-transparent px-2 text-sm font-semibold outline-none"
                             style={{ borderColor: theme.frame.activeStroke, color: theme.node.text }}
                             value={title}
                             onChange={(event) => setTitle(event.target.value)}

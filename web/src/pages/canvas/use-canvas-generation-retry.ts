@@ -44,6 +44,7 @@ import type { Skill } from "@/services/api/skills";
 import { skillRuntime, type SkillRuntimeMetadata } from "@/services/skill-runtime";
 import { queryGenerationTask, recoverGenerationTaskMedia, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { resolveImageUrl } from "@/services/image-storage";
+import { loadPromptMentionedAssets } from "@/services/user-data-sync";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import type { Asset } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeTypeId } from "@/types/canvas";
@@ -278,7 +279,8 @@ export function useCanvasGenerationRetry({
             let rawContext: Awaited<ReturnType<typeof hydrateNodeGenerationContext>> | null;
             try {
                 const promptOnly = retryMode === "video";
-                const baseContext = buildNodeGenerationContext(sourceNode.id, nodesRef.current, connectionsRef.current, retryContextPrompt, assets, promptOnly);
+                const contextAssets = await loadPromptMentionedAssets(retryContextPrompt);
+                const baseContext = buildNodeGenerationContext(sourceNode.id, nodesRef.current, connectionsRef.current, retryContextPrompt, contextAssets, promptOnly);
                 rawContext =
                     hasSavedImageMetadata && !baseContext.characterReferences.length
                         ? null

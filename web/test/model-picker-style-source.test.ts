@@ -15,13 +15,13 @@ test("模型行只保留选中高亮，价格使用独立的彩色标签", async
     expect(styles).toContain(".canvas-model-picker-option:focus-visible");
     const price = styles.match(/\.model-picker-price \{([^}]+)\}/)?.[1] || "";
     expect(price).toContain("color: var(--model-price-ink)");
-    expect(price).toContain("font-weight: 650");
+    expect(price).toContain("font-weight: 600");
     expect(price).not.toContain("background:");
     expect(styles).toContain(".dark .model-picker-price");
     const badge = styles.match(/\.canvas-model-picker-option \.model-picker-price \{([^}]+)\}/)?.[1] || "";
     expect(badge).toContain("border-radius: var(--r-sm)");
     expect(badge).toContain("background: color-mix");
-    expect(badge).toContain("padding: 2px 5px");
+    expect(badge).toContain("padding: 2px 4px");
     expect(price).toContain("--model-price-ink: #946900");
     expect(component).toContain('<Coins className="model-picker-price-icon" aria-hidden="true" />');
     expect(styles).toContain("width: min(800px, calc(100vw - 24px))");

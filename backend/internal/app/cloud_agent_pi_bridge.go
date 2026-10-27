@@ -427,7 +427,7 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 			return nil, err
 		}
 		if run.Status == "waiting_approval" && state.Approval != nil {
-			return map[string]any{"pause": true, "approvalId": state.Approval.ID, "content": "操作正在等待用户审批。"}, nil
+			return map[string]any{"pause": true, "approvalId": state.Approval.ID, "content": cloudAgentPiApprovalPauseText}, nil
 		}
 		if cloudAgentRunTerminal(run.Status) && run.Status != "completed" {
 			return nil, fmt.Errorf("%s", firstNonEmpty(run.FailureMessage, "Agent 工具执行失败"))

@@ -25,6 +25,18 @@ const MIME_EXTENSIONS: Record<string, string> = {
 
 const CONTENT_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "svg", "mp4", "webm", "mov", "ogv", "ogg", "mpeg", "mpg", "mp3", "m4a", "wav", "aac", "flac", "opus"]);
 
+/** 只有带媒体内容的图片、视频、音频节点可以下载；文本、背板等节点没有可交给浏览器的文件。 */
+export function canDownloadCanvasNodeMedia(node: CanvasNodeData) {
+    const supported = node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio;
+    return supported && Boolean(node.metadata?.content?.trim() || node.metadata?.storageKey?.trim());
+}
+
+/** 拆层合成图在合成完成前没有可下载的结果。 */
+export function isCanvasMediaCompositePending(node: CanvasNodeData) {
+    const status = node.metadata?.imageLayerGroup?.compositeStatus;
+    return Boolean(status && status !== "ready");
+}
+
 export function buildCanvasMediaDownloadFileName(canvasTitle: string, node: CanvasNodeData, now = new Date()) {
     const canvasName = safeFileNamePart(canvasTitle, "未命名画布");
     const nodeName = safeFileNamePart(node.title, defaultNodeName(node.type));

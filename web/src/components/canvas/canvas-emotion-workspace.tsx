@@ -308,7 +308,7 @@ function FaceSelectionOverlay({
                     >
                         {selected ? (
                             <span
-                                className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[var(--fs-micro)] font-semibold"
+                                className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[var(--fs-micro)] font-semibold"
                                 style={{ background: active ? theme.accent.primary : "rgba(20,20,22,.82)", color: active ? theme.accent.onPrimary : "#ffffff" }}
                             >
                                 {selected.name}
@@ -380,11 +380,7 @@ function SelectionToolbar({
                 </span>
                 <span className="min-w-0 flex-1 truncate px-2 text-[var(--fs-label)] font-medium leading-none">{label}</span>
                 {status !== "detecting" ? (
-                    <button
-                        type="button"
-                        className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] px-2 text-[var(--fs-label)] font-medium leading-none transition hover:bg-black/5 dark:hover:bg-white/10"
-                        onClick={onManualSelect}
-                    >
+                    <button type="button" className="flex h-8 shrink-0 items-center gap-2 rounded-[var(--dock-item-radius)] px-2 text-[var(--fs-label)] font-medium leading-none transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onManualSelect}>
                         <SquareDashedMousePointer className="size-3.5" />
                         手动框选
                     </button>

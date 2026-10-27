@@ -35,6 +35,7 @@ func (s *Service) finishCloudAgentCleanup(ctx context.Context, run *model.CloudA
 		run = refreshed
 	}
 	seen := map[string]bool{}
+	awaitingMedia := false
 	for _, id := range []string{run.ID, activeID, mediaID} {
 		if id == "" || seen[id] {
 			continue
@@ -50,6 +51,12 @@ func (s *Service) finishCloudAgentCleanup(ctx context.Context, run *model.CloudA
 		if err != nil {
 			return err
 		}
+		if id == mediaID && s.cloudAgentMediaContinuesAfterStop(run, task) {
+			// 用户停止本轮只停止 Agent 后续步骤。已提交上游的媒体任务可能已经计费，
+			// 取消也拿不回费用，所以保留它并等结果回写画布；调度器会重入这里完成收尾。
+			awaitingMedia = true
+			continue
+		}
 		if task.Status == model.TaskStatusQueued || task.Status == model.TaskStatusRunning {
 			source := model.TaskCancellationParentFailed
 			if run.Status == "cancelled" {
@@ -64,6 +71,9 @@ func (s *Service) finishCloudAgentCleanup(ctx context.Context, run *model.CloudA
 				}
 			}
 		}
+	}
+	if awaitingMedia {
+		return nil
 	}
 	if mediaID != "" && decodeErr == nil && state.CallIndex < len(state.Calls) {
 		err := s.advanceCloudAgentMedia(run, &state, state.Calls[state.CallIndex])
@@ -120,4 +130,18 @@ func (s *Service) finishCloudAgentCleanup(ctx context.Context, run *model.CloudA
 		}
 		return nil
 	})
+}
+
+// cloudAgentMediaContinuesAfterStop 判断用户停止本轮后媒体任务是否继续生成。
+// 只有用户主动取消（cancelled）且任务已进入上游阶段时保留；失败收尾仍按原规则取消，
+// 尚未提交上游的任务照常取消并退款。
+func (s *Service) cloudAgentMediaContinuesAfterStop(run *model.CloudAgentExecution, task *model.Task) bool {
+	if run == nil || task == nil || run.Status != "cancelled" {
+		return false
+	}
+	if task.Status != model.TaskStatusQueued && task.Status != model.TaskStatusRunning {
+		return false
+	}
+	s.hydrateTaskProviderRequestID(task)
+	return taskUpstreamSubmitted(task)
 }

@@ -140,8 +140,8 @@ export default function AdminPluginsPage() {
                             <span className="truncate font-medium text-foreground">{item.manifest.name}</span>
                             <span className="shrink-0 text-xs text-foreground/42">v{item.manifest.version}</span>
                         </div>
-                        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs">
-                            <span className="max-w-44 shrink-0 truncate font-mono text-[11px] text-foreground/42" title={item.manifest.id}>
+                        <div className="mt-1 flex min-w-0 items-center gap-2 text-xs">
+                            <span className="max-w-44 shrink-0 truncate font-mono text-[var(--fs-label)] text-foreground/42" title={item.manifest.id}>
                                 {item.manifest.id}
                             </span>
                             <span className="text-foreground/20" aria-hidden="true">
@@ -164,7 +164,7 @@ export default function AdminPluginsPage() {
                 <div>
                     <AdminStatusBadge label={managementLabel(item.management)} tone={item.management.origin === "uploaded" ? "warning" : item.management.kind === "application" ? "info" : "neutral"} />
                     {!item.manifest.trusted ? (
-                        <div className="mt-1.5">
+                        <div className="mt-2">
                             <AdminStatusBadge label="来源未验证" tone="warning" />
                         </div>
                     ) : null}

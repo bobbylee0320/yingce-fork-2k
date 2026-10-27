@@ -42,7 +42,7 @@ export function Callout({ tone = "default", title, icon, action, onClose, closeL
     const resolved = tone === "default" ? "info" : tone;
     const Icon = icon ?? calloutIconByTone[resolved];
     return (
-        <div data-slot="callout" data-tone={resolved} className={cn("flex items-start gap-2.5 rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5", className)} {...props}>
+        <div data-slot="callout" data-tone={resolved} className={cn("flex items-start gap-2 rounded-lg border border-border bg-surface-secondary px-4 py-2", className)} {...props}>
             <Icon
                 aria-hidden
                 strokeWidth={1.75}

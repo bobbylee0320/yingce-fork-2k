@@ -21,6 +21,7 @@ import { type CanvasTheme } from "@/lib/canvas-theme";
 import { fitImageMaterialNodeSize, fitImageNodeSize } from "@/lib/canvas/canvas-node-size";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { prepareCanvasImage } from "@/services/canvas-image-loader";
+import { peekCachedResourceObjectUrl } from "@/services/resource-blob-cache";
 import { getResourceAccess, refreshResource, resourceIdFromStorageKey, resolveResourceAccessURL } from "@/services/api/resources";
 import type { CanvasNodeContentProps } from "./canvas-node-content";
 import { ErrorContent, LoadingContent } from "./canvas-node-status-content";
@@ -324,7 +325,7 @@ export function VideoPreviewPlayButton({ title, onPlay }: { title: string; onPla
     return (
         <button
             type="button"
-            className="absolute left-1/2 top-1/2 z-[var(--node-z-overlay)] grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/62 text-white shadow-lg backdrop-blur transition-[transform,background-color,opacity] hover:scale-105 hover:bg-black/78 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="absolute left-1/2 top-1/2 z-[var(--node-z-overlay)] grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/62 text-white shadow-lg backdrop-blur transition-[background-color,opacity] duration-150 hover:bg-black/78 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             aria-label={`播放 ${title}`}
             title="播放视频"
             onPointerDown={(event) => event.stopPropagation()}
@@ -694,11 +695,14 @@ export function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, variant
     // resources; otherwise DOM virtualization does not reduce image work.
     const isLazyVisual = node.type === CanvasNodeType.Image;
     const isHttpUrl = Boolean(fallback && !fallback.startsWith("data:"));
-    const initialUrl = eager && !isRemoteResource && isLazyVisual && isHttpUrl ? fallback : isRemoteResource || isLazyVisual ? "" : fallback;
+    // 本会话刚上传的图片已在内存里有 Blob URL（primeResourceBlobCache），直接上屏，
+    // 不必再请求访问地址并把原图从服务器完整下载一遍。只用于图片：音视频播放仍走播放副本合同。
+    const sessionBlobUrl = eager && isRemoteResource && isLazyVisual ? peekCachedResourceObjectUrl(storageKey) : "";
+    const initialUrl = sessionBlobUrl || (eager && !isRemoteResource && isLazyVisual && isHttpUrl ? fallback : isRemoteResource || isLazyVisual ? "" : fallback);
     const scope = getActiveUserScope();
     const identity = `${scope}:${node.id}:${storageKey || fallback}`;
     const [resolved, setResolved] = useState<{ identity: string; url: string; loading: boolean; originalWidth?: number; originalHeight?: number }>(() => ({ identity, url: initialUrl, loading: !initialUrl && isRemoteResource && eager }));
-    const current = resolved.identity === identity ? resolved : { identity, url: initialUrl, loading: isRemoteResource && eager };
+    const current = resolved.identity === identity ? resolved : { identity, url: initialUrl, loading: !initialUrl && isRemoteResource && eager };
 
     useEffect(() => {
         if (!isRemoteResource) {
@@ -707,6 +711,11 @@ export function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, variant
         }
         if (!eager) {
             setResolved({ identity, url: "", loading: false });
+            return;
+        }
+        const localUrl = isLazyVisual ? peekCachedResourceObjectUrl(storageKey) : "";
+        if (localUrl) {
+            setResolved({ identity, url: localUrl, loading: false });
             return;
         }
         let cancelled = false;
@@ -799,7 +808,7 @@ export function BatchFrame({
                     {Array.from({ length: Math.min(batchCount - 1, 5) }).map((_, index) => (
                         <div
                             key={index}
-                            className="absolute rounded-[var(--r-lg)] transition-all duration-300 group-hover/batch:translate-x-2"
+                            className="absolute rounded-[var(--r-lg)] transition-[transform,opacity] duration-200"
                             style={{
                                 inset: 0,
                                 background: theme.node.panel,

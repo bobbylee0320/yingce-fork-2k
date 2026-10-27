@@ -109,6 +109,23 @@ func (r *Repository) BillingOrdersByTaskIDs(userID string, taskIDs []string) (ma
 	return result, nil
 }
 
+// AutoRefundableBillingOrders 返回审核队列中可以自动退回的订单。上游已确认生成作品
+// 的订单（任务带作品检查点，或结果保存失败）不在其中：作品可能已经交付或稍后补交付，
+// 自动退款会让平台承担上游费用，同时让用户的“重试保存”失效。
+func (r *Repository) AutoRefundableBillingOrders(limit int) ([]model.BillingOrder, error) {
+	var items []model.BillingOrder
+	err := r.db.Model(&model.BillingOrder{}).
+		Joins("LEFT JOIN tasks ON tasks.id = billing_orders.task_id").
+		Where(
+			"billing_orders.status = ? OR (billing_orders.status = ? AND billing_orders.updated_at < ?) OR (billing_orders.status = ? AND tasks.status IN ?)",
+			model.BillingStatusUncertain, model.BillingStatusRunning, time.Now().Add(-40*time.Minute), model.BillingStatusReserved,
+			[]model.TaskStatus{model.TaskStatusFailed, model.TaskStatusCancelled},
+		).
+		Where("tasks.id IS NULL OR (COALESCE(tasks.media_recovery_json, '') = '' AND COALESCE(tasks.execution_diagnostic_json, '') NOT LIKE ?)", `%"code":"result_persistence_failed"%`).
+		Select("billing_orders.*").Order("billing_orders.created_at desc").Limit(limit).Find(&items).Error
+	return items, err
+}
+
 func (r *Repository) AdminBillingOrders(status string, keyword string, limit int, offset int) ([]model.BillingOrder, int64, error) {
 	var items []model.BillingOrder
 	var total int64

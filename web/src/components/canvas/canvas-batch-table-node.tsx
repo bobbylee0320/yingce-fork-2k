@@ -1,5 +1,6 @@
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
-import { Button, Switch, Tooltip } from "antd";
+import { Button, Switch } from "antd";
+import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import { Film, Image as ImageIcon, LoaderCircle, Maximize2, Minus, Play, Plus, Rows3, Trash2, Upload } from "lucide-react";
 
 import { CachedResourceImage } from "@/components/cached-resource-image";
@@ -228,7 +229,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
                 <div data-canvas-batch-drag className="flex h-11 cursor-grab items-center gap-2 px-3 active:cursor-grabbing">
                     <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" onPointerDown={(event) => event.stopPropagation()}>
                         <BatchChoiceGroup ariaLabel="批量任务类型" theme={theme} disabled={readOnly} options={OPERATION_OPTIONS} value={table.operation} onChange={(operation) => onPatchTable({ operation: operation as CanvasBatchOperation })} />
-                        <div className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2" style={{ background: theme.node.panel }}>
+                        <div className="flex h-8 shrink-0 items-center gap-2 rounded-lg px-2" style={{ background: theme.node.panel }}>
                             <span className="font-medium" style={{ color: theme.node.muted }}>并发</span>
                             <BatchChoiceGroup ariaLabel="并发数" theme={theme} disabled={readOnly} compact options={CONCURRENCY_OPTIONS.map((value) => ({ value, label: String(value) }))} value={table.concurrency} onChange={(concurrency) => onPatchTable({ concurrency: Number(concurrency) })} />
                         </div>
@@ -252,7 +253,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
                         <span className="shrink-0 tabular-nums" style={{ color: theme.node.muted }}>已连 {connectedImageCount} · 完成 {completed}/{table.rows.length}</span>
                     </div>
                     {!readOnly ? (
-                        <div className="ml-auto flex shrink-0 items-center gap-1.5" onPointerDown={(event) => event.stopPropagation()}>
+                        <div className="ml-auto flex shrink-0 items-center gap-2" onPointerDown={(event) => event.stopPropagation()}>
                             <Tooltip title="列端口已自动生效。用列图片重新填充手动修改过的格子，覆盖前需确认">
                                 <Button size="small" type="text" icon={<Rows3 className="size-3.5" />} onClick={onFillRows}>按列填充</Button>
                             </Tooltip>
@@ -263,7 +264,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
                         </div>
                     ) : null}
                 </div>
-                <div className="flex h-[76px] flex-col gap-1.5 border-t px-3 py-2" style={{ borderColor: theme.node.stroke }} onPointerDown={(event) => event.stopPropagation()}>
+                <div className="flex h-[76px] flex-col gap-2 border-t px-3 py-2" style={{ borderColor: theme.node.stroke }} onPointerDown={(event) => event.stopPropagation()}>
                     <div className="flex items-center gap-2">
                         <label data-canvas-no-drag htmlFor={`batch-global-prompt-${node.id}`} className="shrink-0 text-sm font-semibold">全局提示词</label>
                         <span className="rounded px-2 py-0.5 font-medium" style={{ background: theme.accent.primarySoft, color: theme.node.text }}>{hasGlobalPrompt ? "所有行统一使用" : "各行分别填写"}</span>
@@ -275,7 +276,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
                         readOnly={readOnly}
                         placeholder="填写后，所有行统一使用这段提示词；清空后恢复使用各行原文"
                         aria-label="全局提示词"
-                        className="h-8 min-w-0 w-full rounded-md border px-2.5 text-sm outline-none focus-visible:ring-2"
+                        className="h-8 min-w-0 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-2"
                         style={{ background: inputSurface, borderColor: theme.node.stroke, color: theme.node.text }}
                         onChange={(event) => onPatchTable({ globalPrompt: event.target.value })}
                     />
@@ -284,7 +285,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
 
             <div ref={scrollRef} data-batch-scroll className="thin-scrollbar min-h-0 flex-1 overflow-auto overscroll-contain rounded-b-[inherit]" onMouseDown={stopScrollbarMouseDown} onScroll={reportScroll} onFocusCapture={event => { const id = (event.target as HTMLElement).closest<HTMLElement>("[data-batch-row-id]")?.dataset.batchRowId; if (id) setFocusedRowId(current => current === id ? current : id); }} onPointerDown={(event) => event.stopPropagation()}>
                 <div style={{ minWidth: 64 + referenceColumns.length * 88 + textColumns.length * 168 + 280 + 88 + 80 + 24 }}>
-                <div className="sticky top-0 z-10 grid items-center border-b px-3 text-center text-[11px] font-medium" style={{ height: BATCH_COLUMN_HEADER_HEIGHT, borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted, gridTemplateColumns }}>
+                <div className="sticky top-0 z-10 grid items-center border-b px-3 text-center text-[var(--fs-label)] font-medium" style={{ height: BATCH_COLUMN_HEADER_HEIGHT, borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted, gridTemplateColumns }}>
                     <span className="min-w-0 truncate px-1">任务</span>
                     {referenceColumns.map((column) => (
                         <span
@@ -405,7 +406,7 @@ const BatchTableRow = memo(function BatchTableRow({ tableId, row, index, table, 
     return (
         <div key={row.id} data-batch-row-id={row.id} className="group grid items-center border-b px-3 py-2 transition-colors hover:bg-black/[.025] dark:hover:bg-white/[.025]" style={{ height: BATCH_ROW_HEIGHT, borderColor: theme.node.stroke, gridTemplateColumns, opacity: row.enabled ? 1 : 0.58 }}>
             <div className="flex flex-col items-center justify-center gap-2">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                     {!readOnly ? <Switch size="small" checked={row.enabled} aria-label={`启用任务 ${index + 1}`} onChange={(enabled) => actions.current.onUpdateRow(row.id, { enabled })} /> : null}
                     <span className="tabular-nums" style={{ color: theme.node.muted }}>{index + 1}</span>
                 </div>
@@ -461,7 +462,7 @@ const BatchTableRow = memo(function BatchTableRow({ tableId, row, index, table, 
                     onPointerDown={(event) => event.stopPropagation()}
                     onWheel={(event) => event.stopPropagation()}
                 />
-                <div className="mt-1 flex h-5 items-center gap-2 px-0.5 text-[11px]" style={{ color: theme.node.muted }}>
+                <div className="mt-1 flex h-5 items-center gap-2 px-0.5 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
                     <span className="min-w-0 flex-1 truncate" title={hasGlobalPrompt ? globalPrompt : undefined}>{hasGlobalPrompt ? "本次生成使用全局提示词；本行原文保留" : readOnly ? "本次生成使用本行提示词" : "输入 @ 引用参考图 · Ctrl/⌘ + Enter 生成"}</span>
                     <button type="button" className="flex shrink-0 items-center gap-1 rounded px-1 hover:underline" aria-label={`${readOnly ? "放大查看" : "放大编辑"}任务 ${index + 1} 提示词`} onClick={() => actions.current.setEditingRowId(row.id)}><Maximize2 className="size-3" />{readOnly ? "放大查看" : "放大编辑"}</button>
                 </div>
@@ -473,7 +474,7 @@ const BatchTableRow = memo(function BatchTableRow({ tableId, row, index, table, 
                     theme={theme}
                     onFocus={() => { if (row.outputNodeId) actions.current.onFocusOutput?.(row.outputNodeId); }}
                 />
-                {inputChanged ? <span className="whitespace-nowrap text-[10px] font-medium" style={{ color: theme.node.text }} title="参考图或提示词已变更，当前显示的是原结果；需要手动重新生成">输入已变更</span> : null}
+                {inputChanged ? <span className="whitespace-nowrap text-[var(--fs-label)] font-medium" style={{ color: theme.node.text }} title="参考图或提示词已变更，当前显示的是原结果；需要手动重新生成">输入已变更</span> : null}
             </div>
             {!readOnly ? (
                 <div className="flex items-center justify-center gap-1">
@@ -502,7 +503,7 @@ function BatchChoiceGroup({ ariaLabel, options, value, onChange, theme, compact 
         <div role="group" aria-label={ariaLabel} className="flex shrink-0 items-center rounded-lg p-0.5" style={{ background: theme.node.panel }}>
             {options.map((option) => {
                 const selected = option.value === value;
-                return <button key={option.value} type="button" aria-pressed={selected} disabled={disabled} className={`rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${compact ? "min-w-7 px-1.5 py-1 text-[10px]" : "px-2.5 py-1.5 text-[11px]"}`} style={{ background: selected ? theme.accent.primary : "transparent", color: selected ? theme.accent.onPrimary : theme.node.muted }} onClick={() => onChange(option.value)}>{option.label}</button>;
+                return <button key={option.value} type="button" aria-pressed={selected} disabled={disabled} className={`rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${compact ? "min-w-7 px-2 py-1 text-[var(--fs-label)]" : "px-2 py-2 text-[var(--fs-label)]"}`} style={{ background: selected ? theme.accent.primary : "transparent", color: selected ? theme.accent.onPrimary : theme.node.muted }} onClick={() => onChange(option.value)}>{option.label}</button>;
             })}
         </div>
     );
@@ -528,7 +529,7 @@ function BatchReferenceHandle({ column, index, theme, commonStyle, onConnectStar
     return (
         <Tooltip title={`${column.label} · 按列填充：一张图供各行共用，多张图按顺序分配；也可直接连到目标格`} placement="left">
             <button type="button" data-icon-only aria-label={`${column.label}连线点`} className="group absolute z-[var(--node-z-handle)] grid place-items-center rounded-full outline-none" style={{ ...commonStyle, top: BATCH_REFERENCE_HANDLE_TOP + index * BATCH_REFERENCE_HANDLE_GAP, cursor: "crosshair" }} onPointerEnter={(event) => { setHovered(true); update(event); }} onPointerMove={update} onPointerLeave={reset} onPointerDown={(event) => { event.stopPropagation(); onConnectStart(event, handleId); }} onPointerUp={(event) => { event.stopPropagation(); onConnectDrop?.(event, handleId); }}>
-                <span className="grid size-[18px] place-items-center rounded-full border text-[8px] font-semibold shadow-sm transition-transform duration-100 group-hover:scale-125 group-focus-visible:scale-125" style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${hovered ? 1.06 : 1})`, background: theme.node.panel, borderColor: theme.accent.primary, color: theme.accent.primary }}>{index + 1}</span>
+                <span className="grid size-[18px] place-items-center rounded-full border text-[var(--fs-label)] font-semibold shadow-sm transition-transform duration-150 group-hover:brightness-110 group-focus-visible:ring-2 group-focus-visible:ring-current" style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${hovered ? 1.06 : 1})`, background: theme.node.panel, borderColor: theme.accent.primary, color: theme.accent.primary }}>{index + 1}</span>
             </button>
         </Tooltip>
     );
@@ -578,7 +579,7 @@ function ReferenceThumbnail({ node, hasReference, label, targetLabel, theme, rea
                 }}
             >
                 {filled ? <CachedResourceImage eager src={node.metadata?.previewContent || node.metadata?.content} storageKey={node.metadata?.storageKey} alt={node.title || "参考图"} className="block size-full max-h-full max-w-full object-contain" fallback={fallback} /> : fallback}
-                <span className="absolute bottom-1 left-1 rounded px-1 py-0.5 text-[8px] font-medium text-white" style={{ background: "rgba(0,0,0,.58)" }}>{label}</span>
+                <span className="absolute bottom-1 left-1 rounded px-1 py-0.5 text-[var(--fs-label)] font-medium text-white" style={{ background: "rgba(0,0,0,.58)" }}>{label}</span>
             </button>
         </Tooltip>
         {!readOnly ? <>
@@ -637,7 +638,7 @@ function EmptyThumbnail({ theme, compact = false }: { theme: CanvasTheme; compac
             {compact ? <ImageIcon className="size-4" /> : (
                 <span className="flex flex-col items-center gap-0.5">
                     <Upload className="size-4" />
-                    <span className="text-[9px] leading-none">上传</span>
+                    <span className="text-[var(--fs-label)] leading-none">上传</span>
                 </span>
             )}
         </div>

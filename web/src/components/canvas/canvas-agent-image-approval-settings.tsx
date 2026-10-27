@@ -52,7 +52,7 @@ export function CanvasAgentImageApprovalSettings({ initial, value, onChange, the
         });
     };
     return <fieldset disabled={disabled} className="min-w-0 space-y-3 border-0 p-0" data-canvas-no-zoom data-canvas-wheel-scroll aria-label="图片生成设置">
-        <div className="space-y-1.5">
+        <div className="space-y-2">
             <div className="text-xs" style={{ color: theme.node.muted }}>生成模型</div>
             <ModelPicker config={config} capability="image" value={model} onChange={changeModel} requirements={requirements} variant="creation" fullWidth showOptionPrices placeholder="选择生成模型" popoverClassName="agent-model-picker-popover" />
         </div>

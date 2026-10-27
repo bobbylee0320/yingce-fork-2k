@@ -74,7 +74,7 @@ export default function DiagnosticsPanel({ taskId, projectId }: DiagnosticsPanel
                             <h2 className="text-xl font-semibold tracking-[-0.02em] text-foreground sm:text-2xl">问题诊断</h2>
                             <p className="mt-2 max-w-xl text-sm leading-6 text-foreground/55">遇到报错、任务失败或生成卡住时，导出一份给开发人员排查。</p>
                         </div>
-                        <div className="flex items-start gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[.06] px-3.5 py-3">
+                        <div className="flex items-start gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[.06] px-4 py-3">
                             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-500/[.12] text-emerald-600 dark:text-emerald-400">
                                 <ShieldCheck className="size-[18px]" strokeWidth={1.8} aria-hidden="true" />
                             </span>
@@ -96,7 +96,7 @@ export default function DiagnosticsPanel({ taskId, projectId }: DiagnosticsPanel
                                 </div>
                                 <p className="mt-1 text-xs leading-5 text-foreground/48">选择问题发生前后的日志时间窗口。</p>
                             </div>
-                            <span className="rounded-full bg-foreground/[.045] px-2.5 py-1 text-[var(--fs-tiny)] font-medium text-foreground/48">最长 24 小时</span>
+                            <span className="rounded-full bg-foreground/[.045] px-2 py-1 text-[var(--fs-tiny)] font-medium text-foreground/48">最长 24 小时</span>
                         </div>
                         <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,230px)_minmax(0,1fr)] md:items-end">
                             <label className="block">
@@ -112,7 +112,7 @@ export default function DiagnosticsPanel({ taskId, projectId }: DiagnosticsPanel
                                     }}
                                 />
                             </label>
-                            <div className="rounded-lg border border-border/55 bg-foreground/[.025] px-3.5 py-3" aria-live="polite">
+                            <div className="rounded-lg border border-border/55 bg-foreground/[.025] px-4 py-3" aria-live="polite">
                                 <div className="flex items-center gap-2 text-sm font-medium text-foreground/78">
                                     <Activity className="size-4 text-emerald-500" strokeWidth={1.8} aria-hidden="true" />
                                     <span>当前账号的可用记录</span>
@@ -146,9 +146,9 @@ export default function DiagnosticsPanel({ taskId, projectId }: DiagnosticsPanel
 
                 <footer className="mt-5 flex flex-col-reverse gap-4 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
                     <p className="max-w-md text-xs leading-5 text-foreground/48">下载后请把 ZIP 文件和诊断编号一起提交。诊断包不会自动上传到服务器。</p>
-                    <div className="flex flex-wrap items-center gap-2.5 sm:justify-end">
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                         {bundleId ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/[.06] px-2.5 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300" role="status">
+                            <span className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/[.06] px-2 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300" role="status">
                                 <CheckCircle2 className="size-3.5" strokeWidth={2} aria-hidden="true" />
                                 诊断编号：{bundleId}
                             </span>

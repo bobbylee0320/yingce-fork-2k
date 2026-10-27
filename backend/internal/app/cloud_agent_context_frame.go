@@ -36,6 +36,8 @@ var errCloudAgentContextOverBudget = errors.New("Agent model context exceeds inp
 
 func (s *Service) cloudAgentModelContext(run *model.CloudAgentExecution, state *cloudAgentRuntime, budget cloudAgentContextBudget) (canonicalAgentRequest, error) {
 	canonical := cloudAgentCanonicalWithPlan(state)
+	// 与运行时路径同一套配对修复：重复、孤立或缺失的工具结果不能让模型请求被协议校验判死。
+	canonical.Messages = repairCanonicalUnansweredCalls(canonical.Messages)
 	if state.ReadLoopNudge {
 		cloudAgentApplyReadLoopNudge(&canonical, state)
 	}

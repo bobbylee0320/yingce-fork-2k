@@ -13,6 +13,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import {
     AlertTriangle,
     Captions,
+    Check,
     ChevronDown,
     Download,
     Film,
@@ -390,11 +391,11 @@ export function EditorPreviewMonitor() {
                             <span className="truncate text-xs font-medium text-[var(--previs-dock-fg-strong)]" title={clipDisplayTitle(activeClip)}>
                                 {clipDisplayTitle(activeClip)}
                             </span>
-                            <span className="hidden shrink-0 rounded-full bg-[var(--previs-dock-active-surface)] px-1.5 py-0.5 text-[10px] leading-none text-[var(--previs-dock-fg)]/85 sm:inline-flex">
+                            <span className="hidden shrink-0 rounded-full bg-[var(--previs-dock-active-surface)] px-2 py-0.5 text-[var(--fs-label)] leading-none text-[var(--previs-dock-fg)]/85 sm:inline-flex">
                                 {clipKindLabel(activeClip.kind)}
                             </span>
                             {activeTrack && (
-                                <span className="hidden shrink-0 rounded-full border border-[var(--previs-sequencer-border)] px-1.5 py-0.5 text-[10px] leading-none text-[var(--previs-dock-fg)]/55 md:inline-flex">
+                                <span className="hidden shrink-0 rounded-full border border-[var(--previs-sequencer-border)] px-2 py-0.5 text-[var(--fs-label)] leading-none text-[var(--previs-dock-fg)]/55 md:inline-flex">
                                     {activeTrack.label}
                                 </span>
                             )}
@@ -406,7 +407,7 @@ export function EditorPreviewMonitor() {
                 {mediaErrorHint && (
                     <span
                         title={mediaErrorHint}
-                        className="flex min-w-0 max-w-[42%] items-center gap-1.5 rounded-md bg-[var(--previs-danger)]/10 px-2 py-1 text-[11px] text-[var(--previs-danger)]"
+                        className="flex min-w-0 max-w-[42%] items-center gap-2 rounded-md bg-[var(--previs-danger)]/10 px-2 py-1 text-[var(--fs-label)] text-[var(--previs-danger)]"
                     >
                         {mediaErrorHint.includes("正在生成") ? (
                             <LoaderCircle className="size-3 shrink-0 animate-spin" />
@@ -542,7 +543,7 @@ export function EditorPreviewMonitor() {
                         aria-label="播放速度"
                         title="播放速度"
                         onClick={() => setSpeedMenuOpen((v) => !v)}
-                        className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)]"
+                        className="flex h-7 items-center gap-1 rounded-md px-2 text-[var(--fs-label)] font-medium text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)]"
                     >
                         <Gauge className="size-3.5" />
                         {!compact && <span className="tabular-nums">{speed}x</span>}
@@ -552,8 +553,8 @@ export function EditorPreviewMonitor() {
                     </button>
                     {speedMenuOpen && (
                         <>
-                            <div className="fixed inset-0 z-40" onClick={() => setSpeedMenuOpen(false)} />
-                            <div className="absolute bottom-full right-0 z-50 mb-1 w-24 overflow-hidden rounded-md border border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] py-1 shadow-xl">
+                            <div className="fixed inset-0 z-[var(--z-dropdown)]" onClick={() => setSpeedMenuOpen(false)} />
+                            <div className="absolute bottom-full right-0 z-[calc(var(--z-dropdown)+1)] mb-1 w-24 overflow-hidden rounded-md border border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] py-1 shadow-xl">
                                 {[0.5, 1, 1.5, 2].map((s) => (
                                     <button
                                         key={s}
@@ -562,12 +563,12 @@ export function EditorPreviewMonitor() {
                                             changeSpeed(s);
                                             setSpeedMenuOpen(false);
                                         }}
-                                        className={`flex w-full items-center justify-between px-2.5 py-1.5 text-[11px] transition-colors hover:bg-[var(--previs-control-hover)] ${
+                                        className={`flex w-full items-center justify-between px-2 py-2 text-[var(--fs-label)] transition-colors hover:bg-[var(--previs-control-hover)] ${
                                             s === speed ? "text-[var(--previs-dock-fg-strong)]" : "text-[var(--previs-dock-fg)]"
                                         }`}
                                     >
                                         <span>{s}x</span>
-                                        {s === speed && <span className="opacity-60">✓</span>}
+                                        {s === speed && <Check aria-hidden="true" className="size-3.5 opacity-60" />}
                                     </button>
                                 ))}
                             </div>

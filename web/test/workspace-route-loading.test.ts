@@ -61,31 +61,17 @@ describe("workspace route loading", () => {
         expect(canvasCard).toContain("正在打开");
     });
 
-    test("loads only the active project detail view and keeps canvas-only state out of the global layout", () => {
+    test("keeps the drama studio views in-page and canvas-only state out of the global layout", () => {
         const detail = source("../src/pages/projects/detail.tsx");
         const layout = source("../src/layouts/user-layout.tsx");
         const canvas = source("../src/pages/canvas/index.tsx");
 
-        for (const view of ["assets", "canvases", "chapters", "overview", "settings", "workflow", "editor"]) {
-            expect(detail).toContain(`lazy(() => import("./detail/${view}"))`);
-        }
+        // 角色、待处理、设置都是制作台内的整页视图，不再用抽屉遮挡分镜。
+        for (const panel of ["CastPanel", "InboxPanel", "SettingsPanel"]) expect(detail).toContain(`<${panel}`);
+        expect(detail).not.toContain("AppDrawer");
         expect(layout).not.toContain("useCanvasUiStore");
         expect(layout).not.toContain("CanvasDeleteProjectsDialog");
         expect(canvas).toContain("deleteDialogOpen ? <Suspense");
-        expect(detail).toContain("project-workspace-header");
-        expect(detail).not.toContain("useWorkspaceTopBarExtension");
-        expect(detail).toContain("新建画布");
-    });
-
-    test("keeps project asset refresh scoped to the latest user and project", () => {
-        const editor = source("../src/pages/projects/detail/editor.tsx");
-
-        expect(editor).toContain("const assetOwnerKey = JSON.stringify([scope, projectId])");
-        expect(editor).toContain("activeAssetOwnerKeyRef.current !== requestedOwnerKey");
-        expect(editor).toContain("assetRefreshSequenceRef.current !== requestSequence");
-        expect(editor).toContain("assetRefreshSequenceRef.current += 1");
-        expect(editor).toContain("syncedAssetOwnerKeyRef.current = assetOwnerKey");
-        expect(editor.match(/listProjectAssets\(projectId\)/g)).toHaveLength(1);
     });
 
     test("does not poll wallet balance from permanent workspace chrome", () => {
@@ -95,19 +81,13 @@ describe("workspace route loading", () => {
         expect(wallet).toContain("WALLET_STALE_TIME_MS");
     });
 
-    test("defers modal-only markdown and canvas creation runtimes until interaction", () => {
+    test("defers modal-only markdown runtimes until interaction", () => {
         const changelogButton = source("../src/components/layout/app-changelog-modal.tsx");
         const announcements = source("../src/components/layout/system-announcement-center.tsx");
-        const projectDetail = source("../src/pages/projects/detail.tsx");
-        const workflow = source("../src/pages/projects/detail/workflow-production-workbench.tsx");
 
         expect(changelogButton).toContain('lazy(() => import("@/components/layout/app-changelog-dialog")');
         expect(changelogButton).not.toContain('from "react-markdown"');
         expect(announcements).toContain('lazy(() => import("@/components/ui/aceternity/announcement-timeline-modal")');
-        expect(projectDetail).toContain('import("@/services/user-data-sync")');
-        expect(projectDetail).not.toContain('import { createCanvasProjectWithRemoteSync } from "@/services/user-data-sync"');
-        expect(workflow).not.toContain('from "@/lib/video-poster"');
-        expect(workflow).toContain("if (playing) return <video");
     });
 
     test("uses a quiet workspace skeleton for initial hydration", () => {

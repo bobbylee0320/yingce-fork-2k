@@ -2,7 +2,6 @@ package app
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"hash/crc64"
@@ -843,15 +842,10 @@ func TestHydratePreferredURLUsesObjectStorageAndFallsBackLocal(t *testing.T) {
 	if err := svc.repo.CreateResource(&objectResource); err != nil {
 		t.Fatal(err)
 	}
-	input := canvasGenerationInput{
-		Mode: "image", Config: providerConfig{InterfaceType: string(model.ChannelInterfaceOpenAIImage)},
-		ReferenceImages: []providerMedia{{StorageKey: "resource:resource-oss", DataURL: "data:image/png;base64,old"}},
-	}
-	policy := providerMediaHydrationPolicyFor(context.Background(), input)
-	if err := svc.hydrateGenerationMedia("user-1", &input, policy); err != nil {
+	media := providerMedia{StorageKey: "resource:resource-oss", DataURL: "data:image/png;base64,old"}
+	if err := svc.hydrateProviderMedia("user-1", &media, providerMediaHydrationPolicy{preferURL: true}); err != nil {
 		t.Fatalf("hydrateProviderMedia(prefer object) error = %v", err)
 	}
-	media := input.ReferenceImages[0]
 	if media.URL != "https://media.example.com/users/user-1/image/prefer.png" || media.DataURL != "" {
 		t.Fatalf("object media = %#v", media)
 	}
@@ -868,7 +862,7 @@ func TestHydratePreferredURLUsesObjectStorageAndFallsBackLocal(t *testing.T) {
 		t.Fatal(err)
 	}
 	localMedia := providerMedia{StorageKey: "resource:resource-local-bytes"}
-	if err := svc.hydrateProviderMedia("user-1", &localMedia, policy); err != nil {
+	if err := svc.hydrateProviderMedia("user-1", &localMedia, providerMediaHydrationPolicy{preferURL: true}); err != nil {
 		t.Fatalf("hydrateProviderMedia(prefer local) error = %v", err)
 	}
 	if localMedia.URL != "" || !strings.HasPrefix(localMedia.DataURL, "data:image/png;base64,") {
@@ -974,7 +968,7 @@ func newResourceTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.UserDailyUploadUsage{}, &model.UserDailyActivity{}, &model.Resource{}, &model.UploadReservation{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.UserDailyUploadUsage{}, &model.Resource{}, &model.ResourceOffloadJob{}, &model.UploadReservation{}, &model.UserStorageGrant{}, &model.UserStorageState{}); err != nil {
 		t.Fatal(err)
 	}
 	return &Service{repo: repository.New(db), dataDir: t.TempDir()}
