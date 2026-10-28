@@ -55,6 +55,14 @@ type mediaRecoveryError struct {
 	retryable bool
 	cause     error
 }
+
+// clientUploadPendingError stops backend media materialization after an
+// upstream result is checkpointed. The browser owns the short lived upstream
+// URL and uploads the bytes directly to the signed object key.
+type clientUploadPendingError struct{}
+
+func (e *clientUploadPendingError) Error() string { return "等待浏览器上传生成作品" }
+
 type mediaExecutionTaskKey struct{}
 
 func (e *mediaRecoveryError) Error() string {
@@ -111,6 +119,22 @@ func (s *Service) saveMediaCheckpoint(task *model.Task, checkpoint *mediaCheckpo
 		return err
 	}
 	return s.repo.SaveTaskMediaCheckpoint(task, encoded, stage)
+}
+
+func (s *Service) saveMediaCheckpointWithoutLease(task *model.Task, checkpoint *mediaCheckpoint, stage string) error {
+	data, err := json.Marshal(checkpoint)
+	if err != nil {
+		return err
+	}
+	encrypted, err := s.encryptSettingSecret(string(data))
+	if err != nil {
+		return err
+	}
+	err = s.repo.SaveTaskMediaCheckpointWithoutLease(task, encrypted, stage)
+	if err == nil {
+		task.MediaRecoveryJSON, task.MediaStage = encrypted, stage
+	}
+	return err
 }
 
 func recoverProtocolMedia(ctx context.Context, config providerConfig, mode string, references []protocol.MediaReference) (map[string]interface{}, bool, error) {
@@ -179,6 +203,9 @@ func recoverProtocolMedia(ctx context.Context, config providerConfig, mode strin
 	}
 	if err := s.saveMediaCheckpoint(task, checkpoint, "download"); err != nil {
 		return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: err}
+	}
+	if s.clientMediaUploadAvailable(task.UserID, checkpoint) {
+		return nil, true, &clientUploadPendingError{}
 	}
 	result, err := s.materializeTaskMedia(ctx, task, config, checkpoint)
 	return result, true, err
@@ -657,6 +684,10 @@ func (c *taskTerminalCoordinator) handleResultPersistenceFailureError(task *mode
 }
 
 func (s *Service) finishTaskMediaRecovery(task *model.Task, result map[string]interface{}, err error) error {
+	var pending *clientUploadPendingError
+	if errors.As(err, &pending) {
+		return s.repo.PauseTaskForClientUpload(task.ID, task.LeaseOwner)
+	}
 	if err != nil {
 		return s.handleMediaRecoveryFailure(task, err)
 	}

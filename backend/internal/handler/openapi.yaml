@@ -2037,8 +2037,8 @@ paths:
   /resources/direct-upload:
     post:
       tags: [resources]
-      summary: 为 S3 图片签发浏览器直传地址
-      description: 仅为当前用户的 S3 图片资源签发短时 PUT 地址；其他存储方式返回 501，客户端可回退到常规上传。
+      summary: 为 S3 图片资源签发浏览器直传地址
+      description: 用户素材图片使用单 PUT；生成视频的分片签名由任务媒体上传意图接口提供。
       requestBody:
         required: true
         content:
@@ -2063,12 +2063,28 @@ paths:
   /resources/{id}/direct-upload/complete:
     post:
       tags: [resources]
-      summary: 核验 S3 图片并完成资源登记
+      summary: 核验 S3 资源并完成登记；视频请求体可携带 multipartUploadId 和 parts
       parameters:
         - in: path
           name: id
           required: true
           schema: {type: string}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                generated: {type: boolean}
+                multipartUploadId: {type: string}
+                parts:
+                  type: array
+                  items:
+                    type: object
+                    required: [partNumber, etag]
+                    properties:
+                      partNumber: {type: integer, minimum: 1}
+                      etag: {type: string}
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -2080,6 +2096,20 @@ paths:
     post:
       tags: [resources]
       summary: 核验直传结果并准备常规上传回退
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+  /resources/{id}/direct-upload/abort:
+    post:
+      tags: [resources]
+      summary: 取消直传并清理待上传资源
       parameters:
         - in: path
           name: id
@@ -2314,6 +2344,76 @@ paths:
         "401":
           $ref: "#/components/responses/Error"
         "404":
+          $ref: "#/components/responses/Error"
+  /tasks/{id}/media-upload-sources:
+    get:
+      tags: [tasks]
+      summary: 返回待直传生成作品的短期上游地址
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+  /tasks/{id}/media-upload-intent:
+    post:
+      tags: [tasks]
+      summary: 为生成作品创建 pending 资源并签发浏览器直传信息
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [index, size, mimeType]
+              properties:
+                index: {type: integer, minimum: 0}
+                fileName: {type: string, maxLength: 255}
+                size: {type: integer, minimum: 1}
+                mimeType: {type: string}
+                width: {type: integer, minimum: 0}
+                height: {type: integer, minimum: 0}
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+  /tasks/{id}/media-upload-complete:
+    post:
+      tags: [tasks]
+      summary: 完成生成作品直传并登记任务结果
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+  /tasks/{id}/media-upload-fail:
+    post:
+      tags: [tasks]
+      summary: 记录浏览器直传失败并保留任务恢复信息
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
           $ref: "#/components/responses/Error"
   /tasks/{id}/recover-media:
     post:

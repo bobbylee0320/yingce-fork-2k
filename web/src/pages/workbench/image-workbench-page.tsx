@@ -19,7 +19,7 @@ import { imageQualityLabel } from "@/lib/image-quality";
 import { modelQuoteRequest } from "@/lib/model-pricing";
 import { quoteModel } from "@/services/api/logical-models";
 import { prepareBackendGenerationTask } from "@/services/api/generation-task";
-import { createGenerationTask, cancelGenerationTask, queryGenerationTask, retryGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import { createGenerationTask, cancelGenerationTask, ensureClientTaskMediaUploaded, queryGenerationTask, retryGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { capabilitySupportedModes, createWorkbenchTask, listWorkbenchTasks, listWorkbenchTools, normalizeWorkbenchGuide, resolveWorkbenchResourceURL, type WorkbenchKind, type WorkbenchPromptPreset, type WorkbenchTool } from "@/services/api/workbench";
 import { resourceStorageKey, resolveResourceUrl, uploadResourceFile } from "@/services/api/resources";
 import { formatCredits, requestCreditCost } from "@/constant/credits";
@@ -403,8 +403,9 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
     const loadTasks = useCallback(async () => {
         try {
             const result = await listWorkbenchTasks(kind, 100);
-            setTasks(result);
-            return result;
+            const resolved = await Promise.all(result.map((task) => task.mediaStage === "client_upload_pending" ? ensureClientTaskMediaUploaded(task).catch(() => task) : task));
+            setTasks(resolved);
+            return resolved;
         } catch (error) {
             message.error(error instanceof Error ? error.message : "任务列表加载失败");
             return [];

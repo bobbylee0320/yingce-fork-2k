@@ -28,7 +28,7 @@ export type GenerationTask = {
     status: TaskStatus;
     progress?: number;
     stage?: string;
-    mediaStage?: "download" | "upload" | "local_save" | "register" | "completed" | "checkpoint";
+    mediaStage?: "download" | "upload" | "local_save" | "register" | "completed" | "checkpoint" | "client_upload_pending" | "client_uploading";
     canRecoverMedia?: boolean;
     prompt: string;
     operation?: string;
@@ -77,6 +77,200 @@ export type GenerationTask = {
     created_at?: string;
     updated_at?: string;
 };
+
+type TaskMediaUploadIntent = {
+    taskId: string;
+    resourceId: string;
+    sourceUrl: string;
+    uploadUrl?: string;
+    headers?: Record<string, string>;
+    mimeType: string;
+    size: number;
+    expiresAt?: string;
+    index: number;
+    multipartUploadId?: string;
+    parts?: Array<{ partNumber: number; uploadUrl: string }>;
+    partSize?: number;
+};
+
+const clientMediaUploadRequests = new Map<string, Promise<GenerationTask>>();
+type ClientUploadProgress = (uploadedBytes: number, totalBytes: number) => void;
+
+/**
+ * Materializes a checkpointed provider URL in the browser. The server only
+ * signs the destination and verifies it with HEAD; media bytes never enter
+ * the backend process.
+ */
+export function ensureClientTaskMediaUploaded(task: GenerationTask, signal?: AbortSignal, onProgress?: ClientUploadProgress): Promise<GenerationTask> {
+    if (task.mediaStage !== "client_upload_pending") return Promise.resolve(task);
+    const current = clientMediaUploadRequests.get(task.id);
+    if (current) return current;
+    const request = uploadClientTaskMedia(task, signal, onProgress).catch(async (error) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+            await http.post(`/tasks/${encodeURIComponent(task.id)}/media-upload-fail`, { message: error instanceof Error ? error.message : "浏览器上传生成作品失败" }, { signal: undefined }).catch(() => undefined);
+        }
+        throw error;
+    }).finally(() => {
+        if (clientMediaUploadRequests.get(task.id) === request) clientMediaUploadRequests.delete(task.id);
+    });
+    clientMediaUploadRequests.set(task.id, request);
+    return request;
+}
+
+async function uploadClientTaskMedia(task: GenerationTask, signal?: AbortSignal, onProgress?: ClientUploadProgress) {
+    let items = taskMediaItems(task);
+    if (!items.length) {
+        const sources = await http.get<Array<{ index: number; sourceUrl: string; mimeType?: string }>>(`/tasks/${encodeURIComponent(task.id)}/media-upload-sources`, { signal });
+        items = sources.map((item) => ({ sourceUrl: item.sourceUrl, mimeType: item.mimeType }));
+    }
+    if (!items.length) throw new Error("生成作品上传信息为空");
+    for (let index = 0; index < items.length; index += 1) {
+        if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        const source = await fetchClientMedia(items[index].sourceUrl, signal);
+        const hintedMime = items[index].mimeType;
+        const concreteMime = hintedMime && !hintedMime.includes("*") ? hintedMime : undefined;
+        const mimeType = (!source.type || source.type === "application/octet-stream") ? (concreteMime || (task.type.includes("video") ? "video/mp4" : task.type.includes("audio") ? "audio/mpeg" : "image/png")) : source.type;
+        const dimensions = mimeType.startsWith("image/") ? await imageDimensions(source) : { width: 0, height: 0 };
+        const intent = await http.post<TaskMediaUploadIntent>(`/tasks/${encodeURIComponent(task.id)}/media-upload-intent`, {
+            index,
+            fileName: fileNameFromURL(items[index].sourceUrl, task.type, index, mimeType),
+            size: source.size,
+            mimeType,
+            width: dimensions.width,
+            height: dimensions.height,
+        }, { signal });
+        let completedParts: Array<{ partNumber: number; etag: string }> | undefined;
+        if (intent.multipartUploadId && intent.parts?.length && intent.partSize) {
+            try {
+                completedParts = [];
+                for (const part of intent.parts) {
+                    const start = (part.partNumber - 1) * intent.partSize;
+                    const end = Math.min(source.size, start + intent.partSize);
+                    const etag = await putClientMediaPart(part.uploadUrl, source.slice(start, end), signal, (loaded) => onProgress?.(start + loaded, source.size));
+                    completedParts.push({ partNumber: part.partNumber, etag });
+                }
+            } catch (error) {
+                await http.post(`/resources/${encodeURIComponent(intent.resourceId)}/direct-upload/abort`, { multipartUploadId: intent.multipartUploadId }, { signal: undefined }).catch(() => undefined);
+                throw error;
+            }
+        } else if (intent.uploadUrl) {
+            try {
+                await putClientMedia(intent.uploadUrl, intent.headers || {}, source, signal, onProgress);
+            } catch (error) {
+                await http.post(`/resources/${encodeURIComponent(intent.resourceId)}/direct-upload/abort`, {}, { signal: undefined }).catch(() => undefined);
+                throw error;
+            }
+        }
+        if (intent.uploadUrl || completedParts) {
+            await http.post(`/resources/${encodeURIComponent(intent.resourceId)}/direct-upload/complete`, completedParts ? { multipartUploadId: intent.multipartUploadId, parts: completedParts, generated: true } : { generated: true }, { signal });
+        }
+    }
+    return http.post<GenerationTask>(`/tasks/${encodeURIComponent(task.id)}/media-upload-complete`, {}, { signal });
+}
+
+async function imageDimensions(blob: Blob) {
+    if (typeof createImageBitmap !== "function") return { width: 0, height: 0 };
+    try {
+        const bitmap = await createImageBitmap(blob);
+        const result = { width: bitmap.width, height: bitmap.height };
+        bitmap.close();
+        return result;
+    } catch {
+        return { width: 0, height: 0 };
+    }
+}
+
+function taskMediaItems(task: GenerationTask) {
+    const raw = task.resultJson;
+    // The checkpoint is server only. The intent endpoint echoes the URL per
+    // item through a lightweight task field when a client upload is pending.
+    // Keep the parser tolerant for older task snapshots that expose a single
+    // preview URL.
+    const urls: Array<{ sourceUrl: string; mimeType?: string }> = [];
+    if (task.previewUrl && !task.previewUrl.startsWith("data:")) urls.push({ sourceUrl: resolveTaskURL(task.previewUrl), mimeType: task.previewKind ? `${task.previewKind}/*` : undefined });
+    if (raw) {
+        try {
+            const value = JSON.parse(raw) as { images?: Array<{ url?: string; dataUrl?: string; mimeType?: string }>; video?: { url?: string; dataUrl?: string; mimeType?: string }; audio?: { url?: string; dataUrl?: string; mimeType?: string } };
+            const images = Array.isArray(value.images) ? value.images : [];
+            for (const item of images) if (item.url && !item.url.startsWith("data:")) urls.push({ sourceUrl: resolveTaskURL(item.url), mimeType: item.mimeType });
+            for (const item of [value.video, value.audio]) if (item?.url && !item.url.startsWith("data:")) urls.push({ sourceUrl: resolveTaskURL(item.url), mimeType: item.mimeType });
+        } catch {
+            // Result JSON is intentionally not required for the pending path.
+        }
+    }
+    const unique = new Map<string, { sourceUrl: string; mimeType?: string }>();
+    for (const item of urls) unique.set(item.sourceUrl, item);
+    return [...unique.values()];
+}
+
+function resolveTaskURL(value: string) {
+    if (/^(?:https?:|blob:)/i.test(value)) return value;
+    const base = String(apiBaseURL).replace(/\/+$/, "");
+    if (value.startsWith("/")) return /^https?:\/\//i.test(base) ? new URL(value, `${base}/`).toString() : value;
+    return `${base}/${value.replace(/^\/+/, "")}`;
+}
+
+async function fetchClientMedia(url: string, signal?: AbortSignal) {
+    const resolved = resolveTaskURL(url);
+    const apiOrigin = String(apiBaseURL).replace(/\/+$/, "");
+    const platformURL = resolved.startsWith("/") || (/^https?:\/\//i.test(apiOrigin) && resolved.startsWith(apiOrigin));
+    const response = await fetch(resolved, { mode: "cors", credentials: platformURL ? "include" : "omit", signal });
+    if (!response.ok) throw new Error(`读取上游生成结果失败（HTTP ${response.status}）`);
+    const blob = await response.blob();
+    if (!blob.size) throw new Error("上游生成结果为空");
+    return blob;
+}
+
+function fileNameFromURL(raw: string, taskType: string, index: number, mimeType: string) {
+    try {
+        const value = new URL(raw).pathname.split("/").pop() || "";
+        if (value && value.length <= 255 && value.includes(".")) return value;
+    } catch {
+        // Use a generated safe name below.
+    }
+    const ext = mimeType.split("/")[1]?.split(";")[0] || (taskType.includes("video") ? "mp4" : "bin");
+    return `generated-${index + 1}.${ext}`;
+}
+
+function putClientMedia(url: string, headers: Record<string, string>, blob: Blob, signal?: AbortSignal, onProgress?: ClientUploadProgress) {
+    return new Promise<void>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("PUT", url);
+        request.withCredentials = false;
+        Object.entries(headers).forEach(([name, value]) => request.setRequestHeader(name, value));
+        request.upload.onprogress = (event) => { if (event.lengthComputable) onProgress?.(event.loaded, event.total); };
+        request.onload = () => request.status >= 200 && request.status < 300 ? resolve() : reject(new Error(`生成作品直传失败（HTTP ${request.status}）`));
+        request.onerror = () => reject(new Error("生成作品直传网络失败"));
+        request.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+        const abort = () => request.abort();
+        signal?.addEventListener("abort", abort, { once: true });
+        request.onloadend = () => signal?.removeEventListener("abort", abort);
+        request.send(blob);
+    });
+}
+
+function putClientMediaPart(url: string, blob: Blob, signal?: AbortSignal, onProgress?: (loadedBytes: number) => void) {
+    return new Promise<string>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("PUT", url);
+        request.withCredentials = false;
+        request.setRequestHeader("Content-Type", "application/octet-stream");
+        request.upload.onprogress = (event) => { if (event.lengthComputable) onProgress?.(event.loaded); };
+        request.onload = () => {
+            if (request.status >= 200 && request.status < 300) {
+                const etag = request.getResponseHeader("ETag") || request.getResponseHeader("etag");
+                if (!etag) reject(new Error("对象存储未返回分片 ETag"));
+                else resolve(etag.replace(/^"|"$/g, ""));
+            } else reject(new Error(`生成视频分片上传失败（HTTP ${request.status}）`));
+        };
+        request.onerror = () => reject(new Error("生成视频分片网络失败"));
+        request.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+        const abort = () => request.abort();
+        signal?.addEventListener("abort", abort, { once: true });
+        request.onloadend = () => signal?.removeEventListener("abort", abort);
+        request.send(blob);
+    });
+}
 
 export type ProviderTaskQueryResult = {
     task: GenerationTask;
@@ -217,8 +411,9 @@ export async function listGenerationTasks(limit = 30, options?: { projectId?: st
                 )) ?? [],
         }));
     const backendTasks = await collectGenerationTaskPages(backendPageReader, baseRequest, boundedLimit, signal);
+    const clientUploadTasks = await Promise.all(backendTasks.map((task) => task.mediaStage === "client_upload_pending" ? ensureClientTaskMediaUploaded(task, signal).catch(() => task) : task));
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    return backendTasks
+    return clientUploadTasks
         .filter((task) => !options?.projectId || task.projectId === options.projectId)
         .filter((task) => !options?.activeOnly || task.status === "queued" || task.status === "running")
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id))
@@ -482,6 +677,12 @@ export async function waitForGenerationTask(id: string, options?: WaitForGenerat
                 options?.onConnectionChange?.("reconnecting");
                 if (error instanceof ApiError && !error.retryable) throw new TaskObservationError(id);
                 await delay(Math.min(30_000, intervalMs * 2 ** Math.min(consecutiveFailures - 1, 4)), options?.signal);
+                continue;
+            }
+            if (task.mediaStage === "client_upload_pending") {
+                task = await ensureClientTaskMediaUploaded(task, options?.signal, (uploadedBytes, totalBytes) => options?.onTaskUpdate?.({ ...task, mediaStage: "client_uploading", progress: totalBytes > 0 ? Math.round(uploadedBytes / totalBytes * 100) : 0 }));
+                lastTask = task;
+                options?.onTaskUpdate?.(task);
                 continue;
             }
             if (task.status === "succeeded") {

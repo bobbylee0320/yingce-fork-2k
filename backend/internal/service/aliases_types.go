@@ -286,6 +286,7 @@ type (
 	ResourceAccessRequest                  = app.ResourceAccessRequest
 	ResourceAccess                         = app.ResourceAccess
 	ResourceStream                         = app.ResourceStream
+	DirectUploadPart                       = app.DirectUploadPart
 	ResponseInterceptionRule               = app.ResponseInterceptionRule
 	ResponseInterceptionSetting            = app.ResponseInterceptionSetting
 	RouteSimulationCandidate               = app.RouteSimulationCandidate

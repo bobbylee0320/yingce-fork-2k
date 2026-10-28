@@ -61,6 +61,10 @@ var (
 	newS3Client                 = storage.NewS3Client
 	putS3Object                 = storage.PutS3Object
 	presignS3PutObject          = storage.PresignS3PutObject
+	createS3MultipartUpload     = storage.CreateS3MultipartUpload
+	presignS3UploadPart         = storage.PresignS3UploadPart
+	completeS3MultipartUpload   = storage.CompleteS3MultipartUpload
+	abortS3MultipartUpload      = storage.AbortS3MultipartUpload
 	headS3Object                = storage.HeadS3Object
 	getS3ObjectRange            = storage.GetS3ObjectRange
 	signedS3ObjectURL           = storage.SignedS3ObjectURL
