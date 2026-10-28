@@ -29,6 +29,7 @@ import (
 type Service struct {
 	repo                     *repository.Repository
 	dataDir                  string
+	mediaStagingDiskProbe    func() SystemPerformanceDisk
 	cancelMu                 sync.Mutex
 	registrationMu           sync.Mutex
 	emailCodeMu              sync.Mutex

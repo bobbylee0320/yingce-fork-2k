@@ -40,8 +40,11 @@ func (r *Repository) RequeueTaskMediaRecovery(task *model.Task, encrypted string
 // 只读取解析检查点需要的列。
 func (r *Repository) TasksWithPendingMediaCheckpoint(updatedSince time.Time) ([]model.Task, error) {
 	var tasks []model.Task
-	err := r.db.Select("id", "user_id", "media_recovery_json").
-		Where("COALESCE(media_recovery_json, '') <> '' AND status IN ? AND updated_at >= ?", []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning, model.TaskStatusFailed}, updatedSince).
-		Limit(1000).Find(&tasks).Error
+	query := r.db.Select("id", "user_id", "media_recovery_json").
+		Where("COALESCE(media_recovery_json, '') <> '' AND status IN ?", []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning, model.TaskStatusFailed})
+	if !updatedSince.IsZero() {
+		query = query.Where("updated_at >= ?", updatedSince)
+	}
+	err := query.Order("updated_at ASC").Find(&tasks).Error
 	return tasks, err
 }

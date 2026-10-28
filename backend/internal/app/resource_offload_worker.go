@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"yingce/backend/internal/model"
@@ -16,6 +18,9 @@ import (
 // 补传 worker：把本地兜底的生成作品上传到原定对象存储，成功后切换资源行。
 // 资源 ID 和访问链接不变；本地文件在切换后保留一段时间再删，避免打断正在进行的读取。
 const (
+	storageBreakerWindow          = 5 * time.Minute
+	storageBreakerThreshold       = 3
+	storageBreakerOpenFor         = 5 * time.Minute
 	resourceOffloadInterval       = 30 * time.Second
 	resourceOffloadBatch          = 10
 	resourceOffloadLease          = 15 * time.Minute
@@ -24,6 +29,54 @@ const (
 )
 
 var resourceOffloadDelays = []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, 30 * time.Minute, time.Hour}
+
+type storageBreakerState struct {
+	failures  []time.Time
+	openUntil time.Time
+}
+
+type storageBreaker struct {
+	mu     sync.Mutex
+	states map[string]*storageBreakerState
+}
+
+var mediaStorageBreaker = &storageBreaker{states: make(map[string]*storageBreakerState)}
+
+func (b *storageBreaker) isOpen(key string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	state := b.states[key]
+	return state != nil && time.Now().Before(state.openUntil)
+}
+
+func (b *storageBreaker) record(key string, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err == nil {
+		delete(b.states, key)
+		return
+	}
+	if errors.Is(err, context.Canceled) {
+		return
+	}
+	now := time.Now()
+	state := b.states[key]
+	if state == nil {
+		state = &storageBreakerState{}
+		b.states[key] = state
+	}
+	recent := state.failures[:0]
+	for _, failedAt := range state.failures {
+		if now.Sub(failedAt) < storageBreakerWindow {
+			recent = append(recent, failedAt)
+		}
+	}
+	state.failures = append(recent, now)
+	if len(state.failures) >= storageBreakerThreshold {
+		state.openUntil = now.Add(storageBreakerOpenFor)
+		state.failures = nil
+	}
+}
 
 func resourceOffloadRetryDelay(attempts int) time.Duration {
 	if attempts >= 1 && attempts <= len(resourceOffloadDelays) {
@@ -72,7 +125,7 @@ func (s *Service) drainResourceOffloadJobs(ctx context.Context, limit int) {
 }
 
 func offloadTargetKey(job *model.ResourceOffloadJob) string {
-	return storageBreakerKey(&model.Resource{Provider: job.TargetProvider, Endpoint: job.TargetEndpoint, Bucket: job.TargetBucket})
+	return strings.Join([]string{strings.ToLower(job.TargetProvider), job.TargetEndpoint, job.TargetBucket}, "\x00")
 }
 
 func (s *Service) retryResourceOffload(job *model.ResourceOffloadJob, owner, code, message string) {
@@ -126,7 +179,14 @@ func (s *Service) processResourceOffloadJob(ctx context.Context, job *model.Reso
 	}
 	started := time.Now()
 	uploadCtx, cancel := context.WithTimeout(ctx, resourceOffloadUploadTimeout)
+	if err := mediaOSSUploadLimiter.acquire(uploadCtx); err != nil {
+		cancel()
+		_ = file.Close()
+		s.retryResourceOffload(job, owner, "upload_wait_canceled", err.Error())
+		return
+	}
 	etag, err := putOSSObjectContext(uploadCtx, s.storageSettingWithRuntimePolicy(setting), job.TargetObjectKey, resource.MimeType, resource.Size, file)
+	mediaOSSUploadLimiter.release(err)
 	cancel()
 	_ = file.Close()
 	mediaStorageBreaker.record(key, err)

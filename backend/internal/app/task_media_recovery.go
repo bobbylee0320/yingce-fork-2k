@@ -2,14 +2,18 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"math/rand/v2"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/mattn/go-sqlite3"
 	"gorm.io/gorm"
 
 	"yingce/backend/internal/model"
@@ -19,14 +23,16 @@ import (
 
 // Recovery is keyed by the task, not a second generation or billing order.
 type mediaCheckpoint struct {
-	Mode           string                `json:"mode"`
-	Items          []mediaCheckpointItem `json:"items"`
-	StartedAt      time.Time             `json:"startedAt"`
-	Attempts       int                   `json:"attempts"`
-	ManualAttempts int                   `json:"manualAttempts"`
-	LastManualAt   time.Time             `json:"lastManualAt"`
-	// WaitingForSlot 表示本次失败只因保存并发已满，排队时间不应消耗实际传输重试窗口。
-	WaitingForSlot bool `json:"waitingForSlot,omitempty"`
+	Mode                 string                `json:"mode"`
+	Items                []mediaCheckpointItem `json:"items"`
+	StartedAt            time.Time             `json:"startedAt"`
+	Attempts             int                   `json:"attempts"`
+	UploadAttempts       int                   `json:"uploadAttempts,omitempty"`
+	RegistrationAttempts int                   `json:"registrationAttempts,omitempty"`
+	ManualAttempts       int                   `json:"manualAttempts"`
+	LastManualAt         time.Time             `json:"lastManualAt"`
+	// WaitingForStaging 表示本地暂存预算已满；它不消耗上游下载重试次数。
+	WaitingForStaging bool `json:"waitingForStaging,omitempty"`
 	// RefundedBilling 是管理员恢复已退款订单时的计费决定：charge 补扣，waive 免除。
 	// 为空时，已退款订单交付成功后也不会自动补扣。
 	RefundedBilling string `json:"refundedBilling,omitempty"`
@@ -52,11 +58,13 @@ type mediaRecoveryError struct {
 type mediaExecutionTaskKey struct{}
 
 func (e *mediaRecoveryError) Error() string {
+	if errors.Is(e.cause, errMediaStagingFull) {
+		return "作品已生成，等待暂存空间"
+	}
 	return "作品已生成，但保存未完成：" + mediaStageLabel(e.stage)
 }
 func (e *mediaRecoveryError) Unwrap() error { return e.cause }
 
-var mediaRecoverySlots = make(chan struct{}, 2)
 var mediaRecoveryDelays = []time.Duration{15 * time.Second, time.Minute, 3 * time.Minute, 10 * time.Minute}
 
 func mediaStageLabel(stage string) string {
@@ -149,7 +157,20 @@ func recoverProtocolMedia(ctx context.Context, config providerConfig, mode strin
 			}
 			item.TempName, err = s.stageInlineMedia(data)
 			if err != nil {
-				return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: err}
+				if !errors.Is(err, errMediaStagingFull) {
+					return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: err}
+				}
+				item.Reference.DataURL = reference.DataURL
+				item.MIMEType = mimeType
+				checkpoint.WaitingForStaging = true
+				checkpoint.Items = append(checkpoint.Items, item)
+				for _, remaining := range references[len(checkpoint.Items):] {
+					checkpoint.Items = append(checkpoint.Items, mediaCheckpointItem{Reference: remaining})
+				}
+				if err := s.saveMediaCheckpoint(task, checkpoint, "local_save"); err != nil {
+					return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: err}
+				}
+				return nil, true, &mediaRecoveryError{stage: "local_save", retryable: true, cause: errMediaStagingFull}
 			}
 			item.MIMEType = mimeType
 			item.Reference.DataURL = ""
@@ -179,6 +200,18 @@ func (s *Service) resumeTaskMedia(ctx context.Context, task *model.Task) (map[st
 	return s.materializeTaskMedia(withProviderAnalytics(ctx, s, *task), task, input.Config, checkpoint)
 }
 
+func hasPendingInlineMedia(checkpoint *mediaCheckpoint) bool {
+	if checkpoint == nil {
+		return false
+	}
+	for index := range checkpoint.Items {
+		if checkpoint.Items[index].Reference.DataURL != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, config providerConfig, checkpoint *mediaCheckpoint) (result map[string]interface{}, err error) {
 	defer func() {
 		var failure *mediaRecoveryError
@@ -186,17 +219,9 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 			err = &mediaRecoveryError{stage: task.MediaStage, cause: err}
 		}
 	}()
-	// Do not occupy a worker waiting for a download slot.
-	select {
-	case mediaRecoverySlots <- struct{}{}:
-		defer func() { <-mediaRecoverySlots }()
-	default:
-		return nil, &mediaRecoveryError{stage: task.MediaStage, retryable: true, cause: errMediaRecoveryBusy}
-	}
-	// Queue time must not consume the retry window for actual transfer failures.
-	if checkpoint.WaitingForSlot {
+	if checkpoint.WaitingForStaging && !hasPendingInlineMedia(checkpoint) {
 		checkpoint.StartedAt = time.Now()
-		checkpoint.WaitingForSlot = false
+		checkpoint.WaitingForStaging = false
 		if err := s.saveMediaCheckpoint(task, checkpoint, task.MediaStage); err != nil {
 			return nil, &mediaRecoveryError{stage: "checkpoint", retryable: true, cause: err}
 		}
@@ -215,6 +240,21 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 			return nil, &mediaRecoveryError{stage: "register", retryable: true, cause: err}
 		}
 		if resource == nil || resource.Status != model.ResourceStatusReady {
+			if item.Reference.DataURL != "" {
+				mimeType, data, decodeErr := decodeProviderDataURL(item.Reference.DataURL)
+				if decodeErr != nil || !strings.HasPrefix(mimeType, checkpoint.Mode+"/") {
+					return nil, &mediaRecoveryError{stage: "checkpoint", cause: errors.New("内联生成作品检查点无效")}
+				}
+				item.TempName, err = s.stageInlineMedia(data)
+				if err != nil {
+					return nil, &mediaRecoveryError{stage: "local_save", retryable: true, cause: err}
+				}
+				item.MIMEType = mimeType
+				item.Reference.DataURL = ""
+				if err := s.saveMediaCheckpoint(task, checkpoint, "local_save"); err != nil {
+					return nil, &mediaRecoveryError{stage: "checkpoint", retryable: true, cause: err}
+				}
+			}
 			path := s.mediaTempPath(item.TempName)
 			info, statErr := os.Lstat(path)
 			if path == "" || statErr != nil || !info.Mode().IsRegular() {
@@ -249,15 +289,8 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 				return nil, err
 			}
 			started := time.Now()
-			var fallbackCause error
-			resource, fallbackCause, err = s.storeTaskMediaFile(task, index, path, item.MIMEType, checkpoint.Mode, resource)
-			if fallbackCause != nil {
-				// 直传失败已由本地兜底接住：分别记录失败的上传和成功的兜底保存。
-				s.logMediaStage(*task, stage, started, fallbackCause)
-				s.logMediaStage(*task, "local_fallback", started, nil)
-			} else {
-				s.logMediaStage(*task, stage, started, err)
-			}
+			resource, err = s.storeTaskMediaFile(task, index, path, item.MIMEType, checkpoint.Mode, resource)
+			s.logMediaStage(*task, stage, started, err)
 			if err != nil {
 				return nil, &mediaRecoveryError{stage: stage, retryable: retryableMediaRecovery(err), cause: err}
 			}
@@ -282,9 +315,49 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 	return result, nil
 }
 
-var errMediaRecoveryBusy = errors.New("作品保存并发已满")
+func transientMediaRegistrationError(err error) bool {
+	var appErr *AppError
+	if errors.As(err, &appErr) && appErr.Retryable {
+		return true
+	}
+	if errors.Is(err, sql.ErrConnDone) || errors.Is(err, gorm.ErrInvalidDB) {
+		return true
+	}
+	var networkErr net.Error
+	if errors.As(err, &networkErr) {
+		return true
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return strings.HasPrefix(pgErr.Code, "08") || strings.HasPrefix(pgErr.Code, "40") || strings.HasPrefix(pgErr.Code, "53") || strings.HasPrefix(pgErr.Code, "57")
+	}
+	var sqliteErr sqlite3.Error
+	if errors.As(err, &sqliteErr) {
+		return sqliteErr.Code == sqlite3.ErrBusy || sqliteErr.Code == sqlite3.ErrLocked
+	}
+	return false
+}
+
+func mediaUploadRetryDelay(attempt int) time.Duration {
+	delays := [...]time.Duration{15 * time.Second, time.Minute, 3 * time.Minute, 10 * time.Minute, 30 * time.Minute, time.Hour}
+	if attempt < 1 {
+		attempt = 1
+	}
+	return delays[min(attempt-1, len(delays)-1)]
+}
+
+func mediaRegistrationRetryDelay(attempt int) time.Duration {
+	delays := [...]time.Duration{5 * time.Second, 15 * time.Second, time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour}
+	if attempt < 1 {
+		attempt = 1
+	}
+	return delays[min(attempt-1, len(delays)-1)]
+}
 
 func retryableMediaRecovery(err error) bool {
+	if errors.Is(err, errMediaStagingFull) {
+		return true
+	}
 	if retryableProtocolMediaDownload(err) || errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
@@ -316,14 +389,39 @@ func (s *Service) handleMediaRecoveryFailure(task *model.Task, cause error) erro
 		if decodeErr != nil {
 			return decodeErr
 		}
-		if errors.Is(cause, errMediaRecoveryBusy) {
-			if !checkpoint.WaitingForSlot {
-				checkpoint.WaitingForSlot = true
+		if errors.Is(cause, errOSSUploadRetry) && classifyStorageError(cause).Transient {
+			checkpoint.UploadAttempts++
+			delay := mediaUploadRetryDelay(checkpoint.UploadAttempts)
+			if err := s.saveMediaCheckpoint(task, checkpoint, "upload"); err != nil {
+				return err
+			}
+			return s.repo.DeferRunningTaskForProviderPoll(task.ID, task.LeaseOwner, "作品已生成，对象存储暂时不可用，等待自动重试", delay)
+		}
+		if (failure.stage == "register" || failure.stage == "upload") && transientMediaRegistrationError(failure.cause) {
+			stage := failure.stage
+			message := "作品已生成，资源登记暂时不可用，等待自动重试"
+			delay := time.Duration(0)
+			if stage == "register" {
+				checkpoint.RegistrationAttempts++
+				delay = mediaRegistrationRetryDelay(checkpoint.RegistrationAttempts)
+			} else {
+				checkpoint.UploadAttempts++
+				delay = mediaUploadRetryDelay(checkpoint.UploadAttempts)
+				message = "作品已生成，资源保存暂时不可用，等待自动重试"
+			}
+			if err := s.saveMediaCheckpoint(task, checkpoint, stage); err != nil {
+				return err
+			}
+			return s.repo.DeferRunningTaskForProviderPoll(task.ID, task.LeaseOwner, message, delay)
+		}
+		if errors.Is(cause, errMediaStagingFull) {
+			if !checkpoint.WaitingForStaging {
+				checkpoint.WaitingForStaging = true
 				if err := s.saveMediaCheckpoint(task, checkpoint, failure.stage); err != nil {
 					return err
 				}
 			}
-			return s.repo.DeferRunningTaskForProviderPoll(task.ID, task.LeaseOwner, "作品已生成，等待保存", 5*time.Second)
+			return s.repo.DeferRunningTaskForProviderPoll(task.ID, task.LeaseOwner, "作品已生成，等待暂存空间", 30*time.Second)
 		}
 		if failure.retryable && checkpoint.Attempts < len(mediaRecoveryDelays) && time.Since(checkpoint.StartedAt) < 20*time.Minute {
 			delay := mediaRecoveryDelays[checkpoint.Attempts] + time.Duration(rand.IntN(5_000))*time.Millisecond
@@ -529,8 +627,6 @@ func (s *Service) logMediaStage(task model.Task, stage string, started time.Time
 		// 只附加存储服务返回的错误码和状态码，不写对象路径、URL 或凭据。
 		if label := classifyStorageError(err).Label(); label != "" {
 			message += "（存储返回 " + label + "）"
-		} else if errors.Is(err, errStorageCircuitOpen) {
-			message += "（存储熔断中，未直传）"
 		}
 	}
 	if logErr := s.LogAPICall(model.ApiCallLog{UserID: task.UserID, TaskID: task.ID, BillingOrderID: task.BillingOrderID, ProviderRequestID: task.ProviderRequestID, Source: "backend-task", Capability: capabilityFromTaskType(task.Type), Model: task.Model, RequestKind: stage, Method: "INTERNAL", Path: "task/media/" + stage, Status: status, ErrorCode: code, Error: message, DurationMs: time.Since(started).Milliseconds()}); logErr != nil {
@@ -539,10 +635,20 @@ func (s *Service) logMediaStage(task model.Task, stage string, started time.Time
 }
 
 func (s *Service) mediaTempPath(name string) string {
-	if !strings.HasPrefix(name, "result-") || filepath.Base(name) != name || strings.ContainsAny(name, `/\\`) {
+	if !validMediaStagingName(name) {
 		return ""
 	}
-	return filepath.Join(s.dataDir, "media-staging", name)
+	root := filepath.Join(s.dataDir, "media-staging")
+	path := filepath.Join(root, filepath.FromSlash(name))
+	cleanRoot, err := filepath.Abs(root)
+	if err != nil {
+		return ""
+	}
+	cleanPath, err := filepath.Abs(path)
+	if err != nil || (cleanPath != cleanRoot && !strings.HasPrefix(cleanPath, cleanRoot+string(os.PathSeparator))) {
+		return ""
+	}
+	return cleanPath
 }
 
 func (c *taskTerminalCoordinator) handleResultPersistenceFailureError(task *model.Task, err error) error {
