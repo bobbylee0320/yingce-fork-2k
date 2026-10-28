@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { Camera, Check, Focus, Keyboard, Minus, MousePointer2, Move3d, PanelLeft, Plus, Rotate3d, Route, Scale3d, Scan, SlidersHorizontal, WandSparkles } from "lucide-react";
+import { Camera, Check, Focus, Keyboard, Minus, MousePointer2, Move3d, PanelLeft, Plus, Rotate3d, Route, Scale3d, Scan, SlidersHorizontal, ChartGantt } from "lucide-react";
 
 import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -99,7 +99,7 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
         { id: "previs-zoom-out", label: "拉远视角", icon: <Minus />, onClick: () => props.onZoom(1.38) },
         { id: "previs-zoom-in", label: "拉近视角", icon: <Plus />, onClick: () => props.onZoom(0.72) },
         { kind: "separator", id: "previs-sep-panels" },
-        { id: "previs-timeline", label: "动画时间轴", icon: <WandSparkles />, active: props.timelineOpen, onClick: props.onOpenTimeline },
+        { id: "previs-timeline", label: "动画时间轴", icon: <ChartGantt />, active: props.timelineOpen, onClick: props.onOpenTimeline },
         { id: "previs-inspector", label: props.inspectorOpen ? "收起属性面板" : "打开属性面板", icon: <SlidersHorizontal />, active: props.inspectorOpen, expands: true, onClick: props.onToggleInspector },
         { id: "previs-shortcuts", label: "快捷键 (?)", icon: <Keyboard />, active: props.shortcutHelpOpen, onClick: props.onToggleShortcutHelp },
     ];

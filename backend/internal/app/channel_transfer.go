@@ -131,6 +131,7 @@ func exportChannelModel(item model.ChannelModel) (SystemChannelExportModel, erro
 			CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, PriceConfigured: tier.PriceConfigured, Enabled: &tierEnabled,
 		})
 	}
+	priceCurrency := firstNonEmpty(item.PriceCurrency, model.PriceCurrencyCredits)
 	return SystemChannelExportModel{
 		SortOrder: item.SortOrder,
 		ChannelModelRequest: ChannelModelRequest{
@@ -139,6 +140,7 @@ func exportChannelModel(item model.ChannelModel) (SystemChannelExportModel, erro
 			BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits,
 			OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits,
 			PriceConfigured: item.PriceConfigured, Enabled: &enabled, CapabilityConfig: capabilityConfig, PriceTiers: tiers,
+			PriceCurrency: &priceCurrency,
 		},
 	}, nil
 }

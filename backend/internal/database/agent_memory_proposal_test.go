@@ -33,7 +33,7 @@ func TestAgentMemoryProposalMigrationPreservesExistingMemories(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := db.Exec("DELETE FROM schema_migrations WHERE version = 59 AND name = 'agent_memory_proposals'").Error; err != nil {
+	if err := db.Exec("DELETE FROM schema_migrations WHERE version = 58 AND name = 'agent_memory_proposals'").Error; err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {

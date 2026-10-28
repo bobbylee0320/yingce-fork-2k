@@ -365,6 +365,10 @@ type (
 	UpdateProjectRequest                   = app.UpdateProjectRequest
 	UpdateProjectUnitRequest               = app.UpdateProjectUnitRequest
 	UpdateUserRequest                      = app.UpdateUserRequest
+	UserGroupRequest                       = app.UserGroupRequest
+	UserGroupView                          = app.UserGroupView
+	PublicUserGroup                        = app.PublicUserGroup
+	PaymentSettings                        = app.PaymentSettings
 	UpdateWorkflowStepRequest              = app.UpdateWorkflowStepRequest
 	WorkbenchToolInput                     = app.WorkbenchToolInput
 	WorkbenchPresetInput                   = app.WorkbenchPresetInput

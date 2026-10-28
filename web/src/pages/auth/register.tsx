@@ -12,6 +12,8 @@ import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 type AuthSettings = Awaited<ReturnType<typeof getAuthSettings>>;
 
+const REFERRAL_CODE_STORAGE_KEY = "yingce:referral-code";
+
 export default function RegisterPage() {
     const navigate = useNavigate();
     const [params] = useSearchParams();
@@ -33,6 +35,12 @@ export default function RegisterPage() {
     const [registerCountdown, setRegisterCountdown] = useState(0);
     const registering = useRef(false);
     const next = safeNext(params.get("next"));
+    // 推广码只存会话级缓存：用户从推广链接跳到登录页再回来注册时仍能归属，关闭浏览器后失效。
+    const [referralCode] = useState(() => {
+        const fromUrl = (params.get("ref") || "").trim();
+        if (fromUrl) window.sessionStorage.setItem(REFERRAL_CODE_STORAGE_KEY, fromUrl);
+        return fromUrl || window.sessionStorage.getItem(REFERRAL_CODE_STORAGE_KEY) || "";
+    });
 
     // 协议标题与条款由后台「登录与注册」配置下发。标题未配置时才回退到当前品牌名，
     // 且只在确认拿到设置（settings 非空）后回退；接口失败时不猜标题，避免展示
@@ -74,7 +82,8 @@ export default function RegisterPage() {
         setSubmitting(true);
         try {
             if (!settings?.firstUser && !verification.ticket) throw new Error("请先获取本次注册验证码");
-            await register({ username, ...(settings?.firstUser ? { email } : verification), displayName, password, acceptedTerms: agreementAccepted });
+            await register({ username, ...(settings?.firstUser ? { email } : verification), displayName, password, acceptedTerms: agreementAccepted, ...(referralCode ? { referralCode } : {}) });
+            window.sessionStorage.removeItem(REFERRAL_CODE_STORAGE_KEY);
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
             if (!settings?.firstUser) window.sessionStorage.setItem("yingce:model-setup-guide", "1");

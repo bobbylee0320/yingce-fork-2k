@@ -40,6 +40,7 @@ const SystemPerformancePage = lazy(() => import("@/pages/admin/settings/system-p
 const StoryboardPromptsPage = lazy(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
 const AdminFeedbacksPage = lazy(() => import("@/pages/admin/feedbacks/feedbacks-page"));
 const UsersPage = lazy(() => import("@/pages/admin/users/users-page"));
+const UserGroupsPage = lazy(() => import("@/pages/admin/user-groups/user-groups-page"));
 const AssetsPage = lazy(loadAssetsPage);
 const LoginPage = lazy(() => import("@/pages/auth/login"));
 const RegisterPage = lazy(() => import("@/pages/auth/register"));
@@ -60,6 +61,8 @@ const ProjectsPage = lazy(loadProjectsPage);
 const ProjectDetailPage = lazy(loadProjectDetailPage);
 const ProjectCreatePage = lazy(loadProjectCreatePage);
 const SettingsPage = lazy(() => import("@/pages/settings"));
+const ReferralPage = lazy(() => import("@/pages/referral"));
+const AdminReferralPage = lazy(() => import("@/pages/admin/referral/referral-admin-page"));
 const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
 const UserLayout = lazy(() => import("@/layouts/user-layout"));
 const RequireFeature = lazy(() => import("@/components/auth/require-feature").then((module) => ({ default: module.RequireFeature })));
@@ -170,6 +173,7 @@ export const router = createBrowserRouter([
                 element: <RequireAuth>{null}</RequireAuth>,
             },
             { path: "/settings", element: <RequireAuth>{deferred(<SettingsPage />)}</RequireAuth> },
+            { path: "/referral", element: <RequireAuth>{deferred(<ReferralPage />)}</RequireAuth> },
             { path: "/test-voice-recording", element: <RequireAuth>{deferred(<TestVoiceRecording />)}</RequireAuth> },
             {
                 path: "/projects",
@@ -219,6 +223,7 @@ export const router = createBrowserRouter([
                 children: [
                     { index: true, element: <AnalyticsPage /> },
                     { path: "users", element: <UsersPage /> },
+                    { path: "user-groups", element: <UserGroupsPage /> },
                     { path: "login-logs", element: <LoginLogsPage /> },
                     { path: "feedbacks", element: <AdminFeedbacksPage /> },
                     { path: "channels", element: <ChannelsPage /> },
@@ -242,6 +247,7 @@ export const router = createBrowserRouter([
                     { path: "resources", element: <StorageResourcesPage /> },
                     { path: "credit-operations", element: <CreditOperationsPage /> },
                     { path: "redemption-codes", element: <RedemptionCodesPage /> },
+                    { path: "referral", element: <AdminReferralPage /> },
                     { path: "logs", element: <LogsPage /> },
                     { path: "settings", element: <Navigate to="runtime-policy" replace /> },
                     { path: "settings/appearance", element: <AppearanceSettingsPage /> },

@@ -51,6 +51,8 @@ export async function applyUserSession(payload: AuthSessionPayload) {
     useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);
     useUserStore.getState().setDrawingEngine(payload.drawingEngine);
     useUserStore.getState().setFeatures(payload.features);
+    useUserStore.getState().setReferralAvailable(payload.referralAvailable);
+    useUserStore.getState().setUserGroup(payload.userGroup);
     installRemoteUserDataAutoSync();
     try {
         // 缓存恢复和同步基线必须先于工作区开放，防止生成/编辑抢跑，或被初始化误记为已同步。

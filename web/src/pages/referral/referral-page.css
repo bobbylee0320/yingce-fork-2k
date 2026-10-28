@@ -1,0 +1,100 @@
+.referral-page-link-card,
+.referral-page-stat,
+.referral-page-records {
+    border: 1px solid var(--card-border);
+    border-radius: var(--card-radius);
+    background: var(--card-surface);
+}
+
+.referral-page-link-card {
+    display: grid;
+    gap: var(--space-3);
+    padding: var(--space-4);
+}
+
+.referral-page-link-card h2 {
+    font-size: var(--text-label);
+    font-weight: 600;
+}
+
+.referral-page-link-card p {
+    color: var(--text-secondary);
+    font-size: var(--text-caption);
+    line-height: 1.6;
+}
+
+.referral-page-link-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.referral-page-link-row .ant-input {
+    flex: 1 1 280px;
+    min-width: 0;
+}
+
+.referral-page-code {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.08em;
+}
+
+.referral-page-stats {
+    display: grid;
+    gap: var(--space-3);
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+}
+
+.referral-page-stat {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-4);
+}
+
+.referral-page-stat span {
+    color: var(--text-secondary);
+    font-size: var(--text-caption);
+}
+
+.referral-page-stat strong {
+    font-size: var(--text-xl);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.referral-page-records {
+    padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.referral-page-record-row {
+    display: grid;
+    align-items: center;
+    gap: var(--space-3);
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border);
+    font-size: var(--text-ui);
+}
+
+.referral-page-record-row:last-child {
+    border-bottom: 0;
+}
+
+.referral-page-record-row small {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-tertiary);
+    font-size: var(--text-caption);
+}
+
+.referral-page-record-row b {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.referral-page-empty {
+    padding: var(--space-8) 0;
+    color: var(--text-tertiary);
+    font-size: var(--text-caption);
+    text-align: center;
+}

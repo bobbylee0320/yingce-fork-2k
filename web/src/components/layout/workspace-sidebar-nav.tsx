@@ -7,6 +7,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
 import { UserAvatar } from "@/components/layout/user-avatar";
+import { UserGroupAvatarRing, UserGroupBadge } from "@/components/layout/user-group-badge";
 import { Kbd } from "@/components/ui/base/kbd";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
@@ -74,6 +75,7 @@ function WorkspaceSidebarProfile({ collapsed, user, onExpand, onCollapse }: { co
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
+    const userGroup = useUserStore((state) => state.userGroup);
     const profileName = user?.displayName || user?.username || "未登录";
 
     useEffect(() => {
@@ -120,11 +122,11 @@ function WorkspaceSidebarProfile({ collapsed, user, onExpand, onCollapse }: { co
             <WorkspaceSidebarStorageMeter collapsed={collapsed} />
             <div className={cn("app-workspace-sidebar-profile-row", collapsed && "is-collapsed")}>
                 <button ref={triggerRef} type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="打开账户菜单" aria-expanded={menuOpen} title={profileName} onClick={() => setMenuOpen((open) => !open)}>
-                    <UserAvatar user={user} className="app-workspace-sidebar-profile-avatar" />
+                    <UserGroupAvatarRing><UserAvatar user={user} className="app-workspace-sidebar-profile-avatar" /></UserGroupAvatarRing>
                     {!collapsed ? (
                         <span className="app-workspace-sidebar-profile-copy">
                             <strong>{profileName}</strong>
-                            <span>创作工作台</span>
+                            {userGroup?.badgeStyle === "vip" || userGroup?.badgeStyle === "svip" ? <UserGroupBadge className="self-start" /> : <span>创作工作台</span>}
                         </span>
                     ) : null}
                 </button>

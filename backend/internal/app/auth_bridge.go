@@ -90,6 +90,12 @@ func (h authHost) EnsureSignupBonus(userID string) error {
 	return h.svc.ensureSignupBonus(userID)
 }
 
+func (h authHost) BindReferral(inviteeID string, code string) {
+	if h.svc == nil {
+		return
+	}
+	h.svc.bindReferral(inviteeID, code)
+}
 func (h authHost) RecordActivity(userID string, event string, count int) {
 	if h.svc == nil {
 		return

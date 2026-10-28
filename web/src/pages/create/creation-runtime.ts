@@ -1,6 +1,6 @@
 export { createGenerationBatchRetryContexts, createGenerationRetryContext, runGenerationOperationOnce } from "@/lib/canvas/canvas-project-generation";
 export { isGenerationTaskCancelled, runBackendGenerationTask, runBackendGenerationTaskBatch } from "@/services/api/generation-task";
-export { subscribeGenerationTasks, queryGenerationTask, resolveGenerationTaskSubmissions, recoverGenerationTaskMedia, refreshGenerationTaskObservations } from "@/services/api/task-center";
+export { isGenerationTaskTerminalError, queryGenerationTask, resolveGenerationTaskSubmissions, recoverGenerationTaskMedia, refreshGenerationTaskObservations, subscribeGenerationTasks } from "@/services/api/task-center";
 export { uploadMediaFile } from "@/services/file-storage";
 export { uploadImage } from "@/services/image-storage";
 export { consumeGenerationTaskMessage, generationTaskMaterializedStorageKeys, generationTaskMaterializedUrls, materializeGenerationTaskAssets, projectGenerationTaskResult } from "@/services/project-asset-sync";

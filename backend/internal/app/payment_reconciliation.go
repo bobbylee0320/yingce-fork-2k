@@ -222,6 +222,7 @@ func (s *Service) comparePaymentReconciliation(ctx context.Context, provider pay
 		if granted {
 			s.afterStorageOrderGranted(recoveredOrder)
 		}
+		s.grantReferralCommission(recoveredOrder)
 		item.Result = model.PaymentReconciliationRecovered
 		item.Resolved = true
 		item.Detail = "已根据渠道账单自动补发积分"
