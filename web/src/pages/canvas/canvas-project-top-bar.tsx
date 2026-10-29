@@ -271,7 +271,7 @@ function CanvasViewSwitch({ view, onChange, dockStyle, activeBg, color }: { view
         { value: "assets", label: "资产", icon: <FolderTree className="size-4" /> },
     ];
     return (
-        <div role="group" aria-label="画布视图" className="canvas-topbar-cluster canvas-topbar-view-switch pointer-events-auto absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-1 xl:flex" style={dockStyle}>
+        <div role="group" aria-label="画布视图" className="canvas-topbar-cluster canvas-topbar-view-switch pointer-events-auto absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-1 2xl:flex" style={dockStyle}>
             {items.map((item) => (
                 <button
                     key={item.value}
