@@ -96,6 +96,8 @@ type Service struct {
 	// legacyCloudAgentRootTask is enabled only by tests that exercise the pre-Pi
 	// model-worker path. Runtime availability must not change root task semantics.
 	legacyCloudAgentRootTask bool
+	// cloudAgentModelRetryBase 是模型步骤重试的指数退避基数；零值为 1 秒，只有测试会调小。
+	cloudAgentModelRetryBase time.Duration
 	approvedMediaMu          sync.Mutex
 	approvedMediaWg          sync.WaitGroup
 	approvedMediaWaiters     map[string]context.CancelFunc
