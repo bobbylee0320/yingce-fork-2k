@@ -39,7 +39,8 @@
 .canvas-collaboration-members {
     position: absolute;
     top: var(--space-3);
-    left: 50%;
+    /* 与顶栏保持同一排，给居中的视图切换器预留位置。 */
+    left: calc(50% - 164px);
     transform: translateX(-50%);
     pointer-events: auto;
     color: var(--foreground);
