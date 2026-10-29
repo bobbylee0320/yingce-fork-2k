@@ -376,11 +376,27 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 
 `GET/POST /admin/channels/:id/models` 与 `PATCH /admin/channels/:id/models/:modelId` 的 `priceTiers[]` 增加 `costPricing`：`configured`、`unitPriceMicrocredits`、`inputTokenPriceMicrocredits`、`outputTokenPriceMicrocredits`、`cachedTokenPriceMicrocredits`。成本沿用该价格档的计费方式；按次/秒使用单位价，文本 Token 按输入/输出/缓存分别定价，视频 Token 只使用输出价。价格为整数微积分，范围为 0 到 1000000000000；`configured=false` 表示未配置，`true` 且价格为 0 表示显式零成本。
 
-成本保存到下单时的内部账单快照，不受售价倍率或扣费上限影响，后续改价不重算旧订单。历史逻辑模型任务切换备用线路时，成本更新为实际执行线路的快照，独立于用户售价策略。管理员请求列表、详情与 CSV 同时展示销售金额及成本金额；JSON 增加 `creditCostConfigured` 和可选 `creditCostMicrocredits`。成功结算后按实际计费数量、Token 用量或视频公式快照核算；未结算、已退回、历史无快照或缺少有效用量时不编造成本金额。
+成本保存到下单时的内部账单快照，不受售价倍率或扣费上限影响，后续改价不重算旧订单。历史逻辑模型任务切换备用线路时，成本更新为实际执行线路的快照，独立于用户售价策略。管理员请求列表、详情与 CSV 分列展示预授权、实收及成本金额；JSON 返回 `billingReservedMicrocredits`（订单预授权额）、可选 `billingSettledMicrocredits`（仅已结算订单返回实收）、`creditCostConfigured` 和可选 `creditCostMicrocredits`。预授权、待核对和已退回订单不返回实收，不能把预授权额当作扣费额；CSV 对应列为“预授权(微积分)”“实收(微积分)”。成功结算后按实际计费数量、Token 用量或视频公式快照核算；未结算、已退回、历史无快照或缺少有效用量时不编造成本金额。
 
 成本字段仅通过经过管理员权限校验的接口显式返回；普通用户的模型目录、会话模型信息、报价、任务与账单 JSON 均不包含成本配置、成本快照或成本金额。底层价格档和账单成本字段禁止 JSON 序列化，不以页面隐藏代替接口隔离。
 
 数据概览不再提供独立的“模型价格配置”入口。`GET /admin/analytics/overview` 的 `kpi`、`models[]` 使用 `finance` 返回 `settledOrders`、`costedOrders`、`revenueMicrocredits`、`costMicrocredits`、可空的 `profitMicrocredits`、`profitMargin`，取代旧的费用/币种字段。按当前请求日志时间及筛选范围关联已结算订单，以订单 ID 去重并核对用户与实际结算渠道；轮询、下载、未结算、退款和无关联账单请求不计入财务汇总。收入为实际结算积分，成本复用系统模型价格档的订单快照与计费用量，利润为收入减成本，利润率为利润占收入百分比。已知成本可显示部分合计；只要有已结算订单缺失成本，利润和利润率返回 `null`，不把未知成本视为零。无订单时利润为 `null`；零收入时利润率为 `null`。历史无成本快照的订单不按当前价回填。此处为已结算生成订单的积分毛利，不含充值收入或失败请求的上游损耗。
+
+总览的请求类指标（`kpi.upstreamRequests`、`kpi.successRate`、`kpi.p95DurationMs`、`trend[].requests`、`models[].requests` 与耗时、`failures[]`、按调用计入的活跃用户）只统计 `request_kind = create` 的模型生成请求；图片、视频的轮询结果已合并进 create 根记录，轮询、下载、上传、本地保存等阶段不计入。成功率按 succeeded /（succeeded + failed）计算，`trend[].requestSuccessRate`、`models[].taskSuccessRate`、`models[].requestSuccessRate` 在没有样本时返回 `null`，不返回 0。`trend[].consumedMicrocredits` 为当天已结算订单的实收积分，与 `kpi.finance.revenueMicrocredits` 同一口径，按订单首条可计费调用的 UTC 日期归属；`kpi.totalConsumedMicrocredits` 已移除。
+
+`GET /admin/api-logs` 与 `GET /admin/api-logs-export.csv` 支持 `from`、`to`（`YYYY-MM-DD` 按 UTC 自然日、含结束日，或 RFC 3339 时间点）、`userId`、`model`、`channelId`、`capability`；不传日期时默认近 30 个 UTC 日，单次最多 366 天。
+
+`GET /admin/billing-orders` 的每条订单额外返回 `userDisplayName`、`userAccount`，按当前页用户 ID 批量读取；字段不入库，普通用户的订单接口不返回。
+
+`GET /admin/users` 的每个用户额外返回 `rechargedMicrocredits`（已到账支付订单的到账积分合计）和 `consumedMicrocredits`（已结算计费订单的实收合计），按当前页用户批量汇总。
+
+渠道模型运营接口（均要求管理员）：
+
+| 接口 | 行为 |
+| --- | --- |
+| `GET /admin/channel-models` | 返回全部系统渠道（含停用渠道）的模型，结构同 `GET /admin/channels/:id/models` 的单项，另加 `channelName`、`channelEnabled`，供按模型名称跨渠道筛选。 |
+| `GET /admin/channel-models/health?channelId=` | 返回模型调用稳定性 `{ items, computedAt, truncated }`。每项含 `channelId`、`modelKey`、近 24 小时 `requests24h` / `succeeded24h` / `failed24h` / `successRate24h`、近 7 天 `requests7d` / `successRate7d`、`p95DurationMs24h`、最近 10 次结果 `recentResults`（左旧右新）、`lastErrorCode`、`lastFailedAt`、`lastCalledAt`。成功率为 0–1 小数，没有样本时为 `null`。只统计 `request_kind = create`，不设用户端的最少样本门槛；读取近 7 天最新 50,000 条记录，超出时 `truncated = true`。结果缓存 30 秒；不传 `channelId` 时返回全部系统渠道。 |
+| `PATCH /admin/channels/:id/models/:modelId/enabled` | 请求体 `{ "enabled": boolean }`，只改启停，不重写价格档、能力配置和价格版本；能力或协议未配置的模型不能启用。写管理员审计 `channel_model.enable` / `channel_model.disable`。 |
 
 `GET /admin/analytics/export.csv` 沿用相同口径，CSV 输出收入、成本、利润（整数微积分）；重复请求只在该筛选范围内选定的一行记录金额，未知值留空。
 
