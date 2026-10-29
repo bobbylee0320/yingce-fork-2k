@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { isolateCopiedNodeMetadata, nextCopiedNodeTitle } from "@/lib/canvas/canvas-node-copy";
+import { isolateCopiedNodeMetadata, nextCopiedNodeTitle, prepareCanvasNodeForClipboard } from "@/lib/canvas/canvas-node-copy";
 import { buildNodeGenerationContext } from "@/components/canvas/canvas-node-generation";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
@@ -29,6 +29,55 @@ describe("canvas node copy title", () => {
 });
 
 describe("canvas generation copy metadata", () => {
+    test("剪贴板复制图片和视频时只保留提示词、引用和生成配置", () => {
+        for (const type of [CanvasNodeType.Image, CanvasNodeType.Video]) {
+            const source: CanvasNodeData = {
+                id: `${type}-source`,
+                type,
+                title: "生成结果",
+                position: { x: 10, y: 20 },
+                width: 340,
+                height: 240,
+                metadata: {
+                    content: `${type}-url`,
+                    previewContent: "preview-url",
+                    videoPreview: { content: "video-preview" },
+                    storageKey: `${type}:stored-result`,
+                    mimeType: type === CanvasNodeType.Image ? "image/png" : "video/mp4",
+                    bytes: 1024,
+                    durationMs: 5000,
+                    naturalWidth: 1920,
+                    naturalHeight: 1080,
+                    assetId: "asset-result",
+                    producedModel: "model-used",
+                    producedModelCandidate: "model-pending",
+                    prompt: "保留这个提示词",
+                    composerContent: "保留这个编辑器内容",
+                    references: ["image:reference"],
+                    model: "model-next",
+                    status: "success",
+                },
+            };
+
+            const copied = prepareCanvasNodeForClipboard(source);
+
+            expect(copied.metadata).toMatchObject({
+                prompt: "保留这个提示词",
+                composerContent: "保留这个编辑器内容",
+                references: ["image:reference"],
+                model: "model-next",
+                status: "idle",
+            });
+            expect(copied.metadata?.content).toBeUndefined();
+            expect(copied.metadata?.storageKey).toBeUndefined();
+            expect(copied.metadata?.videoPreview).toBeUndefined();
+            expect(copied.metadata?.assetId).toBeUndefined();
+            expect(copied.metadata?.producedModel).toBeUndefined();
+            expect(copied.metadata?.producedModelCandidate).toBeUndefined();
+            expect(source.metadata?.content).toBe(`${type}-url`);
+        }
+    });
+
     test("媒体副本保留提示词与参考字段，并明确原地回填生成结果", () => {
         const source: CanvasNodeData = {
             id: "source",

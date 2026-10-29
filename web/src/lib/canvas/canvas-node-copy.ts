@@ -3,6 +3,38 @@ import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type Stor
 
 const COPY_TITLE_SUFFIX = /^(.*)_copy(\d+)$/i;
 
+const CLIPBOARD_MEDIA_FIELDS = [
+    "content",
+    "previewContent",
+    "videoPreview",
+    "imageRotation",
+    "storageKey",
+    "mimeType",
+    "bytes",
+    "durationMs",
+    "waveform",
+    "waveformVersion",
+    "hasAudio",
+    "naturalWidth",
+    "naturalHeight",
+    "assetId",
+    "producedModel",
+    "producedModelCandidate",
+] as const satisfies ReadonlyArray<keyof CanvasNodeMetadata>;
+
+/** 剪贴板复制只携带媒体节点的生成配置和引用，不复制已生成的媒体结果。 */
+export function prepareCanvasNodeForClipboard(node: CanvasNodeData): CanvasNodeData {
+    const metadata = node.metadata
+        ? { ...node.metadata, frame: node.metadata.frame ? { ...node.metadata.frame } : undefined }
+        : undefined;
+    if (metadata && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio)) {
+        const cleared = resetGenerationTaskMetadata(metadata, "idle");
+        CLIPBOARD_MEDIA_FIELDS.forEach((field) => delete cleared[field]);
+        return { ...node, position: { ...node.position }, metadata: cleared };
+    }
+    return { ...node, position: { ...node.position }, metadata };
+}
+
 export function nextCopiedNodeTitle(sourceTitle: string, existingTitles: Iterable<string>) {
     const sourceMatch = sourceTitle.match(COPY_TITLE_SUFFIX);
     const baseTitle = (sourceMatch?.[1] || sourceTitle.replace(/ Copy$/i, "")).trim() || sourceTitle.trim() || "未命名节点";
