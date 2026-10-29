@@ -500,7 +500,11 @@ function SegmentReceipt({ segment }: { segment: DramaSegment }) {
     // 读到视频模型能力时才有画面与声音参数（aspectRatio 与它们一起填写）。
     const outputRows: ReceiptRow[] = request.aspectRatio
         ? [
-              { tone: request.size || request.resolution ? "ok" : "warn", label: "画面", value: request.resolution ? `${request.aspectRatio}（按 ${request.resolution} 出片）` : request.size ? request.aspectRatio : `${request.aspectRatio}（所选模型给不出这个画幅）` },
+              {
+                  tone: request.size || request.resolution ? "ok" : "warn",
+                  label: "画面",
+                  value: request.resolution ? `${request.aspectRatio}（按 ${request.resolution} 出片）` : request.size ? request.aspectRatio : `${request.aspectRatio}（所选模型给不出这个画幅）`,
+              },
               { tone: request.generateAudio ? "ok" : "warn", label: "声音", value: request.generateAudio ? "模型同步生成对白与音效" : "所选模型不出声，本段视频没有对白与音效" },
           ]
         : [];
