@@ -157,6 +157,10 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 	if err == nil {
 		cloudAgentCompactSupersededReadResult(state, call)
 	}
+	// Pi 直接接收工具结果，不经过旧调度器；末项不是看图时也必须补送本批图片。
+	if state.CallIndex+1 >= len(state.Calls) {
+		cloudAgentFlushPendingImages(state)
+	}
 	state.CallIndex++
 	state.Approval = nil
 	return exhausted
