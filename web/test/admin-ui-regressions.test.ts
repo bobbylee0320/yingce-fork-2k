@@ -165,10 +165,7 @@ test("nested admin pages return to their own parent entry", async () => {
 });
 
 test("admin navigation keeps one sidebar entry per page inside collapsible groups", async () => {
-    const [shell, router] = await Promise.all([
-        Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text(),
-        Bun.file(new URL("../src/router.tsx", import.meta.url)).text(),
-    ]);
+    const [shell, router] = await Promise.all([Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text(), Bun.file(new URL("../src/router.tsx", import.meta.url)).text()]);
     const compacted = compactSource(shell);
     expect(compacted).toContain('className="admin-nav-group-toggle" aria-expanded={expanded}');
     // 不再用页头页签合并页面：页签入口不易发现，切换时还会触发懒加载白屏。
