@@ -70,8 +70,10 @@ function deferred<T>() {
 const requests: Array<{ options: any; result: ReturnType<typeof deferred<any>> }> = [];
 let prepareWait: ReturnType<typeof deferred<void>> | undefined;
 const lifecycle = await import("../../src/services/generation-consumer-lifecycle");
+const { GenerationTaskTerminalError, isGenerationTaskTerminalError } = await import("../../src/services/api/task-center");
 mock.module("../../src/pages/create/creation-runtime", () => ({
     ...lifecycle,
+    isGenerationTaskTerminalError,
     skillRuntime: {
         prepare: async ({ prompt }: { prompt: string }) => {
             await prepareWait?.promise;
@@ -174,7 +176,12 @@ test("创建返回前可提交下一镜，重复触发不重复提交，乱序�
     await flush(() => composer.setPrompt("第三镜"));
     await flush(() => composer.onSubmit());
     expect(composer.busy).toBe(true);
-    await flush(() => requests[0].result.reject(new Error("第一镜失败")));
+    // 只有后端确认的失败终态才判失败；任务仍在运行时的普通异常按“页面没跟上”转交恢复监听。
+    const failedFirst: GenerationTask = { ...task("first"), status: "failed", error: "第一镜失败" };
+    await flush(() => {
+        requests[0].options.onTaskUpdate(failedFirst);
+        requests[0].result.reject(new GenerationTaskTerminalError("第一镜失败", failedFirst));
+    });
     expect(messages()[1].status).toBe("error");
     expect(messages()[3].status).toBe("done");
     expect(composer.busy).toBe(true);

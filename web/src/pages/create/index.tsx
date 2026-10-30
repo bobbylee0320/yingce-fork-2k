@@ -894,7 +894,8 @@ export default function CreatePage() {
                 attemptGroupId: item.attemptGroupId || task.attemptGroupId,
             }));
             submittingControllersRef.current.delete(controller);
-            setBusy(false);
+            // 每次任务进度回调都会走到这里。只有本次提交仍持有提交闸门时才解锁输入框，
+            // 否则旧任务的进度更新会把后面一条正在准备的提交提前解锁。
             releaseSubmitGate();
         };
         updateActive((conversation) => ({
