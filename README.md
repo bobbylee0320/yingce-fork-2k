@@ -180,7 +180,7 @@ GitHub 用户：[@TripsCoder](https://github.com/TripsCoder) · [@sugtex](https:
 ### 环境要求
 
 - [Bun](https://bun.sh/)：前端和文档站
-- [Go 1.25](https://go.dev/)：后端
+- [Go 1.26](https://go.dev/)：后端
 - Docker Compose：仅在使用容器开发时需要
 
 ### 宿主机启动

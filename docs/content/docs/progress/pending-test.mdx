@@ -4,6 +4,14 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 ---
 
 # 待测试
+## 后端依赖安全升级（Go 1.26、x/net、x/text）与首页创作提交锁
+- 已升级（后端）：`golang.org/x/net` v0.57.0 → v0.62.0、`golang.org/x/text` v0.40.0 → v0.43.0，消除 govulncheck 报告的代码可达漏洞（http2 的 GO-2026-6603、6611、6612、6617，precis 的 GO-2026-6629），连带 `x/crypto` v0.58.0、`x/sys` v0.49.0、`x/sync` v0.24.0。`x/net` 从 v0.60.0 起要求 Go 1.26，因此 `go.mod` 改为 `go 1.26.0` 并写入 `toolchain go1.26.10`（CI 的 setup-go 按这一行安装补丁版本，扫描结果与生产镜像一致）；后端镜像与开发镜像改用 `golang:1.26-alpine`，CI 的 golangci-lint 升到 v2.12.2。
+- 仍有提示（不影响运行）：logrus GO-2025-4188 只是导入、代码未调用；aws-sdk-go GO-2022-0635、0646 与 `x/crypto/openpgp` GO-2026-5932 上游没有修复版本。
+- 已修复（首页创作）：旧任务的进度回调会把仍在准备中的新一次提交提前解锁（`bindTask` 无条件 `setBusy(false)`），现在只有仍持有提交令牌的那次提交才解锁。`creation-video-concurrency` 回归用例改为模拟后端确认失败，与“任务仍在运行时普通错误保持等待”的现行语义一致。
+- 已验证：Go 1.26.10 下 `go build`、`go vet`、`go test ./...` 全部通过，`go mod tidy -diff` 无差异，govulncheck 代码可达漏洞为 0，golangci-lint v2.12.2 对 `./internal/agent/...` 为 0 问题；前端在干净依赖的工作树中 `bun run test`、`bun run typecheck` 通过，改动文件 Prettier 检查通过。未做浏览器验收。
+- [ ] 线上：`/api/health` 的 `build.goVersion` 为 go1.26.x；登录、文本任务事件流、图片与视频生成、素材访问正常。
+- [ ] 浏览器验收：首页创作连续提交两次视频生成，第一次任务的进度刷新期间，第二次提交保持“提交中”，不会提前解锁导致重复提交。
+
 ## 稳定性与安全审计修复：后台 panic 边界、真实客户端 IP、会话失效与请求超时
 - 已修复（后端稳定性）：worker 循环、任务执行、Agent 会话与审批续跑、播放副本回填、管理员批量查询的 panic 不再让进程退出；任务 panic 收口为“结果待核对”的失败终态。MP4 解析对 64 位 box 长度做减法边界检查；ffmpeg 转码并发为 CPU 核数一半、单个最长 2 小时并先写 `.part`；ffprobe 最长 30 秒；回填没有新记录时退出。
 - 已修复（安全）：客户端 IP 只取可信代理写入的 `X-Real-IP`，镜像内 nginx 用 realip 从 `X-Forwarded-For` 右侧还原真实地址，客户端伪造的左侧地址不再生效；登录新增不含 IP 的账号级上限（单 IP 上限的 5 倍）；`CANVAS_CORS_ORIGINS=*` 启动即报错；配置 `CANVAS_BOOTSTRAP_TOKEN` 后首个管理员注册必须填写口令（一键部署脚本首次安装自动生成）；Agent 桥接令牌常量时间比较；yingce-agent 连接不走出网代理；错误日志脱敏 URL、IP 与令牌后记录原因；nginx 增加 `X-Content-Type-Options: nosniff`。
