@@ -21,8 +21,7 @@
 
 <p align="center">
   <a href="https://yingce.tv"><strong>在线演示 yingce.tv</strong></a>（账号/密码：test/test123456） ·
-  <a href="#快速开始">本地启动</a> ·
-  <a href="#服务器部署">服务器部署</a>
+  <a href="#快速开始">本地启动</a>
 </p>
 
 > 项目仍在快速开发，数据结构和外部接口可能调整。默认适合个人、本地或可信环境部署；未经安全配置，不要直接作为公网多人服务使用。
@@ -182,7 +181,7 @@ GitHub 用户：[@TripsCoder](https://github.com/TripsCoder) · [@sugtex](https:
 
 - [Bun](https://bun.sh/)：前端和文档站
 - [Go 1.25](https://go.dev/)：后端
-- Docker Compose：仅在使用容器开发或部署时需要
+- Docker Compose：仅在使用容器开发时需要
 
 ### 宿主机启动
 
@@ -217,7 +216,7 @@ Windows PowerShell 用户可在仓库根目录执行：
 
 ### Docker 开发与本地构建
 
-以下命令用于本地开发或试运行。部署服务器并使用后台在线更新，请使用下文的官方 Release 镜像部署。
+以下命令用于本地开发或试运行。
 
 源码热更新：
 
@@ -232,7 +231,7 @@ LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) \
 docker compose -f docker-compose.local.yml up -d --build
 ```
 
-热更新开发默认前端端口为 `3000`、后端端口为 `8080`；端口冲突时可通过 `CANVAS_WEB_HOST_PORT` 和 `CANVAS_BACKEND_HOST_PORT` 覆盖。本地构建编排只暴露 web 的 `3000`，后端留在容器网络内，不安装 Host Updater。
+热更新开发默认前端端口为 `3000`、后端端口为 `8080`；端口冲突时可通过 `CANVAS_WEB_HOST_PORT` 和 `CANVAS_BACKEND_HOST_PORT` 覆盖。本地构建编排只暴露 web 的 `3000`，后端留在容器网络内。
 
 更多本地开发说明（包括时间线字幕转写）见[本地开发文档](docs/content/docs/backend/local-development.mdx)。
 
@@ -253,40 +252,6 @@ docker compose -f docker-compose.local.yml up -d --build
 ```
 
 前端业务 API 统一经 `web/src/services/api/request.ts` 调用。生产环境由 Nginx 托管前端并代理后端，公网只需暴露 web 入口；SSE 仅在明确的流式路径关闭代理缓冲。
-
-## 服务器部署
-
-### 官方 Release 镜像（推荐，支持后台在线更新）
-
-适用于使用 systemd 的 Linux 服务器。先从 [GitHub Releases](https://github.com/ddcat-ai/open-ai-canvas/releases) 选择包含镜像、Host Updater 二进制和 `SHA256SUMS` 的已发布版本，将下方 `vX.Y.Z` 替换为该版本：
-
-```bash
-CANVAS_RELEASE=vX.Y.Z
-curl -fsSL "https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/${CANVAS_RELEASE}/scripts/install-server-image.sh" \
-  | sudo env CANVAS_IMAGE_TAG="${CANVAS_RELEASE}" REPOSITORY_REF="${CANVAS_RELEASE}" bash
-```
-
-脚本使用 `docker-compose.deploy.yml`，启动 PostgreSQL、Redis、独立 `yingce-agent`、backend 和 web，由一次性 `migrate` 服务迁移数据库，并安装宿主机 Host Updater。backend、web、Agent 镜像会固定为对应 GHCR digest。默认访问 `http://服务器IP:3000`，安装完成后在“系统配置 → 系统更新”检查后续版本。
-
-查看状态和日志：
-
-```bash
-cd /opt/open-ai-canvas
-sudo docker compose --env-file .env -f docker-compose.deploy.yml ps
-sudo docker compose --env-file .env -f docker-compose.deploy.yml logs -f --tail=200
-```
-
-### 源码构建与已有部署
-
-需要运行自行修改的源码时，可以使用源码安装脚本：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server.sh | sudo bash
-```
-
-脚本使用 PostgreSQL、Redis、独立 Agent 和源码构建叠加层，但不安装 Host Updater；该部署不属于后台在线更新管理范围，需自行构建、备份和升级。根目录的 `docker-compose.yml`、`docker-compose.local.yml` 和自行编写的两容器 SQLite 编排用于本地试运行，不作为默认服务器部署方案。
-
-已有 SQLite 或自定义 Compose 部署，不能只替换 Compose 文件或补装更新器就获得在线更新；应先核对原数据卷、完成备份和数据迁移。方案选择见 [Docker 部署](docs/content/docs/overview/docker.mdx)，更新约束、备份和回退见[系统更新文档](docs/content/docs/backend/system-update.mdx)。
 
 ## 安全边界
 
