@@ -235,12 +235,6 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 图片任务进入保存阶段后，详情和摘要的 `previewUrl` 指向 `GET /api/tasks/:id/source-image`。该接口校验当前用户对任务的归属，保存前临时重定向到上游图片地址或读取暂存图片，保存完成后重定向到资源文件。上游地址仅保存在加密恢复记录中，不写入任务公开 JSON。画布可用 `task-source:<任务 ID>` 作为参考图 `storageKey` 立即提交下一次生成；服务端读取原任务并按目标模型协议解析参考图，待保存完成后画布自动换成正式资源地址。
 
-## 生成结果浏览器直传对象存储
-
-配置 S3 兼容对象存储时，生成图片、视频和音频会先进入 `client_upload_pending`。客户端通过 `GET /tasks/:id/media-upload-sources` 获取短期上游地址，再以文件大小和 MIME 调用 `POST /tasks/:id/media-upload-intent`。图片使用签名 PUT；视频使用 8MB 分片签名并在 `POST /resources/:id/direct-upload/complete` 中回传分片 ETag。服务端通过 `HEAD` 校验对象大小、MIME 和 ETag 后登记资源，客户端最后调用 `POST /tasks/:id/media-upload-complete` 完成原任务和画布产物登记。
-
-直传失败调用 `POST /resources/:id/direct-upload/abort` 清理待上传资源，并由 `POST /tasks/:id/media-upload-fail` 保留加密恢复记录、把任务置为可恢复失败；不会重新发起 AI 生成。对象存储未启用或不是 S3 时沿用旧的后端下载、暂存和恢复路径。上游 URL 不进入公开任务结果、普通日志或画布内容。
-
 ## 素材读取合同
 
 素材详情、批量读取、分页列表和用户数据快照统一返回完整素材记录。`id`、`kind`、`title`、分类、状态和主版本以素材表列为准；媒体内容保留在 `data` 中。项目上传资源转换为素材时即写入该合同，媒体大小使用 `data.bytes`；只有存储键的媒体仍返回字符串类型的 `url`（图片为 `dataUrl`），可以为空，由 `storageKey` 定位资源。

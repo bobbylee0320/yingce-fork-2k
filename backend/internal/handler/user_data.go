@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -291,19 +290,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		var req struct {
-			MultipartUploadID string                     `json:"multipartUploadId"`
-			Parts             []service.DirectUploadPart `json:"parts"`
-			Generated         bool                       `json:"generated"`
-		}
-		if c.Request.Body != nil {
-			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
-			if bindErr := c.ShouldBindJSON(&req); bindErr != nil && !errors.Is(bindErr, io.EOF) {
-				fail(c, http.StatusBadRequest, bindErr)
-				return
-			}
-		}
-		resource, err := svc.CompleteDirectResourceUpload(user.ID, c.Param("id"), req.MultipartUploadID, req.Parts, req.Generated)
+		resource, err := svc.CompleteDirectImageUpload(user.ID, c.Param("id"))
 		if err != nil {
 			failService(c, err)
 			return
@@ -316,30 +303,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		resource, err := svc.FailDirectResourceUpload(user.ID, c.Param("id"), "")
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		ok(c, gin.H{"resource": resource})
-	})
-	r.POST("/resources/:id/direct-upload/abort", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		var req struct {
-			MultipartUploadID string `json:"multipartUploadId"`
-		}
-		if c.Request.Body != nil {
-			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<10)
-			if bindErr := c.ShouldBindJSON(&req); bindErr != nil && !errors.Is(bindErr, io.EOF) {
-				fail(c, http.StatusBadRequest, bindErr)
-				return
-			}
-		}
-		resource, err := svc.FailDirectResourceUpload(user.ID, c.Param("id"), req.MultipartUploadID)
+		resource, err := svc.FailDirectImageUpload(user.ID, c.Param("id"))
 		if err != nil {
 			failService(c, err)
 			return

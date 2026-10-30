@@ -21,49 +21,12 @@ func (r *Repository) SaveTaskMediaCheckpoint(task *model.Task, encrypted, stage 
 	return nil
 }
 
-// Client completion runs after the worker has released its lease. Keep the
-// same checkpoint contract while requiring an explicitly unleased task.
-func (r *Repository) SaveTaskMediaCheckpointWithoutLease(task *model.Task, encrypted, stage string) error {
-	result := r.db.Model(&model.Task{}).
-		Where("id = ? AND user_id = ? AND status = ? AND (lease_owner = '' OR lease_owner IS NULL)", task.ID, task.UserID, model.TaskStatusRunning).
-		Updates(map[string]any{"media_recovery_json": encrypted, "media_stage": stage, "updated_at": time.Now()})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return ErrTaskStateConflict
-	}
-	task.MediaRecoveryJSON, task.MediaStage = encrypted, stage
-	return nil
-}
-
-// PauseTaskForClientUpload releases the worker lease while keeping the task
-// active. The browser resumes the delivery through the task media endpoints;
-// no worker should download the upstream URL during this window.
-func (r *Repository) PauseTaskForClientUpload(id, owner string) error {
-	now := time.Now()
-	result := taskLeaseWriter(r.db.Model(&model.Task{}), owner).
-		Where("id = ? AND status = ?", id, model.TaskStatusRunning).
-		Updates(map[string]any{
-			"stage": "等待浏览器上传生成作品", "media_stage": "client_upload_pending", "progress": 100,
-			"error": "", "completed_at": nil, "next_poll_at": now.Add(365 * 24 * time.Hour),
-			"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
-		})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return ErrTaskStateConflict
-	}
-	return nil
-}
-
 // Manual recovery requeues the same task and order, never a new generation.
 func (r *Repository) RequeueTaskMediaRecovery(task *model.Task, encrypted string) error {
 	now := time.Now()
 	result := r.db.Model(&model.Task{}).
 		Where("id = ? AND user_id = ? AND status = ? AND media_recovery_json = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?)", task.ID, task.UserID, model.TaskStatusFailed, task.MediaRecoveryJSON, now).
-		Updates(map[string]any{"status": model.TaskStatusQueued, "stage": "等待恢复作品保存", "media_stage": "download", "error": "", "completed_at": nil, "next_poll_at": nil, "lease_owner": "", "lease_expires_at": nil, "media_recovery_json": encrypted, "updated_at": now})
+		Updates(map[string]any{"status": model.TaskStatusQueued, "stage": "等待恢复作品保存", "error": "", "completed_at": nil, "next_poll_at": nil, "lease_owner": "", "lease_expires_at": nil, "media_recovery_json": encrypted, "updated_at": now})
 	if result.Error != nil {
 		return result.Error
 	}
