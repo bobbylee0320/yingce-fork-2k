@@ -28,6 +28,7 @@ const mediaStagingMinFreeBytes int64 = 5 << 30
 func mediaStagingCapacityAvailable(freeBytes, reservation int64, available, writable bool) bool {
 	return available && writable && reservation > 0 && reservation <= mediaStagingBudget && freeBytes >= reservation && freeBytes-reservation >= mediaStagingMinFreeBytes
 }
+const mediaStagingTTL = 24 * time.Hour
 
 // 单次结果下载的时限：上游慢但一直在传输时允许跑完，长时间收不到任何字节才判定卡住。
 // 原来的固定 3 分钟总时限会让慢速结果服务器上的大图永远下载不完——每次重试都从零开始，

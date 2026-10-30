@@ -1,0 +1,651 @@
+# bobby异步视频插件接口说明
+
+依据 `https://newapi.bobby707.xyz/docs`「平台统一 API 调用文档」实现。服务根地址不含 `/v1`；所有接口均使用本站 Bearer Key。JSON 请求使用 `Content-Type: application/json`。
+
+## 协议身份
+
+- 插件名称：`bobby异步视频插件`。
+- 插件 ID / Provider ID：`bobby-async-video`。
+- 能力：视频生成。
+- 默认 Base URL：`https://newapi.bobby707.xyz`。
+- 鉴权：`Authorization: Bearer <API_KEY>`。
+- 创建：`POST /v1/videos`，JSON 异步任务。
+- 查询：`GET /v1/videos/{id}`。
+- 下载：`GET /v1/videos/{id}/content`，`Accept: video/mp4`，返回二进制。
+
+## 创建请求映射
+
+| 上游字段 | 插件来源 | 规则 |
+| --- | --- | --- |
+| `model` | `request.model` | 必填，本站完整对外模型标识 |
+| `prompt` | `request.prompt` | 必填非空文本 |
+| `seconds` | `request.duration` | 必填正整数秒；不转成字符串，不支持 `-1` |
+| `resolution` | `request.resolution` | 可选；必须与 `aspect_ratio` 成对填写 |
+| `aspect_ratio` | `request.aspectRatio` | 可选；必须与 `resolution` 成对填写 |
+| `input_reference` | 唯一 `first_frame` 图片 | 单张首帧 URL；与 `reference_*` 数组互斥 |
+| `reference_images` | 其他 `request.images` | 对象数组：`{ "image_url": "URL" }` |
+| `reference_videos` | `request.videos` | 对象数组：`{ "video_url": "URL" }` |
+| `reference_audios` | `request.audios` | 对象数组：`{ "audio_url": "URL" }` |
+
+空的可选字段省略，不发送 `null` 或空数组。图像角色 `first_frame` 映射到 `input_reference`；普通参考图映射到 `reference_images`。网页通用合同未定义独立 `last_frame` 字段，因此插件拒绝 `last_frame`，不把尾帧误当成全能参考图。单首帧模式不能与参考图、参考视频或参考音频数组混用。
+
+网页示例的全能参考请求：
+
+```json
+{
+  "model": "MODEL_ID",
+  "prompt": "保持图片人物，参考视频运镜并参考音频氛围",
+  "seconds": 5,
+  "resolution": "720p",
+  "aspect_ratio": "16:9",
+  "reference_images": [{ "image_url": "https://cdn.example/character.jpg" }],
+  "reference_videos": [{ "video_url": "https://cdn.example/motion.mp4" }],
+  "reference_audios": [{ "audio_url": "https://cdn.example/voice.mp3" }]
+}
+```
+
+单首帧示例：
+
+```json
+{
+  "model": "MODEL_ID",
+  "prompt": "以图片为首帧，人物缓缓回头",
+  "seconds": 5,
+  "resolution": "720p",
+  "aspect_ratio": "16:9",
+  "input_reference": "https://cdn.example/first.jpg"
+}
+```
+
+素材必须是生成期间有效、服务端可直接读取的 HTTP(S) URL；文档没有定义通用素材上传接口。不要发送本地路径、`file://`、`blob:`、内联 Data URL、数组字符串，或文档未定义的 `n`、`video_count`、`stream`、`quality`、`generate_audio`、`watermark` 等字段。具体模型限制、有效比例、分辨率、素材数量及价格以后台模型能力为准。
+
+## 任务轮询
+
+创建成功的任务响应以顶层公开 `id` 为准：
+
+```json
+{
+  "id": "public-task-id",
+  "object": "video",
+  "model": "MODEL_ID",
+  "status": "queued",
+  "progress": 0,
+  "created_at": 1793000000
+}
+```
+
+插件首先读取 `id`，兼容 `task_id`、`taskId` 和 `data.id` 包装。查询只使用 `GET /v1/videos/{id}`，不会重复创建任务。
+
+| 上游 `status` | 宿主状态 | 行为 |
+| --- | --- | --- |
+| `queued` | 等待中 | 查询原任务 |
+| `in_progress` | 处理中 | 查询原任务 |
+| `completed` | 成功 | 立即调用 `/content` 下载 |
+| `failed` | 失败 | 读取 `error.message`，停止轮询 |
+| `unknown` | 等待中 | 保留原 ID，稍后继续查询 |
+
+`progress` 只用于展示，不能代替状态。建议约每 10 秒查询，长时间排队时放慢并设置等待上限；超时后保留任务 ID，不自动重新创建。
+
+## 鉴权结果下载
+
+视频任务状态为 `completed` 后，宿主执行：
+
+```http
+GET /v1/videos/TASK_ID/content
+Authorization: Bearer API_KEY
+Accept: video/mp4
+```
+
+该响应是视频二进制，不是 JSON，也不是无需鉴权的永久播放地址。插件把内容下载到画布后端并保存为正式资源。必须检查 HTTP 状态和响应头；仅 HTTP 200 或有效的分段响应 206 才能作为视频内容。文件可能到期或被删除，应完成后及时持久化。
+
+## 错误处理
+
+兼容网页定义的两种错误格式：
+
+```json
+{ "code": "error-category", "message": "error details", "data": null }
+```
+
+```json
+{ "error": { "message": "error details", "type": "error type", "code": "error-category" } }
+```
+
+任务查询即使 HTTP 200，也须按 `status` 判断；`failed` 时读取任务内错误。创建请求遇到超时、断线或 5xx 时可能已被接收，不可自动重发。拿到 ID 后只查询原任务。401/403 检查令牌和模型权限；429 降低并发；额度、素材、审核和版权失败按实例提示处理。
+
+## 管理配置
+
+在后台「模型管理 → 系统渠道」新建视频渠道，协议选择 `bobby异步视频插件`，填写服务根地址、本站 API Key、对外模型 ID、计费，以及目标模型实际支持的参数。后台「插件管理」的平台状态统一控制此系统协议是否可用；普通用户不能单独启停。
+
+<!-- YINGCE_MANIFEST_CONTRACT_START -->
+## Manifest 完整接口定义
+
+以下 JSON 与插件包内实际 `manifest.json` 逐字段一致；documentation 使用占位文本避免递归。
+
+```json
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "bobby-async-video",
+  "name": "bobby异步视频插件",
+  "version": "1.1.0",
+  "author": "Bobby / NewAPI",
+  "description": "按 NewAPI 平台统一 API 文档实现的 JSON 异步视频协议，含公开任务轮询和鉴权二进制下载。",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "bobby-async-video",
+        "label": "bobby异步视频插件",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://newapi.bobby707.xyz",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "本站配置的完整对外模型标识。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "非空视频提示词。"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "required": true,
+            "mapping": "seconds",
+            "description": "整数秒数，不能使用毫秒或 -1。"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "required": false,
+            "mapping": "resolution",
+            "description": "与 aspectRatio 同时填写，值以模型能力为准。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "required": false,
+            "mapping": "aspect_ratio",
+            "description": "与 resolution 同时填写，值以模型能力为准。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "required": false,
+            "mapping": "reference_images or input_reference",
+            "description": "普通图片为全能参考；唯一 first_frame 图片映射到单首帧 input_reference。"
+          },
+          {
+            "name": "videos",
+            "type": "media[]",
+            "required": false,
+            "mapping": "reference_videos",
+            "description": "全能参考视频 URL。"
+          },
+          {
+            "name": "audios",
+            "type": "media[]",
+            "required": false,
+            "mapping": "reference_audios",
+            "description": "全能参考音频 URL。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$gt": [
+                {
+                  "$len": {
+                    "$trim": {
+                      "$ref": "request.model"
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "请填写本站可用的完整视频模型 ID。"
+          },
+          {
+            "assert": {
+              "$gt": [
+                {
+                  "$len": {
+                    "$trim": {
+                      "$ref": "request.prompt"
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "视频提示词不能为空。"
+          },
+          {
+            "assert": {
+              "$gt": [
+                {
+                  "$ref": "request.duration"
+                },
+                0
+              ]
+            },
+            "message": "seconds 必须是正整数秒数。"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$and": [
+                    {
+                      "$eq": [
+                        {
+                          "$len": {
+                            "$ref": "request.resolution"
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$eq": [
+                        {
+                          "$len": {
+                            "$ref": "request.aspectRatio"
+                          }
+                        },
+                        0
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$gt": [
+                        {
+                          "$len": {
+                            "$ref": "request.resolution"
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$gt": [
+                        {
+                          "$len": {
+                            "$ref": "request.aspectRatio"
+                          }
+                        },
+                        0
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "resolution 与 aspect_ratio 必须同时填写或同时省略。"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$sortByOrder": {
+                          "$ref": "request.images"
+                        }
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$ref": "media.role"
+                          },
+                          "last_frame"
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "本站通用视频文档没有定义独立 last_frame 字段，请移除尾帧或使用目标模型专用协议。"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$sortByOrder": {
+                          "$ref": "request.images"
+                        }
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$ref": "media.role"
+                          },
+                          "first_frame"
+                        ]
+                      }
+                    }
+                  }
+                },
+                1
+              ]
+            },
+            "message": "input_reference 只支持一张首帧图片。"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$sortByOrder": {
+                              "$ref": "request.images"
+                            }
+                          },
+                          "as": "media",
+                          "where": {
+                            "$eq": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              "first_frame"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$add": [
+                        {
+                          "$len": {
+                            "$filter": {
+                              "from": {
+                                "$sortByOrder": {
+                                  "$ref": "request.images"
+                                }
+                              },
+                              "as": "media",
+                              "where": {
+                                "$ne": [
+                                  {
+                                    "$ref": "media.role"
+                                  },
+                                  "first_frame"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "$len": {
+                            "$sortByOrder": {
+                              "$ref": "request.videos"
+                            }
+                          }
+                        },
+                        {
+                          "$len": {
+                            "$sortByOrder": {
+                              "$ref": "request.audios"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    0
+                  ]
+                }
+              ]
+            },
+            "message": "input_reference 单首帧模式不能与 reference_* 全能参考素材混用。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/videos",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "seconds": {
+              "$ref": "request.duration"
+            },
+            "resolution": {
+              "$omitEmpty": {
+                "$ref": "request.resolution"
+              }
+            },
+            "aspect_ratio": {
+              "$omitEmpty": {
+                "$ref": "request.aspectRatio"
+              }
+            },
+            "input_reference": {
+              "$first": {
+                "$map": {
+                  "from": {
+                    "$filter": {
+                      "from": {
+                        "$sortByOrder": {
+                          "$ref": "request.images"
+                        }
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$ref": "media.role"
+                          },
+                          "first_frame"
+                        ]
+                      }
+                    }
+                  },
+                  "as": "media",
+                  "in": {
+                    "$ref": "media.value"
+                  }
+                }
+              }
+            },
+            "reference_images": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$filter": {
+                      "from": {
+                        "$sortByOrder": {
+                          "$ref": "request.images"
+                        }
+                      },
+                      "as": "media",
+                      "where": {
+                        "$ne": [
+                          {
+                            "$ref": "media.role"
+                          },
+                          "first_frame"
+                        ]
+                      }
+                    }
+                  },
+                  "as": "media",
+                  "in": {
+                    "image_url": {
+                      "$ref": "media.value"
+                    }
+                  }
+                }
+              }
+            },
+            "reference_videos": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$sortByOrder": {
+                      "$ref": "request.videos"
+                    }
+                  },
+                  "as": "media",
+                  "in": {
+                    "video_url": {
+                      "$ref": "media.value"
+                    }
+                  }
+                }
+              }
+            },
+            "reference_audios": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$sortByOrder": {
+                      "$ref": "request.audios"
+                    }
+                  },
+                  "as": "media",
+                  "in": {
+                    "audio_url": {
+                      "$ref": "media.value"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/videos/{{taskId}}",
+          "contentType": "application/json"
+        },
+        "result": {
+          "method": "GET",
+          "path": "/v1/videos/{{taskId}}/content",
+          "headers": {
+            "Accept": "video/mp4"
+          }
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "response.taskId"
+              },
+              {
+                "$ref": "response.data.id"
+              },
+              {
+                "$ref": "response.data.task_id"
+              },
+              {
+                "$ref": "response.data.taskId"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              {
+                "$ref": "response.data.status"
+              },
+              "queued"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.message"
+              },
+              {
+                "$ref": "response.data.error.message"
+              }
+            ]
+          },
+          "errorPaths": [
+            "error.code",
+            "data.error.code",
+            "code"
+          ],
+          "messagePaths": [
+            "error.message",
+            "data.error.message",
+            "message"
+          ]
+        }
+      }
+    ]
+  },
+  "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>"
+}
+```
+<!-- YINGCE_MANIFEST_CONTRACT_END -->
