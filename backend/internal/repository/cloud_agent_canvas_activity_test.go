@@ -119,7 +119,17 @@ func testCanvasAgentHistoryPlan(t *testing.T, db *gorm.DB) {
 	}
 	var plan string
 	if db.Dialector.Name() == "postgres" {
-		if err := db.Raw("EXPLAIN (ANALYZE, FORMAT JSON) "+canvasAgentActivitySQL, "history", "history-canvas", "history", "history-canvas").Scan(&plan).Error; err != nil {
+		// On this ~1k-row fixture the planner may cost a sequential scan below the
+		// partial index, because it multiplies correlated column selectivities and
+		// expects dozens of active rows. Disabling sequential scans for this EXPLAIN
+		// only asks whether each branch can use its active-only index, which is what
+		// keeps the read cheap on production-size tables.
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec("SET LOCAL enable_seqscan = off").Error; err != nil {
+				return err
+			}
+			return tx.Raw("EXPLAIN (ANALYZE, FORMAT JSON) "+canvasAgentActivitySQL, "history", "history-canvas", "history", "history-canvas").Scan(&plan).Error
+		}); err != nil {
 			t.Fatal(err)
 		}
 	} else {
