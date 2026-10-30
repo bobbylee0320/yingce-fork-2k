@@ -88,7 +88,12 @@ func testCanvasAgentHistoryPlan(t *testing.T, db *gorm.DB) {
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		for i := range 1000 {
 			id := fmt.Sprintf("pi-history-%d", i)
-			if err := tx.Create(&model.Task{ID: id, UserID: "history", ProjectID: "history-canvas", Operation: "cloud_agent", Status: model.TaskStatusTextReplay}).Error; err != nil {
+			// History rows start in their final checkpointed state, so they never enter
+			// the active-only reservation index. Inserting them as reservations and
+			// checkpointing afterwards leaves 1000 dead tuples, and VACUUM cannot remove
+			// them while any older transaction is open (in CI, another test package on
+			// the same database); the planner then stops using the partial index.
+			if err := tx.Create(&model.Task{ID: id, UserID: "history", ProjectID: "history-canvas", Operation: "cloud_agent", Status: model.TaskStatusTextReplay, AgentExecutionReady: true}).Error; err != nil {
 				return err
 			}
 			if err := New(tx).EnsureCloudAgent(&model.CloudAgentExecution{ID: id, UserID: "history", Status: "completed"}); err != nil {
@@ -103,27 +108,19 @@ func testCanvasAgentHistoryPlan(t *testing.T, db *gorm.DB) {
 	if err != nil || activity != nil {
 		t.Fatalf("history occupancy: %+v %v", activity, err)
 	}
-	// Clear dead reservation-index entries created by the insert/checkpoint
-	// fixture sequence before testing the steady-state historical read plan.
-	analyze := "ANALYZE"
 	if db.Dialector.Name() == "postgres" {
-		analyze = "VACUUM ANALYZE tasks"
-	}
-	if err := db.Exec(analyze).Error; err != nil {
-		t.Fatal(err)
-	}
-	if db.Dialector.Name() == "postgres" {
-		if err := db.Exec("ANALYZE cloud_agent_executions").Error; err != nil {
-			t.Fatal(err)
+		for _, table := range []string{"tasks", "cloud_agent_executions"} {
+			if err := db.Exec("ANALYZE " + table).Error; err != nil {
+				t.Fatal(err)
+			}
 		}
+	} else if err := db.Exec("ANALYZE").Error; err != nil {
+		t.Fatal(err)
 	}
 	var plan string
 	if db.Dialector.Name() == "postgres" {
-		// On this ~1k-row fixture the planner may cost a sequential scan below the
-		// partial index, because it multiplies correlated column selectivities and
-		// expects dozens of active rows. Disabling sequential scans for this EXPLAIN
-		// only asks whether each branch can use its active-only index, which is what
-		// keeps the read cheap on production-size tables.
+		// Rule out sequential scans so the check only compares index paths; on a
+		// table this small the planner may otherwise prefer a sequential scan.
 		if err := db.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Exec("SET LOCAL enable_seqscan = off").Error; err != nil {
 				return err
