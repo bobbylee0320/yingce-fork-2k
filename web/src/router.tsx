@@ -64,7 +64,6 @@ const ProjectCreatePage = lazy(loadProjectCreatePage);
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const ReferralPage = lazy(() => import("@/pages/referral"));
 const AdminReferralPage = lazyAdminPage(() => import("@/pages/admin/referral/referral-admin-page"));
-const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
 const UserLayout = lazy(() => import("@/layouts/user-layout"));
 const RequireFeature = lazy(() => import("@/components/auth/require-feature").then((module) => ({ default: module.RequireFeature })));
 
@@ -106,6 +105,12 @@ function devRoutes() {
         { path: "/dev/folders", element: fullScreenDeferred(<FolderPreviewLab />), errorElement: <RouteErrorPage /> },
         { path: "/dev/previs-repro", element: fullScreenDeferred(<PrevisReproLab />), errorElement: <RouteErrorPage /> },
     ];
+}
+
+/** DEV 专用、需要工作区外壳和登录态的调试页；同 devRoutes 一样写在函数体内，生产构建会摇树删除。 */
+function devWorkspaceRoutes() {
+    const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
+    return [{ path: "/test-voice-recording", element: <RequireAuth>{deferred(<TestVoiceRecording />)}</RequireAuth> }];
 }
 
 export const router = createBrowserRouter([
@@ -175,7 +180,7 @@ export const router = createBrowserRouter([
             },
             { path: "/settings", element: <RequireAuth>{deferred(<SettingsPage />)}</RequireAuth> },
             { path: "/referral", element: <RequireAuth>{deferred(<ReferralPage />)}</RequireAuth> },
-            { path: "/test-voice-recording", element: <RequireAuth>{deferred(<TestVoiceRecording />)}</RequireAuth> },
+            ...(import.meta.env.DEV ? devWorkspaceRoutes() : []),
             {
                 path: "/projects",
                 element: (

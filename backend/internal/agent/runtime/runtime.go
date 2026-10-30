@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,9 @@ import (
 
 const requestLimit = 32 << 20
 const lineLimit = 4 << 20
+
+// bridgeShutdownGrace 是关闭桥接服务时等待进行中调用结束的上限。
+const bridgeShutdownGrace = 5 * time.Second
 
 type Bridge struct {
 	Model func(context.Context, map[string]json.RawMessage) (any, error)
@@ -147,7 +151,15 @@ func StartBridge(listenAddr, advertiseHost string, bridge Bridge) (*BridgeServer
 	return &BridgeServer{
 		URL:   fmt.Sprintf("http://%s:%d", advertiseHost, tcpAddr.Port),
 		Token: token,
-		Close: func() { _ = server.Shutdown(context.Background()) },
+		// Shutdown 会等待进行中的桥接调用结束；运行被取消时不能因为一个仍在进行的模型调用
+		// 一直卡住，超过宽限时间后强制关闭连接。
+		Close: func() {
+			ctx, cancel := context.WithTimeout(context.Background(), bridgeShutdownGrace)
+			defer cancel()
+			if err := server.Shutdown(ctx); err != nil {
+				_ = server.Close()
+			}
+		},
 	}, nil
 }
 
@@ -175,7 +187,7 @@ func ReadOutput(stdout io.Reader) error {
 }
 
 func BridgeCall(w http.ResponseWriter, r *http.Request, expectedToken string, handler func(context.Context, map[string]json.RawMessage) (any, error)) {
-	if r.Header.Get("Authorization") != "Bearer "+expectedToken {
+	if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+expectedToken)) != 1 {
 		http.Error(w, `{"error":"unauthorized bridge"}`, http.StatusUnauthorized)
 		return
 	}

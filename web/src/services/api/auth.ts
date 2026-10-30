@@ -4,6 +4,7 @@ import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
 import type { CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
 import type { FeatureAvailability } from "@/stores/use-user-store";
 import { http, apiBaseURL } from "@/services/api/request";
+import { announceAuthLogout } from "@/services/auth-broadcast";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
 import type { VerificationPolicy } from "./verification";
 import type { AccountFileStorageUsage } from "@/services/api/resources";
@@ -413,6 +414,8 @@ export function getAuthSettings() {
     return http.get<
         VerificationPolicy & {
             firstUser: boolean;
+            /** 系统还没有用户且部署配置了初始化口令时为 true，首个管理员注册必须填写。 */
+            bootstrapTokenRequired?: boolean;
             registrationEnabled: boolean;
             linuxdoEnabled: boolean;
             emailEnabled: boolean;
@@ -436,7 +439,8 @@ export function getAuthSession() {
     if (authSessionCache && authSessionCache.expiresAt > now) return Promise.resolve(authSessionCache.payload);
     if (authSessionRequest) return authSessionRequest;
     authSessionRequest = http
-        .get<AuthSessionPayload>("/auth/session")
+        // 启动阶段整个工作区在等这个请求；后端卡住时要按超时失败，交给启动页重试。
+        .get<AuthSessionPayload>("/auth/session", { timeout: 15_000 })
         .then((payload) => {
             authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
             return payload;
@@ -484,7 +488,7 @@ export function resetPassword(input: { email: string; emailCode: string; passwor
     return http.post<{ reset: boolean }>("/auth/password-reset", input);
 }
 
-export async function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; ticket?: string; displayName?: string; password: string; acceptedTerms: boolean; referralCode?: string }) {
+export async function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; ticket?: string; displayName?: string; password: string; acceptedTerms: boolean; referralCode?: string; bootstrapToken?: string }) {
     const result = await http.post<{ user: LocalUser }>("/auth/register", input);
     invalidateAuthSessionCache();
     return result;
@@ -493,7 +497,14 @@ export async function register(input: { username: string; email?: string; emailC
 export async function logout() {
     const result = await http.post<{ ok: boolean }>("/auth/logout");
     invalidateAuthSessionCache();
+    announceAuthLogout();
     return result;
+}
+
+/** 直接读取服务端会话，不使用 5 秒缓存；用于确认 401 是否真的代表会话失效。 */
+export function fetchAuthSessionFresh() {
+    invalidateAuthSessionCache();
+    return http.get<AuthSessionPayload>("/auth/session", { timeout: 15_000 });
 }
 
 export type AdminListParams = { keyword?: string; status?: string; role?: string; group?: string; page?: number; pageSize?: number };

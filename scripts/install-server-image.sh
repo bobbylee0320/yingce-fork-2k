@@ -2,7 +2,9 @@
 
 set -Eeuo pipefail
 
-REPOSITORY_REF="${REPOSITORY_REF:-main}"
+# 未显式指定时与镜像 Release 使用同一 Git 标签，避免 main 上较新的 Compose 配合旧镜像启动失败。
+REQUESTED_REPOSITORY_REF="${REPOSITORY_REF:-}"
+REPOSITORY_REF="${REQUESTED_REPOSITORY_REF:-main}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/open-ai-canvas}"
 CANVAS_HTTP_PORT="${CANVAS_HTTP_PORT:-3000}"
 REQUESTED_IMAGE_TAG="${CANVAS_IMAGE_TAG:-}"
@@ -11,8 +13,33 @@ IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-ghcr.io/ddcat-ai/open-ai-canvas}"
 CANVAS_BACKEND_IMAGE=""
 CANVAS_WEB_IMAGE=""
 COMPOSE_FILE="docker-compose.deploy.yml"
-COMPOSE_URL="${COMPOSE_URL:-https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/${REPOSITORY_REF}/${COMPOSE_FILE}}"
-UPDATER_INSTALL_URL="${UPDATER_INSTALL_URL:-https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/${REPOSITORY_REF}/scripts/install-host-updater.sh}"
+REQUESTED_COMPOSE_URL="${COMPOSE_URL:-}"
+REQUESTED_UPDATER_INSTALL_URL="${UPDATER_INSTALL_URL:-}"
+COMPOSE_URL=""
+UPDATER_INSTALL_URL=""
+BOOTSTRAP_TOKEN_CREATED=""
+
+# resolve_source_urls 在确定镜像 Release 后再拼下载地址：未显式指定 REPOSITORY_REF 时
+# 使用与镜像相同的 v<tag>，保证 Compose、更新器脚本与镜像来自同一个 Release。
+resolve_source_urls() {
+    if [[ -z "$REQUESTED_REPOSITORY_REF" && -n "$CANVAS_IMAGE_TAG" ]]; then
+        REPOSITORY_REF="v${CANVAS_IMAGE_TAG}"
+    fi
+    COMPOSE_URL="${REQUESTED_COMPOSE_URL:-https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/${REPOSITORY_REF}/${COMPOSE_FILE}}"
+    UPDATER_INSTALL_URL="${REQUESTED_UPDATER_INSTALL_URL:-https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/${REPOSITORY_REF}/scripts/install-host-updater.sh}"
+}
+
+# check_http_port 只在首次安装时检查端口；升级时端口由本项目的 web 容器占用属于正常情况。
+check_http_port() {
+    if [[ -f "${INSTALL_DIR}/.env" ]] || ! command -v ss >/dev/null 2>&1; then
+        return 0
+    fi
+    local listeners
+    listeners="$(ss -ltnH "( sport = :${CANVAS_HTTP_PORT} )" 2>/dev/null || true)"
+    if [[ -n "$listeners" ]]; then
+        fail "端口 ${CANVAS_HTTP_PORT} 已被占用，请通过 CANVAS_HTTP_PORT 指定其他端口后重试"
+    fi
+}
 
 step() {
     printf '\n==> %s\n' "$1"
@@ -139,6 +166,8 @@ prepare_environment() {
     CANVAS_WEB_IMAGE="${IMAGE_REPOSITORY}-web:${CANVAS_IMAGE_TAG}"
     CANVAS_YINGCE_AGENT_IMAGE="${IMAGE_REPOSITORY}-yingce-agent:${CANVAS_IMAGE_TAG}"
     umask 077
+    # 首个注册用户会成为管理员；口令只在部署完成时打印一次，防止公网实例被他人抢先注册。
+    BOOTSTRAP_TOKEN_CREATED="$(openssl rand -hex 16)"
     cat >.env <<EOF
 POSTGRES_DB=open_ai_canvas
 POSTGRES_USER=open_ai_canvas
@@ -154,6 +183,7 @@ CANVAS_REGISTRATION_ENABLED=false
 CANVAS_ALLOW_PRIVATE_UPSTREAMS=false
 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=
 CANVAS_CORS_ORIGINS=
+CANVAS_BOOTSTRAP_TOKEN=${BOOTSTRAP_TOKEN_CREATED}
 EOF
 }
 
@@ -220,16 +250,24 @@ print_result() {
     printf '访问地址：http://%s:%s\n' "$local_ip" "$CANVAS_HTTP_PORT"
     printf '安装目录：%s\n' "$INSTALL_DIR"
     printf '查看状态：cd %q && docker compose --env-file .env -f %s ps\n' "$INSTALL_DIR" "$COMPOSE_FILE"
-    printf '\n首次打开后注册的第一个账号会自动成为管理员。公网长期使用前请配置 HTTPS。\n'
+    if [[ -n "$BOOTSTRAP_TOKEN_CREATED" ]]; then
+        printf '\n首次打开后注册的第一个账号会成为管理员，注册时需填写初始化口令：%s\n' "$BOOTSTRAP_TOKEN_CREATED"
+        printf '口令保存在 %s/.env 的 CANVAS_BOOTSTRAP_TOKEN，管理员创建后不再需要。\n' "$INSTALL_DIR"
+    else
+        printf '\n首次打开后注册的第一个账号会自动成为管理员。\n'
+    fi
+    printf '公网长期使用前请配置 HTTPS。\n'
 }
 
 main() {
     require_root
+    check_http_port
     step "安装服务器基础工具"
     install_packages
     install_docker
     login_ghcr
     prepare_environment
+    resolve_source_urls
     download_compose
     start_services
     install_host_updater

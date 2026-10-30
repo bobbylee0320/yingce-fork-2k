@@ -191,6 +191,8 @@ const defaultGenerationTaskListDependencies: GenerationTaskListDependencies = {
         tasks: await http.get<GenerationTask[]>("/tasks", {
                 params: { pageSize: Math.min(page.limit, 100), projectId: page.projectId, activeOnly: page.activeOnly || undefined },
                 signal,
+                // 列表是只读轮询，后端卡住时按超时失败交给页面提示，不能让加载态一直挂着。
+                timeout: 30_000,
             }),
     }),
 };
@@ -540,6 +542,7 @@ async function waitForGenerationTaskTextEvents(id: string, options: WaitForGener
         options.onTaskUpdate?.(lastTask);
     }
     const timeoutMs = options.timeoutMs || taskWaitTimeoutMs(lastTask);
+    let consecutiveFailures = 0;
     while (Date.now() - startedAt < timeoutMs) {
         if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
         let terminalReceived = false;
@@ -552,11 +555,18 @@ async function waitForGenerationTaskTextEvents(id: string, options: WaitForGener
                 credentials: "include",
                 signal: options.signal,
             });
-            if (!response.ok) throw new TaskTextStreamFatalError(await taskTextStreamHTTPError(response));
+            if (!response.ok) {
+                const message = await taskTextStreamHTTPError(response);
+                // 部署重启、网关超时或限流期间任务仍在服务端运行，按可恢复的断线重连，
+                // 只有鉴权、任务不存在等 4xx 才结束观察。
+                if (isRetryableTextStreamStatus(response.status)) throw new Error(message);
+                throw new TaskTextStreamFatalError(message);
+            }
             if (!(response.headers.get("content-type") || "").toLowerCase().includes("text/event-stream")) {
                 throw new TaskTextStreamFatalError("任务文本流接口未返回事件流，请检查后端地址和反向代理配置");
             }
             if (!response.body) throw new Error("任务文本流不可用");
+            consecutiveFailures = 0;
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             const parser = createTaskTextStreamParser();
@@ -615,10 +625,22 @@ async function waitForGenerationTaskTextEvents(id: string, options: WaitForGener
             if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
             if (error instanceof TaskTextStreamFatalError || error instanceof GenerationTaskTerminalError) throw error;
             lastStreamError = error;
+            consecutiveFailures += 1;
         }
-        await delay(intervalMs, options.signal);
+        await delay(textStreamReconnectDelay(intervalMs, consecutiveFailures), options.signal);
     }
     throw new Error(lastStreamError instanceof Error ? `任务文本流同步失败：${lastStreamError.message}` : "任务执行超时，请稍后重试");
+}
+
+function isRetryableTextStreamStatus(status: number) {
+    return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+/** 连续失败时指数退避并加随机抖动，避免后端恢复瞬间所有页面同时重连。 */
+function textStreamReconnectDelay(intervalMs: number, consecutiveFailures: number) {
+    if (consecutiveFailures <= 0) return intervalMs;
+    const backoff = Math.min(30_000, intervalMs * 2 ** Math.min(consecutiveFailures - 1, 5));
+    return Math.round(backoff * (0.75 + Math.random() * 0.5));
 }
 
 function asTaskTextStreamRecord(value: unknown): Record<string, unknown> {

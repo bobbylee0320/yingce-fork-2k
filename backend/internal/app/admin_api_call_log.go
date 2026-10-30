@@ -9,6 +9,7 @@ import (
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 func (s *Service) LogAPICall(log model.ApiCallLog) error {
@@ -65,15 +66,69 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
-	usage, err := s.repo.UserStorageUsage(log.UserID)
+	usage, err := s.cachedAPICallLogUsage(log.UserID)
 	if err != nil {
 		return err
 	}
 	incomingBytes := int64(len(log.Path) + len(log.Model) + len(log.ProviderRequestID) + len(log.ErrorCode) + len(log.Error) + len(log.UpstreamURL) + len(log.RequestContentType) + len(log.RequestBody) + len(log.ResponseBody))
 	if err := validateAPICallLogQuotaWithPolicy(usage, incomingBytes, policy.Resource); err != nil {
+		// 超限时丢弃快照，下一次按真实用量重新判断（例如管理员刚归档过历史）。
+		delete(s.apiLogUsageCache, log.UserID)
 		return err
 	}
-	return s.repo.Create(&log)
+	if err := s.repo.Create(&log); err != nil {
+		return err
+	}
+	s.noteAPICallLogUsage(log.UserID, incomingBytes)
+	return nil
+}
+
+// apiLogUsageCacheTTL 是调用日志配额基线允许的最长陈旧时间。
+// UserStorageUsage 会汇总该用户全部历史表，每条上游请求都在 storageMu 内重算会让所有用户排队。
+const apiLogUsageCacheTTL = 30 * time.Second
+
+// apiLogUsageCacheLimit 限制快照条目数，超过时先清理过期项。
+const apiLogUsageCacheLimit = 10_000
+
+type apiLogUsageEntry struct {
+	usage repository.UserStorageUsage
+	at    time.Time
+}
+
+// cachedAPICallLogUsage 返回调用日志配额判断所需的用量；调用方必须持有 storageMu。
+// 快照最多陈旧 apiLogUsageCacheTTL，期间由 noteAPICallLogUsage 累加本进程写入的日志。
+func (s *Service) cachedAPICallLogUsage(userID string) (repository.UserStorageUsage, error) {
+	now := time.Now()
+	if entry, ok := s.apiLogUsageCache[userID]; ok && now.Sub(entry.at) < apiLogUsageCacheTTL {
+		return entry.usage, nil
+	}
+	usage, err := s.repo.UserStorageUsage(userID)
+	if err != nil {
+		return usage, err
+	}
+	if s.apiLogUsageCache == nil {
+		s.apiLogUsageCache = make(map[string]apiLogUsageEntry)
+	}
+	if len(s.apiLogUsageCache) >= apiLogUsageCacheLimit {
+		for key, entry := range s.apiLogUsageCache {
+			if now.Sub(entry.at) >= apiLogUsageCacheTTL {
+				delete(s.apiLogUsageCache, key)
+			}
+		}
+	}
+	s.apiLogUsageCache[userID] = apiLogUsageEntry{usage: usage, at: now}
+	return usage, nil
+}
+
+// noteAPICallLogUsage 把刚写入的日志计入快照；调用方必须持有 storageMu。
+func (s *Service) noteAPICallLogUsage(userID string, bytes int64) {
+	entry, ok := s.apiLogUsageCache[userID]
+	if !ok {
+		return
+	}
+	entry.usage.APICallCount++
+	entry.usage.TaskBytes += bytes
+	s.apiLogUsageCache[userID] = entry
 }
 
 func (s *Service) mergeAsyncMediaAPICallLog(log model.ApiCallLog) (bool, error) {

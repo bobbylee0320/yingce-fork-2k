@@ -38,6 +38,7 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !enforceRateLimit(c, "redeem:"+user.ID, 10, time.Hour) {
 			return
 		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
 		var req struct {
 			Code string `json:"code"`
 		}

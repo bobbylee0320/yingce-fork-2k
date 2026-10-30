@@ -1,5 +1,5 @@
 import { CollectionToolbar } from "@/components/layout/collection-toolbar";
-import { App, Button, Drawer, Form, Input, Modal, Typography } from "antd";
+import { Alert, App, Button, Drawer, Form, Input, Modal, Typography } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import { Bug, LayoutGrid, List, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
@@ -69,6 +69,7 @@ export default function TasksPage() {
     const { view: viewPreferenceKey, group: groupPreferenceKey } = preferenceKeys();
     const [domainProjects, setDomainProjects] = useState<ProjectSummary[]>([]);
     const [loading, setLoading] = useState(false);
+    const [loadError, setLoadError] = useState("");
     const [actingId, setActingId] = useState("");
     const [createOpen, setCreateOpen] = useState(false);
     const [creating, setCreating] = useState(false);
@@ -241,10 +242,14 @@ export default function TasksPage() {
         try {
             const next = await listGenerationTasks();
             setTasks((current) => reconcileTaskSummaries(current, next));
+            setLoadError("");
             void syncCompletedCanvasTasks(next);
             return next;
         } catch (error) {
-            if (showLoading) message.error(error instanceof Error ? error.message : "任务加载失败");
+            const text = error instanceof Error ? error.message : "任务加载失败";
+            // 后台轮询失败也要留下可见状态，否则后端不可用时列表停在旧数据上没有任何提示。
+            setLoadError(text);
+            if (showLoading) message.error(text);
             return undefined;
         } finally {
             if (showLoading) setLoading(false);
@@ -434,7 +439,17 @@ export default function TasksPage() {
 
                 <div className="collection-content task-collection-content">
                     {loading && !tasks.length ? <div className="library-loading-grid" aria-label="正在加载任务">{Array.from({ length: 8 }, (_, index) => <div key={index} className="library-skeleton" />)}</div> : null}
-                    {!loading || tasks.length ? (
+                    {loadError && tasks.length ? (
+                        <Alert className="mb-3" type="warning" showIcon title="任务状态同步中断，正在自动重试" description={loadError} action={<Button size="small" onClick={() => void loadTasks(true)}>立即重试</Button>} />
+                    ) : null}
+                    {!loading && loadError && !tasks.length ? (
+                        <WorkspaceState
+                            compact
+                            title="任务加载失败"
+                            description={loadError}
+                            action={<Button onClick={() => void loadTasks(true)}>重试</Button>}
+                        />
+                    ) : !loading || tasks.length ? (
                         visibleTasks.length ? (
                             viewMode === "grid" ? (
                                 <div className="task-grid-view">

@@ -8,50 +8,67 @@
              空 data URL 只是为了不让浏览器去请求 /favicon.ico（那会是一条 404）。 -->
         <link rel="icon" href="data:," />
         <title>正在加载</title>
+        <meta name="theme-color" content="#f4f4f5" />
         <style>
             /* Fix layer order before production chunks can register utilities ahead of base. */
             @layer theme, base, components, utilities;
 
-            html,
-            body {
-                margin: 0;
-                background: #ffffff;
-            }
-            #root:empty {
-                min-height: 100vh;
-            }
-            #root:empty::before {
-                content: "";
-                position: fixed;
-                left: 50%;
-                top: 50%;
-                width: 12px;
-                height: 12px;
-                margin: -6px 0 0 -6px;
-                background: rgba(255, 255, 255, 0.84);
-                border-radius: 999px;
-                box-shadow: 0 0 0 7px rgba(255, 255, 255, 0.08);
-                animation: appearance-bootstrap-pulse 1.8s ease-in-out infinite;
-            }
-            #root:empty::after {
-                content: "";
-                position: fixed;
-                left: 50%;
-                top: 50%;
-                width: 82px;
-                height: 82px;
-                margin: -42px 0 0 -42px;
-                border: 1px solid rgba(255, 255, 255, 0.14);
-                border-right-color: transparent;
-                border-radius: 999px;
-                animation: appearance-bootstrap-orbit 2.8s linear infinite;
-            }
-            @keyframes appearance-bootstrap-pulse { 0%, 100% { opacity: .62; transform: scale(.82); } 50% { opacity: 1; transform: scale(1.08); } }
-            @keyframes appearance-bootstrap-orbit { to { transform: rotate(360deg); } }
-            @media (prefers-reduced-motion: reduce) {
-                #root:empty::before,
+            /* 启动样式放在 base 层：应用样式加载后由同层的 globals 规则接管底色；
+               深色主题在 JS 主包加载前就使用深色底，避免白屏闪烁。 */
+            @layer base {
+                html,
+                body {
+                    margin: 0;
+                    background: #ffffff;
+                }
+                html.dark,
+                html.dark body {
+                    background: #101011;
+                }
+                #root:empty {
+                    min-height: 100vh;
+                }
+                #root:empty::before {
+                    content: "";
+                    position: fixed;
+                    left: 50%;
+                    top: 50%;
+                    width: 12px;
+                    height: 12px;
+                    margin: -6px 0 0 -6px;
+                    background: rgba(17, 17, 19, 0.62);
+                    border-radius: 999px;
+                    box-shadow: 0 0 0 7px rgba(17, 17, 19, 0.06);
+                    animation: appearance-bootstrap-pulse 1.8s ease-in-out infinite;
+                }
                 #root:empty::after {
-                    animation: none;
+                    content: "";
+                    position: fixed;
+                    left: 50%;
+                    top: 50%;
+                    width: 82px;
+                    height: 82px;
+                    margin: -42px 0 0 -42px;
+                    border: 1px solid rgba(17, 17, 19, 0.16);
+                    border-right-color: transparent;
+                    border-radius: 999px;
+                    animation: appearance-bootstrap-orbit 2.8s linear infinite;
+                }
+                html.dark #root:empty::before {
+                    background: rgba(255, 255, 255, 0.84);
+                    box-shadow: 0 0 0 7px rgba(255, 255, 255, 0.08);
+                }
+                html.dark #root:empty::after {
+                    border-color: rgba(255, 255, 255, 0.14);
+                    border-right-color: transparent;
+                }
+                @keyframes appearance-bootstrap-pulse { 0%, 100% { opacity: .62; transform: scale(.82); } 50% { opacity: 1; transform: scale(1.08); } }
+                @keyframes appearance-bootstrap-orbit { to { transform: rotate(360deg); } }
+                @media (prefers-reduced-motion: reduce) {
+                    #root:empty::before,
+                    #root:empty::after {
+                        animation: none;
+                    }
                 }
             }
         </style>
@@ -61,10 +78,12 @@
                 var t = s.state && s.state.theme === "dark" ? "dark" : "light";
                 document.documentElement.classList.toggle("dark", t === "dark");
                 document.documentElement.style.colorScheme = t;
+                var m = document.querySelector('meta[name="theme-color"]');
+                if (m) m.setAttribute("content", t === "dark" ? "#101011" : "#f4f4f5");
             } catch (e) {}
         </script>
     </head>
-    <body class="bg-background text-foreground antialiased" style="background:#ffffff">
+    <body class="bg-background text-foreground antialiased">
         <div id="root"></div>
         <script type="module" src="/src/main.tsx"></script>
     </body>

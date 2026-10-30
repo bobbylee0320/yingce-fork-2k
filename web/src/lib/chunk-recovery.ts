@@ -4,6 +4,25 @@ let recovering = false;
 
 export function installChunkRecovery() {
     window.addEventListener("vite:preloadError", handlePreloadError);
+    stripRecoveryMarker();
+}
+
+/**
+ * 恢复刷新后去掉地址栏里的时间戳标记，避免被复制分享。只有会话存储里已记下恢复标记时才去掉；
+ * 存储不可用时 URL 标记是唯一的防循环依据，必须保留。
+ */
+function stripRecoveryMarker() {
+    try {
+        const href = window.location?.href;
+        if (!href) return;
+        const url = new URL(href);
+        if (!url.searchParams.has(RECOVERY_QUERY)) return;
+        if (sessionStorage.getItem(RECOVERY_KEY) !== "1") return;
+        url.searchParams.delete(RECOVERY_QUERY);
+        window.history.replaceState(window.history.state, "", url.toString());
+    } catch {
+        // 读不到会话存储或历史接口时保留标记，继续用它防止循环刷新。
+    }
 }
 
 export function markChunkRecoverySucceeded() {

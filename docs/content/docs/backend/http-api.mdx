@@ -265,6 +265,8 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 `POST /auth/register` 的 JSON 请求必须携带布尔值 `acceptedTerms: true`，首次创建管理员也适用。缺省、`false` 或 `null` 均按未同意处理，在创建用户、消费验证码和创建会话前返回 HTTP 400，提示 `请先同意<协议名称>`。原有注册开放、邮箱白名单、验证码与限流校验继续生效。
 
+系统还没有任何用户时，首个注册账号成为管理员。部署配置了 `CANVAS_BOOTSTRAP_TOKEN` 时，`GET /auth/settings` 在 `firstUser: true` 之外返回 `bootstrapTokenRequired: true`，`POST /auth/register` 必须携带相同的 `bootstrapToken`，否则返回 HTTP 403 `forbidden`。一键部署脚本首次安装时生成该口令并打印；未配置时保持原有行为，已有用户的实例不受影响。
+
 `GET /auth/linuxdo/start` 可携带 `acceptedTerms=true`，只有该精确值表示同意。服务端将标志写入一次性的 OAuth state；回调仅在新建 Linux.do 用户时要求该 state 已同意，不从回调参数重新取值。已有 Linux.do 用户可从登录页继续登录，无需传此参数；同意协议不绕过注册关闭策略。
 
 协议名称与正文由管理员在 `PATCH /admin/settings/registration` 配置，公开读取面是 `GET /auth/settings` 的 `agreementTitle`、`agreementContent`。`agreementTitle` 未配置时按当前外观品牌名生成 `<品牌名>服务协议`，因此外观改名后注册页文案同步；接口返回的标题不含书名号，由注册页补《》。`agreementContent` 支持多段文本，按空行分段渲染，留空时注册页提示“服务协议内容待补充”。
@@ -351,6 +353,10 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 用户模型目录、报价、任务创建、工作台任务、短剧模型选择、云端 Agent 模型列表和系统渠道中转都按当前用户分组过滤系统渠道：分组未绑定的渠道不出现在 `GET /model-catalog` 与 `GET /models`，直接提交其 `channelId` 时报价、建任务和中转返回 `reason=model_catalog_mismatch`。管理员账号可见全部渠道。目录与报价返回的价格档单价（`unitPriceMicrocredits`、Token 单价）已按分组换算为实际扣费的微积分，含全局积分倍率、分组倍率和模型倍率；分组未配置该货币兑换比例的模型不进入目录，报价返回 `model_price_not_configured`。
 
 `GET /auth/session` 增加 `userGroup`：`{ code, name, badgeLabel, badgeStyle, ratioBasisPoints }`，分组配置缺失时为 `null`。用户对象增加 `userGroup`（空串表示 `default`）。
+
+`GET /auth/session` 只在未登录、会话失效、账号已删除或被禁用时返回 `{ user: null }`；数据库等暂时故障返回 HTTP 503，前端据此停留在“服务暂时不可用”并自动重试，不再把已登录用户当成匿名送到登录页。前端收到业务接口的 401 `unauthorized` 后会重新读取一次会话，确认 `user` 为空才退出工作区，因此“当前密码不正确”这类 401 不会触发退出。
+
+客户端 IP（登录、注册、验证码、公开分享限流与登录日志）只取可信代理写入的 `X-Real-IP`。镜像内 nginx 通过 realip 从 `X-Forwarded-For` 右侧跳过本机与私网代理后得到真实地址；请求不是来自可信代理时使用 TCP 对端地址。可信网段默认是本机与私网，可用 `CANVAS_TRUSTED_PROXIES` 覆盖。登录在“IP + 账号”上限之外，另有不含 IP 的账号级上限（单 IP 上限的 5 倍）。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |

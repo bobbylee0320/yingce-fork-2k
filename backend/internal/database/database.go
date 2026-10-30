@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"yingce/backend/internal/logging"
 
@@ -55,11 +57,30 @@ func ConfigurePool(db *gorm.DB) error {
 		return err
 	}
 	if db.Dialector.Name() == "postgres" {
-		sqlDB.SetMaxOpenConns(30)
-		sqlDB.SetMaxIdleConns(10)
+		maxOpen, err := poolSizeFromEnv("CANVAS_DB_MAX_OPEN_CONNS", 30)
+		if err != nil {
+			return err
+		}
+		sqlDB.SetMaxOpenConns(maxOpen)
+		sqlDB.SetMaxIdleConns(min(10, maxOpen))
+		// 定期轮换连接：数据库重启、故障切换或中间代理回收连接后，失效连接不会一直留在池里。
+		sqlDB.SetConnMaxLifetime(30 * time.Minute)
+		sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 		return nil
 	}
 	sqlDB.SetMaxOpenConns(8)
 	sqlDB.SetMaxIdleConns(4)
 	return nil
+}
+
+func poolSizeFromEnv(key string, fallback int) (int, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 || value > 500 {
+		return 0, fmt.Errorf("%s 必须是 1-500 的整数", key)
+	}
+	return value, nil
 }

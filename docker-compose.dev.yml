@@ -56,7 +56,8 @@ services:
     init: true
 
   web:
-    image: oven/bun:1.3.13
+    # 与 package.json 的 packageManager、生产 Dockerfile 和 CI 使用同一 Bun 版本，避免锁文件解析差异。
+    image: oven/bun:1.3.9
     working_dir: /workspace/web
     command: ["sh", "-c", "bun install --frozen-lockfile && bun run dev"]
     environment:

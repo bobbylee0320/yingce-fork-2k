@@ -98,11 +98,11 @@ export type AdminPaymentProvider = PaymentProvider & {
 };
 
 export function listPaymentProviders() {
-    return http.get<{ providers: PaymentProvider[] }>("/payments/providers");
+    return http.get<{ providers: PaymentProvider[] }>("/payments/providers", { timeout: 30_000 });
 }
 
 export function listTopupProducts() {
-    return http.get<{ products: TopupProduct[] }>("/payments/products");
+    return http.get<{ products: TopupProduct[] }>("/payments/products", { timeout: 30_000 });
 }
 
 export function createPaymentOrder(input: { productId: string; providerId: string; idempotencyKey: string }) {

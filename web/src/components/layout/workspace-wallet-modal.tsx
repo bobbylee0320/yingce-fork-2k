@@ -107,6 +107,7 @@ export function WorkspaceWalletModal({
     const [selectedProviderId, setSelectedProviderId] = useState("");
     const [code, setCode] = useState("");
     const [redeeming, setRedeeming] = useState(false);
+    const redeemingRef = useRef(false);
     const requestSequence = useRef(0);
     const storageQuery = useAccountFileStorageUsage(open);
     const grantsQuery = useQuery({ queryKey: storageGrantsQueryKey, queryFn: listMyStorageGrants, enabled: open });
@@ -186,11 +187,14 @@ export function WorkspaceWalletModal({
     }, [open, pendingPaymentOrderId]);
 
     const redeem = async () => {
+        // 回车与按钮都会触发；按钮的 loading 挡不住输入框里连按回车，需要单独防重入。
+        if (redeemingRef.current) return;
         const normalized = code.trim().toLowerCase();
         if (normalized.length !== 32) {
             message.error("请输入完整的 32 位兑换码");
             return;
         }
+        redeemingRef.current = true;
         setRedeeming(true);
         try {
             await redeemCredits(normalized);
@@ -200,6 +204,7 @@ export function WorkspaceWalletModal({
         } catch (error) {
             message.error(error instanceof Error ? error.message : "兑换失败");
         } finally {
+            redeemingRef.current = false;
             setRedeeming(false);
         }
     };
@@ -326,7 +331,8 @@ export function WorkspaceWalletModal({
                                     <TicketCheck />
                                 </div>
                                 <div className="workspace-wallet-redeem-row">
-                                    <Input size="large" value={code} maxLength={32} placeholder="输入 32 位兑换码" onChange={(event) => setCode(event.target.value.replace(/\s/g, ""))} onPressEnter={() => void redeem()} />
+                                    {/* 先去掉空白再截断：maxLength 会在去空格之前截断粘贴内容，带空格的卡密会被截短。 */}
+                                    <Input size="large" value={code} placeholder="输入 32 位兑换码" onChange={(event) => setCode(event.target.value.replace(/\s/g, "").slice(0, 32))} onPressEnter={() => void redeem()} />
                                     <Button size="large" loading={redeeming} disabled={code.trim().length !== 32} onClick={() => void redeem()}>
                                         确认兑换
                                     </Button>

@@ -19,6 +19,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// loginAccountRateMultiplier 是账号级登录上限相对“IP+账号”上限的倍数。
+const loginAccountRateMultiplier = 5
+
 func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerChannelOrderRoutes(r, svc)
 	registerNotificationRoutes(r, svc)
@@ -134,6 +137,11 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !enforceRateLimit(c, "login:"+c.ClientIP()+":"+subject, policy.Request.LoginAccountPerTenMinutes, 10*time.Minute) {
 			return
 		}
+		// 不含 IP 的账号级上限挡住多 IP 轮换撞同一账号；阈值放宽到单 IP 上限的 5 倍，
+		// 降低他人故意输错把正常用户锁住的影响。
+		if !enforceRateLimit(c, "login-account:"+subject, policy.Request.LoginAccountPerTenMinutes*loginAccountRateMultiplier, 10*time.Minute) {
+			return
+		}
 		req.LoginContext = loginRequestContext(c)
 		c.Set("login_audit_handled", true)
 		result, err := svc.Login(req)
@@ -168,7 +176,14 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/auth/session", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
-			ok(c, gin.H{"user": nil})
+			// 未登录、会话失效或账号被禁用才按匿名返回；数据库等暂时故障必须如实返回错误，
+			// 否则前端会把已登录用户当成匿名并跳到登录页。
+			var appErr *service.AppError
+			if errors.As(err, &appErr) && (appErr.Status == http.StatusUnauthorized || appErr.Status == http.StatusForbidden) {
+				ok(c, gin.H{"user": nil})
+				return
+			}
+			failInternal(c, http.StatusServiceUnavailable, err)
 			return
 		}
 		publicUser, err := svc.PublicAuthUser(user)

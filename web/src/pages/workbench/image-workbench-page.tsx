@@ -9,6 +9,7 @@ import { ImageSizePicker } from "@/components/image-size-picker";
 import { MediaPreview } from "@/components/media-preview";
 import { ModelPicker } from "@/components/model-picker";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
+import { SafeImage } from "@/components/ui/product/safe-image";
 import { WorkspacePage } from "@/components/layout/workspace-page";
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { normalizeCanvasNodeMentionTokens, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -1037,7 +1038,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                             <div className="workbench-tool-bar">
                                 <span className="workbench-kind-label">{kind === "image" ? "图片生成" : "视频生成"}</span>
                                 <button type="button" className="workbench-tool-choice" aria-expanded={toolLibraryOpen} aria-haspopup="dialog" aria-controls="workbench-tool-library" onClick={() => setToolLibraryOpen((open) => !open)}>
-                                    <span className="workbench-tool-choice-mark">{tool?.iconUrl ? <img src={tool.iconUrl} alt="" /> : kind === "image" ? <FileImage /> : <Video />}</span>
+                                    <span className="workbench-tool-choice-mark"><SafeImage src={tool?.iconUrl} alt="" fallback={kind === "image" ? <FileImage /> : <Video />} /></span>
                                     <span className="workbench-tool-choice-copy">
                                         <small>{tool ? (isModelIdLike(tool.subtitle) ? tool.description || "创作工具" : tool.subtitle || tool.description || "创作工具") : "直接创作"}</small>
                                         <strong>{tool?.name || "选择创作工具"}</strong>
@@ -1387,7 +1388,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                                             <span>{tool.resultExample.title || "效果参考"}</span>
                                             {tool.resultExample.imageUrls?.slice(0, 3).map((url) => (
                                                 <span className="workbench-example-thumb" key={url}>
-                                                    <img src={url} alt="工具效果参考" />
+                                                    <SafeImage src={url} alt="工具效果参考" fallback={<FileImage aria-hidden="true" />} />
                                                 </span>
                                             ))}
                                             {tool.resultExample.videoUrl ? (
@@ -1686,7 +1687,7 @@ function QuickGoalCard({ tool, kind, onClick }: { tool: WorkbenchTool; kind: Wor
     const visual = toolVisual(tool, kind);
     return (
         <button type="button" className={`workbench-goal-card is-${visual.tone}`} onClick={onClick}>
-            <span className="workbench-goal-icon">{tool.coverUrl || tool.iconUrl ? <img src={tool.coverUrl || tool.iconUrl} alt="" /> : visual.icon}</span>
+            <span className="workbench-goal-icon"><SafeImage src={tool.coverUrl || tool.iconUrl} alt="" fallback={visual.icon} /></span>
             <span className="workbench-goal-copy">
                 <strong>{tool.name}</strong>
                 <small>{tool.subtitle || visual.label}</small>
@@ -1702,7 +1703,7 @@ function ToolCard({ tool, selected, onClick }: { tool: WorkbenchTool; selected: 
     return (
         <button type="button" className={`workbench-tool-card ${selected ? "is-selected" : ""} is-${visual.tone}`} aria-pressed={selected} onClick={onClick}>
             <SpotlightSurface className="workbench-tool-card-spotlight" contentClassName="workbench-tool-card-surface relative z-[1]" spotlightColor="color-mix(in srgb, var(--user-ink) 5%, transparent)">
-                <span className="workbench-tool-card-image">{tool.coverUrl || tool.iconUrl ? <img src={tool.coverUrl || tool.iconUrl} alt="" /> : visual.icon}</span>
+                <span className="workbench-tool-card-image"><SafeImage src={tool.coverUrl || tool.iconUrl} alt="" fallback={visual.icon} /></span>
                 <span className="workbench-tool-card-copy">
                     <strong>{tool.name}</strong>
                     <small>{subtitle}</small>

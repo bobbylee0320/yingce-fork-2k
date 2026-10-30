@@ -4,6 +4,7 @@ import "yingce/backend/internal/app"
 
 var (
 	ErrPlaybackNotReady                        = app.ErrPlaybackNotReady
+	RedactLogText                              = app.RedactLogText
 	ErrNotBuiltinSkill                         = app.ErrNotBuiltinSkill
 	AllowedPrivateUpstreamHost                 = app.AllowedPrivateUpstreamHost
 	AppearanceAssetMaxBytes                    = app.AppearanceAssetMaxBytes

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
 	"yingce/backend/internal/repository"
 )
 
@@ -213,27 +214,10 @@ func (s *Service) AdminBatchQueryFailedVideoTasks(ctx context.Context, actor *mo
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			item := ProviderTaskRecoveryItem{LogID: id}
-			log, logErr := s.repo.APICallLog(id)
-			if logErr != nil {
-				item.Error = logErr.Error()
-				_ = s.appendAdminAudit(actor, "api_log.query_provider_task", "api_call_log", id, "批量查询视频任务失败", map[string]any{"apiCallLogId": id, "outcome": "failed", "error": item.Error})
-				result.Items[index] = item
-				return
+			// 子 goroutine 不受 Gin Recovery 保护：单条记录 panic 只标记该条失败，不能让整个进程退出。
+			if platform.RunRecovered("admin_video_recovery:"+id, func() { s.adminBatchQueryFailedVideoTask(ctx, actor, id, index, result) }) {
+				result.Items[index] = ProviderTaskRecoveryItem{LogID: id, Error: "查询异常，已跳过本条"}
 			}
-			if log.Capability != "video" {
-				item.Error = "跳过：不是视频请求明细"
-				_ = s.appendAdminAudit(actor, "api_log.query_provider_task", "api_call_log", id, "批量查询跳过非视频请求", map[string]any{"apiCallLogId": id, "outcome": "skipped", "error": item.Error})
-				result.Items[index] = item
-				return
-			}
-			queryResult, queryErr := s.AdminQueryFailedVideoTask(ctx, actor, id, "")
-			if queryErr != nil {
-				item.Error = queryErr.Error()
-			} else {
-				item.Recovered, item.ProviderStatus = queryResult.Recovered, queryResult.ProviderStatus
-			}
-			result.Items[index] = item
 		}()
 	}
 	wg.Wait()
@@ -247,6 +231,31 @@ func (s *Service) AdminBatchQueryFailedVideoTasks(ctx context.Context, actor *mo
 		}
 	}
 	return result, nil
+}
+
+// adminBatchQueryFailedVideoTask 处理批量查询中的单条请求明细；每条只写自己的 result.Items[index]。
+func (s *Service) adminBatchQueryFailedVideoTask(ctx context.Context, actor *model.User, id string, index int, result *ProviderTaskRecoveryBatchResult) {
+	item := ProviderTaskRecoveryItem{LogID: id}
+	log, logErr := s.repo.APICallLog(id)
+	if logErr != nil {
+		item.Error = logErr.Error()
+		_ = s.appendAdminAudit(actor, "api_log.query_provider_task", "api_call_log", id, "批量查询视频任务失败", map[string]any{"apiCallLogId": id, "outcome": "failed", "error": item.Error})
+		result.Items[index] = item
+		return
+	}
+	if log.Capability != "video" {
+		item.Error = "跳过：不是视频请求明细"
+		_ = s.appendAdminAudit(actor, "api_log.query_provider_task", "api_call_log", id, "批量查询跳过非视频请求", map[string]any{"apiCallLogId": id, "outcome": "skipped", "error": item.Error})
+		result.Items[index] = item
+		return
+	}
+	queryResult, queryErr := s.AdminQueryFailedVideoTask(ctx, actor, id, "")
+	if queryErr != nil {
+		item.Error = queryErr.Error()
+	} else {
+		item.Recovered, item.ProviderStatus = queryResult.Recovered, queryResult.ProviderStatus
+	}
+	result.Items[index] = item
 }
 
 func (s *Service) adminRecoveryTask(logID string) (*model.ApiCallLog, *model.Task, error) {

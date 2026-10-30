@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,7 @@ type Service struct {
 	emailCodeMu              sync.Mutex
 	redeemBatchMu            sync.Mutex
 	storageMu                sync.Mutex
+	apiLogUsageCache         map[string]apiLogUsageEntry // 由 storageMu 保护
 	storageTestMu            sync.Mutex
 	workerRuntimeMu          sync.Mutex
 	agentSchedulerMu         sync.Mutex
@@ -173,6 +175,7 @@ func newService(repo *repository.Repository, dataDir string) *Service {
 	service.tools = tools.New(service.repo)
 	service.prompts = prompts.New(service.repo, promptAdminGate{svc: service})
 	service.auth = auth.New(service.repo, authHost{svc: service}, nil)
+	service.auth.SetBootstrapToken(os.Getenv("CANVAS_BOOTSTRAP_TOKEN"))
 	service.sms = service.newSMSDomain()
 	service.auth.SetSMSDelivery(service.sms)
 	service.canvas = canvas.New(service.repo, canvasHost{svc: service})

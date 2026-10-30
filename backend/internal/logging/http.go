@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/kernel"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -97,6 +99,7 @@ func isStreamResponse(c *gin.Context) bool {
 }
 
 // Recovery 替代 gin.Recovery：panic 与堆栈进入统一日志，而不是直接写带颜色码的 stderr。
+// 响应沿用统一错误信封，前端才能显示中文提示而不是传输层的英文状态描述。
 func Recovery() gin.HandlerFunc {
 	return gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, recovered any) {
 		slog.ErrorContext(c.Request.Context(), "http panic recovered",
@@ -106,6 +109,15 @@ func Recovery() gin.HandlerFunc {
 			"panic", recovered,
 			"stack", string(debug.Stack()),
 		)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		if c.Writer.Written() {
+			c.Abort()
+			return
+		}
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+			"code":   http.StatusInternalServerError,
+			"data":   nil,
+			"msg":    "系统处理失败，请稍后重试",
+			"reason": kernel.ReasonInternal,
+		})
 	})
 }

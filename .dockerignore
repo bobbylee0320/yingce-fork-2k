@@ -14,8 +14,11 @@ data
 backend/data
 backend/*.db
 backend/cmd/server/server
+backend/server
+backend/agent-runtime/pi/node_modules
 .serena
 .local
+**/.local
 web/.next
 web/dist
 web/node_modules

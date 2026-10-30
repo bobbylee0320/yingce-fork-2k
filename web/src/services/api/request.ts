@@ -42,6 +42,18 @@ export const apiBaseURL = import.meta.env.VITE_CANVAS_BACKEND_URL || "/api";
 export const apiClient = axios.create({ baseURL: apiBaseURL, withCredentials: true });
 
 /**
+ * 订阅业务接口返回的 HTTP 401 + reason `unauthorized`，回调收到请求路径；返回取消订阅函数。
+ * 401 不一定代表会话失效（例如“当前密码不正确”），订阅方需要自行向服务端确认。
+ */
+export function onUnauthorizedResponse(listener: (url?: string) => void) {
+    const interceptor = apiClient.interceptors.response.use(undefined, (error: unknown) => {
+        if (axios.isAxiosError<{ reason?: string }>(error) && error.response?.status === 401 && error.response.data?.reason === "unauthorized") listener(error.config?.url);
+        return Promise.reject(error);
+    });
+    return () => apiClient.interceptors.response.eject(interceptor);
+}
+
+/**
  * 解包后端业务信封的唯一边界。这里把非零业务 code 转成 ApiError，保留 reason、重试语义和 Retry-After；
  * 取消请求必须继续抛出 AbortError，不能被包装成普通失败，否则页面切换会被误报为错误。
  */
@@ -76,6 +88,10 @@ function unwrapTransportError(error: unknown): never {
     if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) {
         const status = error.response?.status;
         const code = error.response?.data?.code;
+        if (!error.response && isTimeoutError(error)) {
+            // 超时没有 HTTP 响应，axios 的英文描述不适合直接展示；按可重试的暂时性错误交给上层。
+            throw new ApiError("请求超时，请检查网络后重试", { reason: "timeout", retryable: true, cause: error });
+        }
         throw new ApiError(error.response?.data?.msg || transportFailureMessage(status, error.message), {
             status,
             code,
@@ -91,8 +107,14 @@ function unwrapTransportError(error: unknown): never {
     throw error;
 }
 
+function isTimeoutError(error: { code?: string; message?: string }) {
+    return error.code === "ETIMEDOUT" || (error.code === "ECONNABORTED" && /timeout/i.test(error.message || ""));
+}
+
 function transportFailureMessage(status?: number, fallback?: string) {
     switch (status) {
+        case 500:
+            return "服务器处理失败，请稍后重试";
         case 502:
             return "后端服务暂时不可用，请稍后重试";
         case 503:

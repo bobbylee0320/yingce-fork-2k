@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -24,7 +26,28 @@ func fail(c *gin.Context, status int, err error) {
 	if err != nil && strings.TrimSpace(err.Error()) != "" {
 		message = err.Error()
 	}
+	if public, ok := requestDecodeMessage(err); ok {
+		message = public
+	}
 	writeFailure(c, status, status, service.ReasonForStatus(status), message)
+}
+
+// requestDecodeMessage 把请求体解析失败的内部错误（JSON 语法、字段类型、超限、空正文）
+// 换成可公开的中文提示，避免把 Go 结构体名和英文解析信息返回给用户。
+func requestDecodeMessage(err error) (string, bool) {
+	if err == nil {
+		return "", false
+	}
+	var maxBytes *http.MaxBytesError
+	var syntaxErr *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+	switch {
+	case errors.As(err, &maxBytes):
+		return "请求内容过大", true
+	case errors.As(err, &syntaxErr), errors.As(err, &typeErr), errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		return "请求格式错误", true
+	}
+	return "", false
 }
 
 func failService(c *gin.Context, err error) {
@@ -124,6 +147,11 @@ func logHandlerError(c *gin.Context, status int, err error) {
 			route = "<unmatched>"
 		}
 	}
-	// 普通访问日志会输出 Gin error；这里只记录错误类型，避免密钥或上游响应体进入日志。
-	log.Printf("handler request failed: method=%s route=%s status=%d error_type=%T", method, route, status, err)
+	requestID := ""
+	if c != nil {
+		requestID = c.Writer.Header().Get("X-Request-ID")
+	}
+	// 只记录脱敏、截断后的错误文本：URL 中的地址与密钥参数、Bearer 令牌会被替换，
+	// 上游响应体不会整段进入日志。没有原因文本时 500 无法排查。
+	log.Printf("handler request failed: method=%s route=%s status=%d request_id=%s error_type=%T error=%q", method, route, status, requestID, err, service.RedactLogText(err.Error(), 500))
 }

@@ -120,7 +120,9 @@ func Run(ctx context.Context, endpoint, serviceToken, bridgeHost string, request
 
 var remoteClient = &http.Client{
 	Transport: &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
+		// yingce-agent 是 Compose 内部服务。为模型出网配置的 HTTP(S)_PROXY 不能接管这条连接，
+		// 否则运行请求（含 bridge token 与完整上下文）会被送往外部代理。
+		Proxy: nil,
 		DialContext: (&net.Dialer{
 			Timeout:   10 * time.Second,
 			KeepAlive: 30 * time.Second,

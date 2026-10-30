@@ -251,7 +251,7 @@ export type BillingOrder = {
 };
 
 export function getWallet(page = 1, pageSize = 30, type = "all") {
-    return http.get<WalletSummary>("/wallet", { params: { type, page, pageSize } });
+    return http.get<WalletSummary>("/wallet", { params: { type, page, pageSize }, timeout: 30_000 });
 }
 
 export function redeemCredits(code: string) {

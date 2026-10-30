@@ -30,21 +30,30 @@ function authorized(request) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-function acquire(request) {
+// Request bodies are fully read before queueing. Node does not emit "aborted"
+// for a request whose body has completed, so disconnects are observed on the
+// response "close" event instead.
+function acquire(response) {
   if (active < maxSessions) {
     active += 1;
     return Promise.resolve();
   }
   return new Promise((resolve, reject) => {
-    const waiter = { resolve, reject };
-    waiters.push(waiter);
     const abort = () => {
       const index = waiters.indexOf(waiter);
       if (index >= 0) waiters.splice(index, 1);
       reject(new Error("Agent request cancelled while queued"));
     };
-    if (request.aborted || request.destroyed) abort();
-    else request.once("aborted", abort);
+    const waiter = {
+      resolve: () => {
+        response.off("close", abort);
+        resolve();
+      },
+      reject,
+    };
+    waiters.push(waiter);
+    if (response.destroyed) abort();
+    else response.once("close", abort);
   });
 }
 
@@ -136,10 +145,17 @@ const server = createServer(async (request, response) => {
     return;
   }
   try {
-    await acquire(request);
+    await acquire(response);
   } catch (error) {
-    response.writeHead(499, { "content-type": "application/json" });
-    response.end(JSON.stringify({ error: error instanceof Error ? error.message : "cancelled" }));
+    if (!response.destroyed) {
+      response.writeHead(499, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: error instanceof Error ? error.message : "cancelled" }));
+    }
+    return;
+  }
+  if (response.destroyed) {
+    // The caller left between admission and spawn; hand the slot to the next waiter.
+    release();
     return;
   }
 
@@ -162,7 +178,16 @@ const server = createServer(async (request, response) => {
   const stop = () => {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
   };
-  request.on("aborted", stop);
+  // The backend cancels a run by closing this connection; stop the runtime so it
+  // releases its session slot instead of running to completion for nobody.
+  response.on("close", () => {
+    if (!response.writableFinished) stop();
+  });
+  // A runtime that exits before reading stdin makes the write fail with EPIPE.
+  // Without a listener that error would crash every active session.
+  child.stdin.on("error", (error) => {
+    if (error.code !== "EPIPE") process.stderr.write(`agent stdin error: ${error.message}\n`);
+  });
   response.writeHead(200, { "content-type": "application/x-ndjson" });
   child.stdout.on("data", (chunk) => {
     const text = chunk.toString("utf8");

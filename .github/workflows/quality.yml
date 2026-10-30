@@ -170,6 +170,34 @@ jobs:
           path: ${{ runner.temp }}/go-tests.jsonl
           if-no-files-found: ignore
 
+  # 依赖漏洞扫描只作提示，不阻断合并与镜像发布；结果在作业日志中查看。
+  dependency-audit:
+    name: Dependency vulnerability audit (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: govulncheck
+        working-directory: backend
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+      - name: bun audit
+        working-directory: web
+        run: bun install --frozen-lockfile && bun audit
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+      - name: npm audit (agent runtime)
+        working-directory: backend/agent-runtime/pi
+        run: npm audit --omit=dev
+
   payment-plugins:
     name: Payment plugin artifacts
     runs-on: ubuntu-latest

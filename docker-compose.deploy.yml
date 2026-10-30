@@ -1,3 +1,11 @@
+# Docker 默认的 json-file 日志不轮转，长期运行会写满磁盘；业务容器统一限制为 5 个 20MB 文件。
+# 数据库与 Redis 暂不加，避免仅因日志配置变化而重建数据容器。
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -30,6 +38,7 @@ services:
     image: ${CANVAS_BACKEND_IMAGE:?请先配置 CANVAS_BACKEND_IMAGE（必须包含镜像 digest）}
     entrypoint: ["migrate-schema"]
     command: ["up"]
+    logging: *default-logging
     environment:
       CANVAS_BACKEND_DATA_DIR: /data
       CANVAS_DATABASE_DRIVER: postgres
@@ -45,6 +54,7 @@ services:
       YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:-${CANVAS_UPDATER_TOKEN:?请先配置 YINGCE_AGENT_TOKEN}}
       MAX_CONCURRENT_SESSIONS: ${YINGCE_AGENT_MAX_SESSIONS:-30}
       NODE_MAX_OLD_SPACE_SIZE: ${YINGCE_AGENT_NODE_MEMORY_MB:-512}
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
       interval: 10s
@@ -77,7 +87,12 @@ services:
       YINGCE_AGENT_BRIDGE_HOST: backend
       CANVAS_LOG_LEVEL: ${CANVAS_LOG_LEVEL:-info}
       CANVAS_LOG_FORMAT: ${CANVAS_LOG_FORMAT:-text}
+      # 首个管理员注册口令，由一键部署脚本生成；已有用户的实例不受影响。
+      CANVAS_BOOTSTRAP_TOKEN: ${CANVAS_BOOTSTRAP_TOKEN:-}
+      # 留空时信任本机与私网代理（Compose 内的 nginx/cloudflared）写入的 X-Real-IP。
+      CANVAS_TRUSTED_PROXIES: ${CANVAS_TRUSTED_PROXIES:-}
       GIN_MODE: release
+    logging: *default-logging
     volumes:
       - ${CANVAS_DATA_PATH:-backend-data}:/data
       - ${CANVAS_UPDATER_SOCKET_DIR:-/run/open-ai-canvas-updater}:/run/open-ai-canvas-updater
@@ -95,6 +110,7 @@ services:
 
   web:
     image: ${CANVAS_WEB_IMAGE:?请先配置 CANVAS_WEB_IMAGE（必须包含镜像 digest）}
+    logging: *default-logging
     ports:
       - "${CANVAS_HTTP_PORT:-3000}:3000"
     volumes:

@@ -20,6 +20,7 @@ import (
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
 	"yingce/backend/internal/repository"
 )
 
@@ -66,7 +67,11 @@ func (s *Service) startCloudAgentPi(userID, runID string) {
 			s.piRunnerWg.Done()
 		}()
 
-		if err := s.runCloudAgentPiSession(ctx, userID, runID); err != nil && !errors.Is(err, context.Canceled) {
+		var err error
+		if platform.RunRecovered("agent_session:"+runID, func() { err = s.runCloudAgentPiSession(ctx, userID, runID) }) {
+			err = errors.New("Agent 会话异常退出")
+		}
+		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("[Agent] session failed run=%s: %v", runID, err)
 			s.failPiRunner(runID, userID, errors.New(cloudAgentUserFailureMessage(runID, err)))
 		}
@@ -152,7 +157,11 @@ func (s *Service) startApprovedCloudAgentMediaWaiter(userID, runID, mediaTaskID 
 			s.approvedMediaWg.Done()
 		}()
 
-		if err := s.finishApprovedCloudAgentMedia(ctx, userID, runID, mediaTaskID); err != nil && !errors.Is(err, context.Canceled) {
+		var err error
+		if platform.RunRecovered("agent_approved_media:"+runID, func() { err = s.finishApprovedCloudAgentMedia(ctx, userID, runID, mediaTaskID) }) {
+			err = errors.New("审批后的媒体续跑异常退出")
+		}
+		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("[Agent] approved media resume failed run=%s: %v", runID, err)
 			s.failPiRunner(runID, userID, errors.New(cloudAgentUserFailureMessage(runID, err)))
 		}

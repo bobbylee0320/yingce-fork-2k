@@ -64,7 +64,9 @@ type Coordinator struct {
 	instanceID string
 	localMu    sync.Mutex
 	localRate  map[string]localRateEntry
-	localSlots map[string]map[string]time.Time
+	// localRatePrunedAt 限制过期清理的频率：活跃 key 都未过期时，不能每次请求都全表扫描。
+	localRatePrunedAt time.Time
+	localSlots        map[string]map[string]time.Time
 }
 
 var fixedWindowScript = redis.NewScript(`
@@ -125,6 +127,16 @@ func NewCoordinatorWithRedis(client *redis.Client, instanceID string) *Coordinat
 	}
 }
 
+// localRatePruneThreshold 是单机限流表触发过期清理的条目数。条目只在同一 key 再次访问时覆盖，
+// 不清理时按 IP/账号生成的 key 会持续累积。
+const localRatePruneThreshold = 10_000
+
+// localRateMaxWindow 是清理时认定条目已过期的保守时长，覆盖当前所有限流窗口（最长 1 小时）。
+const localRateMaxWindow = 2 * time.Hour
+
+// localRatePruneInterval 是两次过期清理之间的最短间隔。
+const localRatePruneInterval = time.Minute
+
 func (c *Coordinator) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
 	if c.redis != nil {
 		count, err := fixedWindowScript.Run(ctx, c.redis, []string{"canvas:rate:" + key}, window.Milliseconds(), limit).Int64()
@@ -133,6 +145,14 @@ func (c *Coordinator) Allow(ctx context.Context, key string, limit int, window t
 	c.localMu.Lock()
 	defer c.localMu.Unlock()
 	now := time.Now()
+	if len(c.localRate) >= localRatePruneThreshold && now.Sub(c.localRatePrunedAt) >= localRatePruneInterval {
+		c.localRatePrunedAt = now
+		for staleKey, staleEntry := range c.localRate {
+			if now.Sub(staleEntry.started) >= max(window, localRateMaxWindow) {
+				delete(c.localRate, staleKey)
+			}
+		}
+	}
 	entry := c.localRate[key]
 	if entry.started.IsZero() || now.Sub(entry.started) >= window {
 		c.localRate[key] = localRateEntry{started: now, count: 1}
@@ -316,11 +336,17 @@ func (c *Coordinator) RecordChannelResult(ctx context.Context, channelID string,
 		_ = c.redis.Del(ctx, failureKey, openKey).Err()
 		return
 	}
-	count, err := c.redis.Incr(ctx, failureKey).Result()
-	if err != nil {
+	// INCR 与 EXPIRE 放在同一事务里：分两步时进程在中间退出会留下永不过期的失败计数，
+	// 之后零星的失败也会立即触发熔断。
+	var incr *redis.IntCmd
+	if _, err := c.redis.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		incr = pipe.Incr(ctx, failureKey)
+		pipe.Expire(ctx, failureKey, time.Minute)
+		return nil
+	}); err != nil {
 		return
 	}
-	_ = c.redis.Expire(ctx, failureKey, time.Minute).Err()
+	count := incr.Val()
 	if count >= int64(failureLimit) {
 		_ = c.redis.Set(ctx, openKey, "1", openDuration).Err()
 	}

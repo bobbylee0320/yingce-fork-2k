@@ -55,6 +55,16 @@ type Service struct {
 	emailCodeMu    sync.Mutex
 	registrationMu sync.Mutex
 	sms            SMSDelivery
+	// bootstrapToken 非空时，系统里还没有用户的首次注册必须提交同一口令。
+	bootstrapToken string
+}
+
+// SetBootstrapToken 由组合根注入部署时生成的首个管理员初始化口令；空值保持原有行为。
+func (s *Service) SetBootstrapToken(token string) {
+	if s == nil {
+		return
+	}
+	s.bootstrapToken = strings.TrimSpace(token)
 }
 
 type SMSDelivery interface {

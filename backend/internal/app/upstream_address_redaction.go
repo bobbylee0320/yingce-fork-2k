@@ -19,6 +19,18 @@ var (
 	upstreamIPv4Address      = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b`)
 )
 
+// logBearerToken 匹配错误文本里可能夹带的 Bearer 令牌与 sk- 形式的密钥。
+var logBearerToken = regexp.MustCompile(`(?i)\b(?:bearer\s+[a-z0-9._~+/=-]{8,}|sk-[a-z0-9_-]{8,})`)
+
+// RedactLogText 生成可写入进程日志的错误文本：隐藏 URL（含签名参数）、IP 与令牌，并按字符截断。
+func RedactLogText(text string, maxRunes int) string {
+	text = logBearerToken.ReplaceAllString(redactUpstreamAddress(text), "[令牌已隐藏]")
+	if maxRunes > 0 {
+		text = truncateRunes(text, maxRunes)
+	}
+	return text
+}
+
 // redactUpstreamAddress 隐藏文本里的上游 URL、IP 和网络操作地址。
 // URL 复用请求明细的 [链接已隐藏] 约定，保持用户可见文案与后台日志同一套措辞。
 func redactUpstreamAddress(text string) string {

@@ -255,8 +255,8 @@ docker compose -f docker-compose.local.yml up -d --build
 
 ## 安全边界
 
-- 首次管理员注册应在受控网络完成，公网部署保持 `CANVAS_REGISTRATION_ENABLED=false`。
-- 设置准确的 `CANVAS_CORS_ORIGINS`，不要在公网使用 `*`；使用 HTTPS 并正确转发代理头。
+- 首次管理员注册应在受控网络完成，公网部署保持 `CANVAS_REGISTRATION_ENABLED=false`。一键部署首次安装会生成 `CANVAS_BOOTSTRAP_TOKEN`，注册首个管理员时需要填写。
+- `CANVAS_CORS_ORIGINS` 必须列出具体来源，配置为 `*` 时后端拒绝启动；使用 HTTPS 并正确转发代理头。
 - 后端默认拒绝本机、私网和链路本地模型地址。开发时只通过 `CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS` 精确放行可信主机，不要使用全量放行开关。
 - 用户 API Key 不应出现在 URL、日志、错误上报或服务端长期明文存储中；只在可信部署和 HTTPS 链路中使用真实密钥。
 - 后端 `8080` 应留在 Compose 网络内，不要直接暴露到公网；限制 `.env`、数据库、上传目录、备份和 `.settings-key` 的权限。

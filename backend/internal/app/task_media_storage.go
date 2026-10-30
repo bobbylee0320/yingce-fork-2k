@@ -29,6 +29,9 @@ const mediaStagingMinFreeBytes int64 = 5 << 30
 // mediaStagingTTL 之后，没有未完成检查点引用的暂存文件会在下次分配暂存空间时删除。
 const mediaStagingTTL = 24 * time.Hour
 
+// mediaProbeTimeout 限制读取媒体时长的 ffprobe 进程；超时按“时长未知”处理，结算回退到上游用量或人工核对。
+const mediaProbeTimeout = 30 * time.Second
+
 func mediaStagingCapacityAvailable(freeBytes, reservation int64, available, writable bool) bool {
 	return available && writable && reservation > 0 && reservation <= mediaStagingBudget && freeBytes >= reservation && freeBytes-reservation >= mediaStagingMinFreeBytes
 }
@@ -506,7 +509,12 @@ func probeMediaDurationMs(path string) int64 {
 	if _, err := exec.LookPath("ffprobe"); err != nil {
 		return 0
 	}
-	output, err := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path).Output()
+	// ffprobe 不受任务 context 控制；异常文件让它卡住时，任务会一直占着执行位并持续续租。
+	ctx, cancel := context.WithTimeout(context.Background(), mediaProbeTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path)
+	command.WaitDelay = 5 * time.Second
+	output, err := command.Output()
 	if err != nil {
 		return 0
 	}

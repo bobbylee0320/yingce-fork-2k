@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"yingce/backend/internal/kernel"
@@ -142,7 +144,7 @@ func OutboundHTTPClientWithProxy(timeout time.Duration, proxyURL string) *http.C
 	if proxyURL == "" {
 		return OutboundHTTPClient(timeout)
 	}
-	transport := newOutboundTransportWithProxy(proxyURL)
+	transport := cachedProxyTransport(proxyURL)
 	if transport == nil {
 		return &http.Client{Transport: rejectingTransport{err: errors.New("渠道代理地址无效")}, Timeout: timeout}
 	}
@@ -157,6 +159,37 @@ func OutboundHTTPClientWithProxy(timeout time.Duration, proxyURL string) *http.C
 			return err
 		},
 	}
+}
+
+// proxyTransports 按代理地址复用 Transport。每个请求新建 Transport 时连接无法复用，
+// 每条空闲连接还会占着 FD 和读写 goroutine 直到 IdleConnTimeout，轮询多时持续堆积。
+var proxyTransports sync.Map
+
+// maxCachedProxyTransports 限制缓存的代理数量；渠道代理由管理员配置，正常远小于该值。
+const maxCachedProxyTransports = 64
+
+var proxyTransportCount atomic.Int64
+
+func cachedProxyTransport(proxyURL string) *http.Transport {
+	if value, ok := proxyTransports.Load(proxyURL); ok {
+		return value.(*http.Transport)
+	}
+	transport := newOutboundTransportWithProxy(proxyURL)
+	if transport == nil {
+		return nil
+	}
+	if proxyTransportCount.Load() >= maxCachedProxyTransports {
+		// 超出上限时不再缓存，退回旧行为并关闭空闲连接，避免地址被频繁修改时无限增长。
+		transport.DisableKeepAlives = true
+		return transport
+	}
+	actual, loaded := proxyTransports.LoadOrStore(proxyURL, transport)
+	if loaded {
+		transport.CloseIdleConnections()
+	} else {
+		proxyTransportCount.Add(1)
+	}
+	return actual.(*http.Transport)
 }
 
 type rejectingTransport struct{ err error }

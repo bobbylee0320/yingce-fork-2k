@@ -14,10 +14,20 @@ import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
 
 const WorkspaceCommandPalette = lazy(() => import("@/components/layout/workspace-command-palette").then((module) => ({ default: module.WorkspaceCommandPalette })));
 
+// 与样式里的 lg 断点（1024px）保持一致。
+const DESKTOP_SIDEBAR_QUERY = "(min-width: 1024px)";
+
+function matchesDesktopSidebar() {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
+    return window.matchMedia(DESKTOP_SIDEBAR_QUERY).matches;
+}
+
 export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     const { pathname } = useLocation();
     const navigate = useNavigate();
-    const [mobileSidebarExpanded, setMobileSidebarExpanded] = useState(false);
+    // 移动端抽屉记录展开时所在的路由；路由变化后自动视为收起，不会盖在新页面上。
+    const [mobileSidebarRoute, setMobileSidebarRoute] = useState<string | null>(null);
+    const [desktopViewport, setDesktopViewport] = useState(matchesDesktopSidebar);
     const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(readWorkspaceSidebarCollapsed);
     const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -25,12 +35,13 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     const showGlobalTopBar = !hideChrome;
     const spatialWorkbench = isSpatialWorkbenchPath(pathname);
     const creationWorkspace = pathname === "/" || pathname === "/create";
+    const mobileSidebarExpanded = !desktopViewport && mobileSidebarRoute === pathname;
 
-    const isMobileViewport = () => window.innerWidth < 1024;
+    const closeMobileSidebar = () => setMobileSidebarRoute(null);
 
     const toggleSidebar = () => {
-        if (isMobileViewport()) {
-            setMobileSidebarExpanded((current) => !current);
+        if (!desktopViewport) {
+            setMobileSidebarRoute((current) => (current === pathname ? null : pathname));
             return;
         }
         setDesktopSidebarCollapsed((current) => {
@@ -51,8 +62,31 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     };
 
     const handleNavClick = () => {
-        if (isMobileViewport()) setMobileSidebarExpanded(false);
+        if (!desktopViewport) closeMobileSidebar();
     };
+
+    // 窗口跨过桌面断点时同步布局；回到桌面后丢弃移动端抽屉状态，再缩小时不会自动弹出。
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+        const media = window.matchMedia(DESKTOP_SIDEBAR_QUERY);
+        const update = () => {
+            setDesktopViewport(media.matches);
+            if (media.matches) setMobileSidebarRoute(null);
+        };
+        update();
+        media.addEventListener("change", update);
+        return () => media.removeEventListener("change", update);
+    }, []);
+
+    // 移动端抽屉展开时支持 Esc 收起。
+    useEffect(() => {
+        if (!mobileSidebarExpanded) return;
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setMobileSidebarRoute(null);
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [mobileSidebarExpanded]);
 
     // ⌘K / Ctrl+K 全局呼出搜索面板。
     useEffect(() => {
@@ -81,7 +115,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
         <>
             <WorkspaceTopBarExtensionProvider>
                 <div className={cn("app-workspace-shell flex h-dvh min-h-0 w-full flex-col overflow-hidden", spatialWorkbench && "is-spatial", creationWorkspace && "is-creation-workspace")}>
-                    {!hideChrome && mobileSidebarExpanded ? <button type="button" className="app-workspace-sidebar-scrim lg:hidden" aria-label="收起侧栏" onClick={() => setMobileSidebarExpanded(false)} /> : null}
+                    {!hideChrome && mobileSidebarExpanded ? <button type="button" className="app-workspace-sidebar-scrim lg:hidden" aria-label="收起侧栏" onClick={closeMobileSidebar} /> : null}
 
                     {showGlobalTopBar ? <BannerAnnouncementsSlider /> : null}
 
@@ -105,7 +139,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                         ) : null}
 
                         <div className="app-workspace-stage relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                            {showGlobalTopBar ? <WorkspaceTopBar sidebarOpen={isMobileViewport() ? mobileSidebarExpanded : !desktopSidebarCollapsed} onToggleSidebar={toggleSidebar} /> : null}
+                            {showGlobalTopBar ? <WorkspaceTopBar sidebarOpen={desktopViewport ? !desktopSidebarCollapsed : mobileSidebarExpanded} onToggleSidebar={toggleSidebar} /> : null}
                             <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div>
                         </div>
                     </div>

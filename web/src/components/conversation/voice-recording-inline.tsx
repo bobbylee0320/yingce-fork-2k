@@ -123,6 +123,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                             <Button
                                 type="text"
                                 size="small"
+                                aria-label="重新录音"
                                 icon={<Mic className="size-3.5" />}
                                 onClick={handleRetry}
                                 style={{ color: theme.node.muted }}
@@ -133,6 +134,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                         <Button
                             type="text"
                             size="small"
+                            aria-label="取消语音输入"
                             icon={<X className="size-3.5" />}
                             onClick={onCancel}
                             style={{ color: theme.node.muted }}
@@ -167,6 +169,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                         <Button
                             type="text"
                             size="small"
+                            aria-label="取消录音"
                             icon={<X className="size-3.5" />}
                             onClick={() => {
                                 cancelRecording();
@@ -180,6 +183,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                         <Button
                             type="text"
                             size="small"
+                            aria-label="停止录音并转写"
                             icon={<Square className="size-3.5" />}
                             onClick={handleStop}
                             disabled={state !== "recording" || transcribeState !== "idle"}

@@ -37,6 +37,10 @@ export function useVoiceRecording(options: UseVoiceRecordingOptions = {}): UseVo
     const animationFrameRef = useRef<number | null>(null);
     const timerRef = useRef<number | null>(null);
     const startTimeRef = useRef<number>(0);
+    // 录音结束（手动停止或到达时长上限）统一由 onstop 收尾；stop() 只登记等待结果的回调。
+    const finishRef = useRef<((blob: Blob | null) => void) | null>(null);
+    // 申请麦克风权限期间再次调用 start() 会再开一路音频流且前一路永远不会释放。
+    const startingRef = useRef(false);
 
     // 清理资源
     const cleanup = useCallback(() => {
@@ -86,6 +90,8 @@ export function useVoiceRecording(options: UseVoiceRecordingOptions = {}): UseVo
 
     // 开始录制
     const start = useCallback(async () => {
+        if (startingRef.current || mediaRecorderRef.current) return;
+        startingRef.current = true;
         setError(null);
         setWaveform([]);
         setDuration(0);
@@ -112,6 +118,14 @@ export function useVoiceRecording(options: UseVoiceRecordingOptions = {}): UseVo
                     chunksRef.current.push(event.data);
                 }
             };
+            mediaRecorder.onstop = () => {
+                // Safari 录出的是 audio/mp4，按录音器实际格式标注 Blob 类型。
+                const blob = chunksRef.current.length > 0 ? new Blob(chunksRef.current, { type: mediaRecorder.mimeType || "audio/webm" }) : null;
+                cleanup();
+                setState("idle");
+                finishRef.current?.(blob);
+                finishRef.current = null;
+            };
 
             mediaRecorder.start(100);
             startTimeRef.current = Date.now();
@@ -123,19 +137,18 @@ export function useVoiceRecording(options: UseVoiceRecordingOptions = {}): UseVo
             // 启动计时器
             timerRef.current = window.setInterval(() => {
                 const elapsed = (Date.now() - startTimeRef.current) / 1000;
-                setDuration(elapsed);
-                if (elapsed >= maxDuration) {
-                    // 达到最大时长，自动停止
-                    mediaRecorder.stop();
-                }
+                setDuration(Math.min(elapsed, maxDuration));
+                // 达到最大时长自动停止；onstop 负责释放麦克风并回到 idle，调用方据此自动转写。
+                if (elapsed >= maxDuration && mediaRecorder.state !== "inactive") mediaRecorder.stop();
             }, 100);
         } catch (err) {
             const message = err instanceof Error ? err.message : "无法访问麦克风";
             setError(message);
             setState("idle");
             cleanup();
+        } finally {
+            startingRef.current = false;
         }
-
     }, [cleanup, maxDuration, updateWaveform]);
 
     // 停止录制
@@ -149,13 +162,7 @@ export function useVoiceRecording(options: UseVoiceRecordingOptions = {}): UseVo
                 return;
             }
 
-            mediaRecorder.onstop = () => {
-                const blob = chunksRef.current.length > 0 ? new Blob(chunksRef.current, { type: "audio/webm" }) : null;
-                cleanup();
-                setState("idle");
-                resolve(blob);
-            };
-
+            finishRef.current = resolve;
             mediaRecorder.stop();
         });
     }, [cleanup]);

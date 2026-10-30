@@ -9,6 +9,7 @@ import { ApiError } from "@/services/api/request";
 import { VerificationFields } from "@/components/auth/verification-fields";
 import { emptyVerification, methodLabels, verificationMethods, type VerificationMethod } from "@/services/api/verification";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { safeNext } from "@/lib/safe-next";
 
 type AuthSettings = Awaited<ReturnType<typeof getAuthSettings>>;
 
@@ -25,6 +26,7 @@ export default function RegisterPage() {
     const [verification, setVerification] = useState({ ...emptyVerification });
     const [method, setMethod] = useState<VerificationMethod>("email");
     const [displayName, setDisplayName] = useState("");
+    const [bootstrapToken, setBootstrapToken] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [agreementAccepted, setAgreementAccepted] = useState(false);
@@ -82,7 +84,7 @@ export default function RegisterPage() {
         setSubmitting(true);
         try {
             if (!settings?.firstUser && !verification.ticket) throw new Error("请先获取本次注册验证码");
-            await register({ username, ...(settings?.firstUser ? { email } : verification), displayName, password, acceptedTerms: agreementAccepted, ...(referralCode ? { referralCode } : {}) });
+            await register({ username, ...(settings?.firstUser ? { email } : verification), displayName, password, acceptedTerms: agreementAccepted, ...(referralCode ? { referralCode } : {}), ...(settings?.firstUser && bootstrapToken.trim() ? { bootstrapToken: bootstrapToken.trim() } : {}) });
             window.sessionStorage.removeItem(REFERRAL_CODE_STORAGE_KEY);
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
@@ -113,7 +115,7 @@ export default function RegisterPage() {
         <form onSubmit={submit} className="space-y-4">
             {settings?.firstUser ? (
                 <Notice icon={<Info className="size-3.5" />} tone="blue">
-                    首个账号自动成为管理员，邮箱验证码暂不要求。
+                    首个账号自动成为管理员，邮箱验证码暂不要求{settings.bootstrapTokenRequired ? "，需要填写部署时生成的初始化口令" : ""}。
                 </Notice>
             ) : null}
             {registrationClosed ? (
@@ -135,6 +137,21 @@ export default function RegisterPage() {
                     <Input size="large" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="不填则使用用户名" disabled={disabled} />
                 </AuthField>
             </div>
+
+            {settings?.firstUser && settings.bootstrapTokenRequired ? (
+                <AuthField label="初始化口令">
+                    <Input.Password
+                        size="large"
+                        prefix={<LockKeyhole className="auth-scene-icon size-4" />}
+                        value={bootstrapToken}
+                        onChange={(event) => setBootstrapToken(event.target.value)}
+                        placeholder="部署完成时输出的口令，也保存在服务器 .env 的 CANVAS_BOOTSTRAP_TOKEN"
+                        autoComplete="off"
+                        required
+                        disabled={disabled}
+                    />
+                </AuthField>
+            ) : null}
 
             {settings?.firstUser ? <AuthField label="邮箱（可选）">
                 <Input
@@ -267,11 +284,6 @@ function Notice({ icon, tone, children }: { icon: ReactNode; tone: "blue" | "amb
             {children}
         </div>
     );
-}
-
-function safeNext(value: string | null) {
-    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
-    return value;
 }
 
 // 中文条款里「一、」「二、」这类条目标题常与正文写在同一个段落内（只隔一个换行）。

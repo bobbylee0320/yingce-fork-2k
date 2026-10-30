@@ -8,3 +8,20 @@ updates:
     directory: /web
     schedule:
       interval: weekly
+  # 生产 yingce-agent 镜像与后端内嵌模式都运行这份 Agent runtime 依赖。
+  - package-ecosystem: npm
+    directory: /backend/agent-runtime/pi
+    schedule:
+      interval: weekly
+  # nginx、node、golang 等基础镜像的安全更新。
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /backend
+      - /yingce-agent
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

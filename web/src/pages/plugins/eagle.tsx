@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { App, Button, Drawer, Input, Spin, Tag, Tree, Typography } from "antd";
 import { IconButton } from "@/components/ui/base/buttons";
 import { EmptyState } from "@/components/ui/product/empty-state";
+import { SafeImage } from "@/components/ui/product/safe-image";
 import type { DataNode } from "antd/es/tree";
 import { useNavigate } from "react-router";
 
@@ -251,7 +252,7 @@ function EagleItemCard({ item, selected, onOpen }: { item: ExternalAssetItem; se
     return <AssetLibraryCard selected={selected}>
         <AssetLibraryCardMedia className={item.kind === "image" || item.kind === "video" ? "assets-cover" : "assets-cover is-light"}>
             <button type="button" className="assets-cover-link" onClick={onOpen} aria-label={"查看 Eagle 素材：" + item.title}>
-                {item.thumbnailUrl ? <img src={item.thumbnailUrl} alt={item.title} loading="lazy" decoding="async" className="assets-cover-media" /> : <div className="assets-cover-fallback"><AssetKindIcon kind={item.kind} size="size-7" /></div>}
+                <SafeImage src={item.thumbnailUrl} alt={item.title} loading="lazy" decoding="async" className="assets-cover-media" fallback={<div className="assets-cover-fallback"><AssetKindIcon kind={item.kind} size="size-7" /></div>} />
                 <span className="assets-cover-vignette" aria-hidden="true" />
             </button>
             <span className="assets-cover-badges">
@@ -286,7 +287,7 @@ function EagleAssetDrawer({ item, onClose, totalBytes }: { item: ExternalAssetIt
                 </div>
             </div>
             <div className="eagle-drawer-preview">
-                {item.thumbnailUrl ? <img src={item.thumbnailUrl} alt={item.title} loading="lazy" decoding="async" /> : <AssetKindIcon kind={item.kind} size="size-9" />}
+                <SafeImage src={item.thumbnailUrl} alt={item.title} loading="lazy" decoding="async" fallback={<AssetKindIcon kind={item.kind} size="size-9" />} />
             </div>
             <div className="grid gap-2">
                 <EagleFact label="类型" value={assetKindLabel(item.kind)} />

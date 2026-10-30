@@ -89,8 +89,13 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 						globalSlot.Release()
 						s.wakeTaskDispatcher()
 					}()
-					if err := w.processClaimedTask(task, globalSlot); err != nil {
-						_ = s.log(task.UserID, task.ID, "error", "后台任务处理失败", err.Error())
+					var processErr error
+					if platform.RunRecovered("task:"+task.ID, func() { processErr = w.processClaimedTask(task, globalSlot) }) {
+						w.settlePanickedTask(task)
+						return
+					}
+					if processErr != nil {
+						_ = s.log(task.UserID, task.ID, "error", "后台任务处理失败", processErr.Error())
 					}
 				})
 				if !started {
@@ -116,6 +121,21 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 			}
 		}
 	})
+}
+
+// settlePanickedTask 把执行中 panic 的任务收口为失败终态。上游可能已经收单，
+// 计费按“结果不确定”交给核对流程；不能等租约过期后被其他 worker 反复领取再次触发同一 panic。
+func (w *taskWorkerCoordinator) settlePanickedTask(task *model.Task) {
+	s := w.service
+	cause := errors.New("后台任务执行异常，已停止处理，结果待核对")
+	if latest, err := s.repo.Task(task.ID); err == nil && latest.Status != model.TaskStatusRunning {
+		return
+	}
+	// markPreparationFailure 收口成功时原样返回 cause；只有附带了终态或计费错误时才需要记录。
+	if err := s.terminalCoordinator().markPreparationFailure(task, "执行异常", cause, true, ""); err != nil && err != cause {
+		log.Printf("task panic settlement failed: task_id=%s error=%v", task.ID, err)
+	}
+	_ = s.log(task.UserID, task.ID, "error", "后台任务执行异常", "")
 }
 
 func (w *taskWorkerCoordinator) processNextTask() error {

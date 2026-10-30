@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -10,11 +11,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"time"
 
 	"errors"
 	"strings"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
 )
 
 // 播放副本转码：HEVC/H.265 原片在 Chrome/Firefox 等无法解码（<video> 黑屏），
@@ -35,7 +39,14 @@ const (
 	videoCodecMPEG4         = "mpeg4"
 	probeMaxMoovSize        = 128 << 20
 	playbackPersistAttempts = 3
+	// playbackTranscodeTimeout 是单个播放副本转码的墙钟上限；异常输入让 ffmpeg 卡住时按超时失败，
+	// 不能让 goroutine、子进程和 processing 状态一直挂到下次重启。
+	playbackTranscodeTimeout = 2 * time.Hour
 )
+
+// playbackTranscodeSlots 限制同时运行的 ffmpeg 转码数量。启动回填会一次认领全部待转码视频，
+// 不设上限时存量较多就会同时拉起几十个 ffmpeg，耗尽 CPU 与内存。
+var playbackTranscodeSlots = make(chan struct{}, max(1, runtime.NumCPU()/2))
 
 // probeVideoCodec 解析本地 mp4 的 stsd 首个视频 sample entry fourcc，返回 h264/h265 等。
 // 非 mp4 容器或解析失败返回空串（调用方按“无需转码”处理，前端仍可用原件）。
@@ -45,56 +56,55 @@ func probeVideoCodec(path string) string {
 		return ""
 	}
 	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return ""
+	}
+	fileSize := info.Size()
 
 	// 顶层 box 遍历（跳过 mdat 数据体），定位 moov。
-	var moovSize int64
-	var moovData []byte
 	pos := int64(0)
-	for {
-		boxType, size, err := readMP4BoxHeaderAt(f, pos)
-		if err != nil {
+	for pos+8 <= fileSize {
+		boxType, size, headerSize, err := readMP4BoxHeaderAt(f, pos)
+		// 声明长度超过文件剩余字节说明容器被截断或被构造过，不能再按它跳转。
+		if err != nil || size > fileSize-pos {
 			return ""
 		}
-		switch boxType {
-		case "moov":
+		if boxType == "moov" {
 			if size > probeMaxMoovSize {
 				return ""
 			}
-			moovData = make([]byte, size-8)
-			if _, err := f.ReadAt(moovData, pos+8); err != nil {
+			moovData := make([]byte, size-headerSize)
+			if _, err := f.ReadAt(moovData, pos+headerSize); err != nil {
 				return ""
 			}
-			moovSize = size
+			return codecFromMoov(moovData)
 		}
 		pos += size
-		if moovSize != 0 {
-			break
-		}
-		if size < 8 {
-			return ""
-		}
 	}
-	return codecFromMoov(moovData)
+	return ""
 }
 
-// readMP4BoxHeaderAt 定位文件 pos 处的 box（8/16 字节头），返回类型与总大小。
-func readMP4BoxHeaderAt(r io.ReaderAt, pos int64) (string, int64, error) {
+// readMP4BoxHeaderAt 定位文件 pos 处的 box（8/16 字节头），返回类型、总大小与头部长度。
+func readMP4BoxHeaderAt(r io.ReaderAt, pos int64) (string, int64, int64, error) {
 	var hdr [16]byte
 	if _, err := r.ReadAt(hdr[:8], pos); err != nil {
-		return "", 0, err
+		return "", 0, 0, err
 	}
 	size := int64(binary.BigEndian.Uint32(hdr[:4]))
 	boxType := string(hdr[4:8])
+	headerSize := int64(8)
 	if size == 1 {
 		if _, err := r.ReadAt(hdr[8:16], pos+8); err != nil {
-			return "", 0, err
+			return "", 0, 0, err
 		}
 		size = int64(binary.BigEndian.Uint64(hdr[8:16]))
+		headerSize = 16
 	}
-	if size < 8 {
-		return "", 0, fmt.Errorf("invalid box size %d", size)
+	if size < headerSize {
+		return "", 0, 0, fmt.Errorf("invalid box size %d", size)
 	}
-	return boxType, size, nil
+	return boxType, size, headerSize, nil
 }
 
 // codecFromMoov 在 moov 子树中找出所有 stsd，取首个视频 sample entry fourcc。
@@ -140,7 +150,9 @@ func boxBodies(data []byte, want string) []int {
 				size = int(binary.BigEndian.Uint64(data[pos+8 : pos+16]))
 				hdr = 16
 			}
-			if size < 8 || pos+size > end {
+			// 用减法比较：64 位 largesize 接近 int 上限时 pos+size 会溢出成负数，
+			// 绕过越界检查后在下一轮切片时 panic。
+			if size < hdr || size > end-pos {
 				return
 			}
 			if boxType == want {
@@ -226,6 +238,8 @@ func (s *Service) runPlaybackTranscode(userID string, resourceID string, src str
 			}
 		}
 	}()
+	playbackTranscodeSlots <- struct{}{}
+	defer func() { <-playbackTranscodeSlots }()
 	status := model.PlaybackStatusFailed
 	objectKey := ""
 	var errText string
@@ -272,20 +286,33 @@ func runH264Transcode(src string, dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 		return err
 	}
-	cmd := exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+	ctx, cancel := context.WithTimeout(context.Background(), playbackTranscodeTimeout)
+	defer cancel()
+	// 先写临时文件再改名：进程中途退出时不会留下半截文件被下次启动当成已完成的副本。
+	tmp := dst + ".part"
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
 		"-i", src,
 		"-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
 		"-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
 		"-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
-		dst)
+		"-f", "mp4", tmp)
+	cmd.WaitDelay = 10 * time.Second
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		_ = os.Remove(tmp)
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return fmt.Errorf("ffmpeg 转码超过 %s 仍未完成，已终止", playbackTranscodeTimeout)
+		}
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
 			msg = err.Error()
 		}
 		return fmt.Errorf("ffmpeg 转码失败：%s", clipText(msg, 800))
+	}
+	if err := os.Rename(tmp, dst); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("保存播放副本失败：%w", err)
 	}
 	return nil
 }
@@ -329,13 +356,23 @@ func (s *Service) OpenResourcePlaybackRange(userID string, resourceID string) (*
 func (s *Service) BackfillPlaybackTranscodes() {
 	// 上次进程可能崩溃在转码中途（状态卡 processing），先重置为待判定。
 	_ = s.repo.ResetStuckPlaybackTranscodes()
+	seen := make(map[string]bool)
 	for {
 		resources, err := s.repo.PlaybackPendingVideos(20)
 		if err != nil || len(resources) == 0 {
 			break
 		}
+		progressed := false
 		for i := range resources {
-			s.maybeStartPlaybackTranscode(&resources[i])
+			if seen[resources[i].ID] {
+				continue
+			}
+			seen[resources[i].ID], progressed = true, true
+			s.backfillPlaybackTranscode(&resources[i])
+		}
+		// 认领或写库失败时记录仍是待判定，会被同一查询反复取回；本批没有新记录就退出，避免空转。
+		if !progressed {
+			break
 		}
 	}
 	// 旧版本曾把 H.265/MPEG-4 Part 2 误判为浏览器可播并落 none；对存量 none 行
@@ -345,7 +382,13 @@ func (s *Service) BackfillPlaybackTranscodes() {
 	legacy, err := s.repo.PlaybackNoneVideos(20)
 	if err == nil {
 		for i := range legacy {
-			s.maybeStartPlaybackTranscode(&legacy[i])
+			s.backfillPlaybackTranscode(&legacy[i])
 		}
 	}
+}
+
+// backfillPlaybackTranscode 让单个资源的判定异常只影响它自己：回填运行在独立 goroutine，
+// 未恢复的 panic 会让进程在每次启动时都退出。
+func (s *Service) backfillPlaybackTranscode(resource *model.Resource) {
+	platform.RunRecovered("playback_backfill:"+resource.ID, func() { s.maybeStartPlaybackTranscode(resource) })
 }

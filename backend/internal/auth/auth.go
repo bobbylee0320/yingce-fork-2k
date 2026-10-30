@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"log"
@@ -40,6 +41,8 @@ type RegisterRequest struct {
 	Password      string       `json:"password"`
 	AcceptedTerms bool         `json:"acceptedTerms"`
 	ReferralCode  string       `json:"referralCode"`
+	// BootstrapToken 只在系统还没有任何用户、且部署配置了 CANVAS_BOOTSTRAP_TOKEN 时校验。
+	BootstrapToken string `json:"bootstrapToken"`
 }
 
 type LoginRequest struct {
@@ -53,6 +56,7 @@ type PublicAuthSettings struct {
 	SMSBindingAvailable   bool   `json:"smsBindingAvailable"`
 	EmailBindingAvailable bool   `json:"emailBindingAvailable"`
 	FirstUser             bool   `json:"firstUser"`
+	BootstrapTokenNeeded  bool   `json:"bootstrapTokenRequired,omitempty"`
 	RegistrationEnabled   bool   `json:"registrationEnabled"`
 	LinuxDOEnabled        bool   `json:"linuxdoEnabled"`
 	EmailEnabled          bool   `json:"emailEnabled"`
@@ -83,7 +87,7 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	if count == 0 {
 		// 首个管理员同样要看到服务协议，不能因为跳过注册校验就丢失协议字段。
 		agreementTitle, agreementContent := s.RegistrationAgreement()
-		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, AgreementTitle: agreementTitle, AgreementContent: agreementContent}, nil
+		return &PublicAuthSettings{FirstUser: true, BootstrapTokenNeeded: s.bootstrapToken != "", RegistrationEnabled: true, LinuxDOEnabled: false, AgreementTitle: agreementTitle, AgreementContent: agreementContent}, nil
 	}
 	registrationEnabled, err := s.RegistrationEnabled()
 	if err != nil {
@@ -152,6 +156,11 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	count, err := s.repo.UserCount()
 	if err != nil {
 		return nil, err
+	}
+	// 首个注册用户会成为管理员。部署配置了初始化口令时必须核对，否则公网实例从部署完成
+	// 到管理员注册之间，任何先访问的人都能抢注管理员。
+	if count == 0 && s.bootstrapToken != "" && subtle.ConstantTimeCompare([]byte(strings.TrimSpace(req.BootstrapToken)), []byte(s.bootstrapToken)) != 1 {
+		return nil, kernel.Forbidden("首个管理员注册需要部署时生成的初始化口令")
 	}
 	var verifiedCode *model.EmailVerificationCode
 	var verification *model.AuthVerification
@@ -349,6 +358,10 @@ func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 	}
 	user, err := s.repo.User(session.UserID)
 	if err != nil {
+		// 会话还在但账号已被删除：按会话失效处理，与数据库暂时故障区分开。
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, kernel.Unauthorized("登录状态已失效")
+		}
 		return nil, err
 	}
 	if user.Status != model.UserStatusActive {

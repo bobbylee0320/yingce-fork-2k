@@ -33,15 +33,15 @@ func TestEnsureBuiltinWorkbenchCatalogStartupWiring(t *testing.T) {
 	}
 }
 
-func TestAllowedOriginWildcard(t *testing.T) {
+func TestAllowedOriginRejectsWildcard(t *testing.T) {
+	if _, err := parseCORSPolicy("*"); err == nil {
+		t.Fatal("wildcard CORS must be rejected because the API relies on session cookies")
+	}
 	t.Setenv("CANVAS_CORS_ORIGINS", "*")
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())
 	context.Request = httptest.NewRequest("GET", "http://backend/api/health", nil)
-	if !allowedOrigin(context, "https://example.com") {
-		t.Fatal("wildcard CORS should allow a valid HTTPS origin")
-	}
-	if allowedOrigin(context, "ftp://example.com") {
-		t.Fatal("wildcard CORS should reject non-HTTP origins")
+	if allowedOrigin(context, "https://example.com") {
+		t.Fatal("wildcard CORS must not allow arbitrary credentialed origins")
 	}
 }
 

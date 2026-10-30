@@ -2,9 +2,28 @@ package platform
 
 import (
 	"context"
+	"log/slog"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
+	"time"
 )
+
+// loopPanicRestartDelay 是后台循环 panic 后重新启动前的等待时间，避免同一个缺陷高频刷日志。
+const loopPanicRestartDelay = 5 * time.Second
+
+// RunRecovered 执行 fn 并兜住 panic。后台 goroutine 不在 Gin 的 Recovery 保护范围内，
+// 未恢复的 panic 会让整个进程退出，连带中断所有 SSE、WebSocket 与执行中的任务。
+func RunRecovered(scope string, fn func()) (panicked bool) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			panicked = true
+			slog.Error("background goroutine panic recovered", "scope", scope, "panic", recovered, "stack", string(debug.Stack()))
+		}
+	}()
+	fn()
+	return false
+}
 
 type Worker struct {
 	mu          sync.Mutex
@@ -39,7 +58,16 @@ func (r *Worker) GoLoop(fn func(context.Context)) bool {
 	r.mu.Unlock()
 	go func() {
 		defer r.wg.Done()
-		fn(ctx)
+		// 循环体 panic 后退避重启；正常返回（通常是 ctx 结束）时退出。
+		for RunRecovered("worker_loop", func() { fn(ctx) }) {
+			timer := time.NewTimer(loopPanicRestartDelay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+		}
 	}()
 	return true
 }
@@ -56,7 +84,7 @@ func (r *Worker) GoTask(fn func()) bool {
 	go func() {
 		defer r.wg.Done()
 		defer r.activeTasks.Add(-1)
-		fn()
+		RunRecovered("worker_task", fn)
 	}()
 	return true
 }

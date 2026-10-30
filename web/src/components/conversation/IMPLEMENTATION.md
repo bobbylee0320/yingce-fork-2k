@@ -59,7 +59,7 @@ VoiceRecordingInline 内联波形录制条
 
 - 创建页主输入行：`web/src/pages/create/index.tsx`（`CreationComposer` 的 `creation-chat-controls`）
 - 画布 Agent 面板：`canvas-cloud-agent-panel.tsx`（输入行 left 插槽）
-- 测试页：`web/src/pages/test-voice-recording.tsx`（路由 `/test-voice-recording`）
+- 测试页：`web/src/pages/test-voice-recording.tsx`（路由 `/test-voice-recording`，仅开发环境注册）
 
 ## 使用示例
 

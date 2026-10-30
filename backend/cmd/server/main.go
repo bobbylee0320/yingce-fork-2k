@@ -113,6 +113,9 @@ func run(ctx context.Context) error {
 		slog.Info("storage migration completed", "tasks", summary.Tasks, "assets", summary.Assets, "projects", summary.Projects, "backup", summary.Backup)
 	}
 	r := gin.New()
+	if err := configureClientIP(r); err != nil {
+		return err
+	}
 	// 访问日志：成功的查询类请求只在 debug 级别输出，避免轮询和列表查询把日志打爆。
 	r.Use(logging.AccessLog(redactCanvasSharePath), logging.Recovery())
 	r.Use(handler.RequestCorrelationMiddleware())
@@ -138,7 +141,8 @@ func run(ctx context.Context) error {
 		_ = listener.Close()
 		return err
 	}
-	httpServer := &http.Server{Handler: r, ReadHeaderTimeout: 10 * time.Second}
+	// SSE 与大文件上传不能设置整体读写超时；IdleTimeout 只回收空闲的 keep-alive 连接。
+	httpServer := &http.Server{Handler: r, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 120 * time.Second}
 	svc.StartWorker()
 	// 启动后回填存量视频的播放副本转码（幂等，无待处理项即退出）。
 	go svc.BackfillPlaybackTranscodes()
@@ -181,6 +185,26 @@ func run(ctx context.Context) error {
 
 func ensureBuiltinWorkbenchCatalog(svc *service.Service) error {
 	return svc.EnsureBuiltinWorkbenchCatalog()
+}
+
+// defaultTrustedProxies 覆盖本机与私网地址：Compose 内的 nginx、cloudflared 等反向代理都在这些网段。
+const defaultTrustedProxies = "127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7"
+
+// configureClientIP 只信任反向代理写入的 X-Real-IP。nginx 用 realip 还原真实地址后以 $remote_addr
+// 覆盖该头，客户端自带的值无法透传；X-Forwarded-For 最左侧可被客户端伪造，不再作为客户端 IP 来源。
+// 请求不是来自可信代理时（例如直接访问后端端口），Gin 使用 TCP 对端地址。
+func configureClientIP(r *gin.Engine) error {
+	r.RemoteIPHeaders = []string{"X-Real-IP"}
+	trusted := make([]string, 0, 8)
+	for _, item := range strings.Split(env("CANVAS_TRUSTED_PROXIES", defaultTrustedProxies), ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			trusted = append(trusted, item)
+		}
+	}
+	if err := r.SetTrustedProxies(trusted); err != nil {
+		return fmt.Errorf("CANVAS_TRUSTED_PROXIES 无效：%w", err)
+	}
+	return nil
 }
 
 func redactCanvasSharePath(path string) string {
@@ -232,8 +256,7 @@ const corsAllowedHeaders = "Accept, Content-Type, Authorization, X-Requested-Wit
 const corsAllowedMethods = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
 
 type corsPolicy struct {
-	origins  map[string]struct{}
-	allowAny bool
+	origins map[string]struct{}
 }
 
 func cors() (gin.HandlerFunc, error) {
@@ -280,8 +303,8 @@ func parseCORSPolicy(raw string) (corsPolicy, error) {
 			continue
 		}
 		if value == "*" {
-			policy.allowAny = true
-			continue
+			// 接口依赖登录 Cookie，回显任意来源并允许凭据等于让任何网站读取用户数据。
+			return corsPolicy{}, fmt.Errorf("CANVAS_CORS_ORIGINS 不支持 *：接口携带登录 Cookie，请列出具体来源")
 		}
 		normalized, err := normalizeCORSOrigin(value)
 		if err != nil {
@@ -321,9 +344,6 @@ func allowedOriginWithPolicy(c *gin.Context, origin string, policy corsPolicy) b
 		requestHost = strings.TrimSpace(strings.Split(forwardedHost, ",")[0])
 	}
 	if strings.EqualFold(parsed.Host, strings.TrimSpace(requestHost)) {
-		return true
-	}
-	if policy.allowAny {
 		return true
 	}
 	if _, ok := policy.origins[normalizedOrigin]; ok {
