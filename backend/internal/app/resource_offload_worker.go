@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -125,7 +124,7 @@ func (s *Service) drainResourceOffloadJobs(ctx context.Context, limit int) {
 }
 
 func offloadTargetKey(job *model.ResourceOffloadJob) string {
-	return strings.Join([]string{strings.ToLower(job.TargetProvider), job.TargetEndpoint, job.TargetBucket}, "\x00")
+	return storageBreakerKey(&model.Resource{Provider: job.TargetProvider, Endpoint: job.TargetEndpoint, Bucket: job.TargetBucket})
 }
 
 func (s *Service) retryResourceOffload(job *model.ResourceOffloadJob, owner, code, message string) {

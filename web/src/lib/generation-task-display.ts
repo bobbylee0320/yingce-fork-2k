@@ -35,6 +35,8 @@ export function mediaDeliverySummary(status: TaskStatus | undefined, stage: Gene
     if (stage === "completed") return "生成成功 · 文件保存成功 · 素材登记成功";
     const prefix = stage === "download" || stage === "checkpoint" ? "生成成功" : stage === "register" ? "生成成功 · 文件保存成功" : "生成成功 · 下载成功";
     const action = { download: "下载", upload: "上传 OSS", local_save: "保存文件", register: "登记素材", checkpoint: "记录恢复信息" }[stage];
+    // 已下线的阶段（例如旧的浏览器直传）只可能残留在历史失败任务里，不显示无意义的摘要。
+    if (!action) return "";
     return `${prefix} · ${action}${status === "failed" ? "失败" : status === "cancelled" ? "已停止" : "待完成"}`;
 }
 

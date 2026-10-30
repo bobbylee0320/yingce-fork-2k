@@ -289,8 +289,15 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 				return nil, err
 			}
 			started := time.Now()
-			resource, err = s.storeTaskMediaFile(task, index, path, item.MIMEType, checkpoint.Mode, resource)
-			s.logMediaStage(*task, stage, started, err)
+			var fallbackCause error
+			resource, fallbackCause, err = s.storeTaskMediaFile(task, index, path, item.MIMEType, checkpoint.Mode, resource)
+			if fallbackCause != nil {
+				// 直传失败已由本地兜底接住：分别记录失败的上传和成功的兜底保存。
+				s.logMediaStage(*task, stage, started, fallbackCause)
+				s.logMediaStage(*task, "local_fallback", started, nil)
+			} else {
+				s.logMediaStage(*task, stage, started, err)
+			}
 			if err != nil {
 				return nil, &mediaRecoveryError{stage: stage, retryable: retryableMediaRecovery(err), cause: err}
 			}
@@ -625,8 +632,15 @@ func (s *Service) logMediaStage(task model.Task, stage string, started time.Time
 		code = "media_" + stage + "_failed"
 		message = mediaStageLabel(stage)
 		// 只附加存储服务返回的错误码和状态码，不写对象路径、URL 或凭据。
-		if label := classifyStorageError(err).Label(); label != "" {
-			message += "（存储返回 " + label + "）"
+		switch {
+		case errors.Is(err, errStorageCircuitOpen):
+			message += "（存储熔断中，未直传）"
+		case errors.Is(err, errOSSUploadQueueTimeout):
+			message += "（等待上传名额超时）"
+		default:
+			if label := classifyStorageError(err).Label(); label != "" {
+				message += "（存储返回 " + label + "）"
+			}
 		}
 	}
 	if logErr := s.LogAPICall(model.ApiCallLog{UserID: task.UserID, TaskID: task.ID, BillingOrderID: task.BillingOrderID, ProviderRequestID: task.ProviderRequestID, Source: "backend-task", Capability: capabilityFromTaskType(task.Type), Model: task.Model, RequestKind: stage, Method: "INTERNAL", Path: "task/media/" + stage, Status: status, ErrorCode: code, Error: message, DurationMs: time.Since(started).Milliseconds()}); logErr != nil {
