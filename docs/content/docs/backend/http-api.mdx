@@ -32,6 +32,18 @@ description: 信封、错误码与 OpenAPI
 
 图片的 `role=first_frame/last_frame` 表示帧约束；`reference` 或未指定角色表示普通参考，不能静默改成首帧。模式、素材数量和参数共同参与模型能力校验及价格档选择；不支持的组合在创建任务和计费前拒绝。执行输入的 `metadata.videoEditOperation` 与任务操作保持一致，并保留帧素材标识。浏览器自定义渠道的工作台任务使用同一模式规则，其他入口沿用各自的意图解析。
 
+## 工作台批量生成的批次标识
+
+一次生成多张图片或多条视频时，页面把请求拆成多个任务（视频每条一个任务，图片按模型单次张数拆分），逐个调用 `POST /api/workbench/tasks`，每个请求带上同一个批次：
+
+```json
+{ "batch": { "id": "3f6c…", "index": 0, "count": 3 } }
+```
+
+`id` 为 8–64 位字母、数字、`-` 或 `_`，`count` 为 1–20，`index` 从 0 开始且小于 `count`；字段非法时 `POST /api/workbench/tasks` 返回 400。批次只写入任务输入的 `metadata.workbench.batch`，用于列表分组，不参与调度、准入和计费，每个任务仍各自校验、预占积分与结算。浏览器自定义渠道走 `POST /api/tasks` 时把同样的对象放在 `input.metadata.workbench.batch`；该入口不校验批次，非法批次在列表中按单任务展示。
+
+`GET /api/workbench/tasks` 与 `GET /api/tasks` 的列表项对 `metadata.source=workbench` 且批次合法的任务返回 `clientContext.batchId`、`batchIndex`、`batchCount`（`batchIndex` 为 0 时省略）；任务详情的 `inputJson.workbench.batch` 保留同一批次。旧任务没有批次，页面按单任务展示。
+
 ## 图片响应格式
 
 渠道模型的 `capabilityConfig.image.responseFormat` 包含 `supported` 和可选的 `default`。默认值为 `auto`，表示请求中不发送 `response_format`，由上游决定返回 URL 或 Base64；`b64_json` 和 `url` 会分别强制发送对应值。该配置按模型保存，不根据 `openai-image` 协议名称自动推断，避免兼容网关不接受 Base64 时生成失败。需要持久化 Base64 结果的模型（例如已验证的 ddcat 图片模型）应将默认值设为 `b64_json`。
@@ -574,12 +586,12 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 | 路径 | 请求与结果 |
 | --- | --- |
 | `GET/POST /api/agent/memories` | 按状态读取 / 手工添加；状态含 `pending/approved/rejected/expired`，新增正文按受控字段校验 |
-| `PATCH/DELETE /api/agent/memories/:id` | 编辑 / 删除自己的条目；`POST .../:id/decide` 的 `{ decision: "approve" | "reject" }` 决定待审经验是否以后可用 |
+| `PATCH/DELETE /api/agent/memories/:id` | 编辑 / 删除自己的条目；`POST .../:id/decide` 的 `{ decision: "approve" \| "reject" }` 决定待审经验是否以后可用 |
 | `GET /api/agent/memories/export`、`POST /api/agent/memories/import` | `kind=agent-memories` 的个人记忆 JSON；一次导入最多 200 条，仍校验内容与归属 |
 | `GET/PATCH /api/agent/memories/settings` | 读取压缩设置或更新 `compactInterval: off/daily/weekly/monthly` 与受管文本模型 |
 | `POST /api/agent/memories/compact` | 按文本模型计费生成压缩提案，返回设置视图的 `taskId/proposalId/lastStatus/summary`；模型完成不直接改删记忆 |
 | `GET /api/agent/memories/proposals?limit=30` | 返回 `{ proposals }`；每项含 `id/status/version/taskId?/summary/changes/createdAt/decidedAt?`，change 含 `kind`、全部 `before` 和拟保留的 `after` |
-| `POST /api/agent/memories/proposals/:proposalId/decide` | 必填 `{ decision: "approve" | "reject", version }`；批准原子应用整份提案，拒绝不改原记忆；返回更新后的提案 |
+| `POST /api/agent/memories/proposals/:proposalId/decide` | 必填 `{ decision: "approve" \| "reject", version }`；批准原子应用整份提案，拒绝不改原记忆；返回更新后的提案 |
 | `GET /api/agent/memories/revisions?limit=30` | 返回 `{ revisions }`；每项含 `id/proposalId/version/before/after/createdAt/restoredAt?` |
 | `POST /api/agent/memories/revisions/:revisionId/restore` | 必填 `{ version }`；原子恢复该批次压缩前的内容，返回更新后的版本视图 |
 

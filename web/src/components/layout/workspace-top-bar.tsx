@@ -25,6 +25,11 @@ const PAGE_TITLES: Record<string, string> = {
     settings: "设置",
 };
 
+const TOOLBOX_TITLES: Record<string, string> = {
+    image: "图片生成",
+    video: "视频生成",
+};
+
 export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen: boolean; onToggleSidebar: () => void }) {
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const theme = useThemeStore((state) => state.theme);
@@ -33,8 +38,10 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const { availableMicrocredits } = useWalletBalance(user?.id, creditsEnabled);
     const { pathname } = useLocation();
-    const slug = pathname.split("/").filter(Boolean)[0];
-    const pageTitle = slug ? PAGE_TITLES[slug] || brandName : PAGE_TITLES.home;
+    const [slug, subSlug] = pathname.split("/").filter(Boolean);
+    // /toolbox/image 和 /toolbox/video 共用 toolbox 首段，标题按第二段区分。
+    const sectionTitle = slug === "toolbox" ? TOOLBOX_TITLES[subSlug ?? ""] : PAGE_TITLES[slug ?? ""];
+    const pageTitle = slug ? sectionTitle || brandName : PAGE_TITLES.home;
     const balance = availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 
     return (
@@ -43,18 +50,22 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
                 {sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
             </button>
             <nav className="app-workspace-topbar-breadcrumb" aria-label="当前位置">
-                <Link to="/" className="font-medium text-foreground/65 transition-colors hover:text-foreground">{brandName}</Link>
+                <Link to="/" className="font-medium text-foreground/65 transition-colors hover:text-foreground">
+                    {brandName}
+                </Link>
                 <span aria-hidden="true">/</span>
                 <span className="truncate font-medium text-foreground">{pageTitle}</span>
             </nav>
             <WorkspaceTopBarExtensionSlot />
             <div className="app-workspace-topbar-actions">
                 {user ? <TopbarFeedbackButton /> : null}
-                {creditsEnabled ? <button type="button" className="app-workspace-topbar-credit-pill" aria-label={`打开积分中心，可用 ${balance} 积分`} onClick={() => openWorkspaceWallet()}>
-                    <WorkspaceCreditGiftMark />
-                    <span>积分</span>
-                    <strong>{balance}</strong>
-                </button> : null}
+                {creditsEnabled ? (
+                    <button type="button" className="app-workspace-topbar-credit-pill" aria-label={`打开积分中心，可用 ${balance} 积分`} onClick={() => openWorkspaceWallet()}>
+                        <WorkspaceCreditGiftMark />
+                        <span>积分</span>
+                        <strong>{balance}</strong>
+                    </button>
+                ) : null}
                 {user ? <SystemAnnouncementCenter userId={user.id} className="app-workspace-topbar-icon-button" autoOpen /> : null}
                 <AnimatedThemeToggler className="app-workspace-topbar-icon-button" theme={theme} onThemeChange={setTheme} aria-label="切换主题" />
                 <WorkspaceAccountMenu />

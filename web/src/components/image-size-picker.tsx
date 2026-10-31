@@ -13,6 +13,7 @@ export function ImageSizePicker({
     quality,
     imageResolution,
     canSelectResolution,
+    ratioHint,
     onChange,
 }: {
     profile: ImageCapabilityConfig;
@@ -20,6 +21,8 @@ export function ImageSizePicker({
     quality?: string;
     imageResolution?: string;
     canSelectResolution?: (resolution: string) => boolean;
+    /** 可选：在比例按钮下补一行用途说明（如电商“主图”），不改变可选值。 */
+    ratioHint?: (ratio: string) => { label: string; title?: string } | undefined;
     onChange: (size: string, quality?: string, resolution?: string) => void;
 }) {
     const ungrouped = Boolean(profile.parameters && !profile.resolution.supported);
@@ -204,18 +207,22 @@ export function ImageSizePicker({
             ) : null}
             {choices.length ? <div className="image-size-label">宽高比</div> : null}
             <div className="image-size-ratios">
-                {choices.map((preset) => (
-                    <button
-                        type="button"
-                        key={`${preset.ratio}:${preset.size}`}
-                        title={`${preset.ratio} · ${preset.width} × ${preset.height}`}
-                        aria-pressed={size !== "auto" && active?.size === preset.size && active?.tier === tier}
-                        onClick={() => select(preset)}
-                    >
-                        <span className="image-size-ratio-icon" style={{ width: 24 * Math.min(1, preset.width / preset.height), height: 24 * Math.min(1, preset.height / preset.width) }} />
-                        <span>{preset.ratio}</span>
-                    </button>
-                ))}
+                {choices.map((preset) => {
+                    const hint = ratioHint?.(preset.ratio);
+                    return (
+                        <button
+                            type="button"
+                            key={`${preset.ratio}:${preset.size}`}
+                            title={`${preset.ratio} · ${preset.width} × ${preset.height}${hint?.title ? `\n${hint.title}` : ""}`}
+                            aria-pressed={size !== "auto" && active?.size === preset.size && active?.tier === tier}
+                            onClick={() => select(preset)}
+                        >
+                            <span className="image-size-ratio-icon" style={{ width: 24 * Math.min(1, preset.width / preset.height), height: 24 * Math.min(1, preset.height / preset.width) }} />
+                            <span>{preset.ratio}</span>
+                            {hint ? <small className="image-size-ratio-hint">{hint.label}</small> : null}
+                        </button>
+                    );
+                })}
             </div>
             {!choices.length ? <p className="image-size-hint">未配置预设尺寸{profile.size.allowCustom ? "，可输入自定义比例或尺寸" : ""}</p> : null}
             <output aria-live="polite" className="image-size-output">

@@ -92,7 +92,11 @@ export type CreateWorkbenchTaskInput = {
         role?: "reference" | "first_frame" | "last_frame";
         slotKey?: string;
     }>;
+    /** 一次提交拆成多个任务时共用的批次标识，只用于列表分组，不影响准入和计费。 */
+    batch?: WorkbenchTaskBatch;
 };
+
+export type WorkbenchTaskBatch = { id: string; index: number; count: number };
 
 export async function listWorkbenchTasks(kind: WorkbenchKind, limit = 100, activeOnly = false, signal?: AbortSignal) {
     const pageSize = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.trunc(limit))) : 100;
@@ -221,6 +225,8 @@ export async function createWorkbenchTask(input: WorkbenchTaskIntent) {
     const result = await http.post<WorkbenchTaskReceipt | WorkbenchTaskReceipt["task"]>("/workbench/tasks", input);
     const task = result && "task" in result ? result.task : result;
     if (!task?.id) throw new Error("任务已提交，但没有返回任务编号");
+    // 与 createGenerationTask 一致：创建时积分已被预占，钱包余额需要立即刷新。
+    window.dispatchEvent(new CustomEvent("wallet:updated"));
     return task;
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/workbench"
 )
 
 // TaskSummary 是任务列表/会话详情的读模型，不直接复用数据库 Task，避免把
@@ -48,6 +49,7 @@ type TaskClientContext struct {
 	NodeID           string `json:"nodeId,omitempty"`
 	ConversationID   string `json:"conversationId,omitempty"`
 	MessageID        string `json:"messageId,omitempty"`
+	BatchID          string `json:"batchId,omitempty"`
 	BatchIndex       int    `json:"batchIndex,omitempty"`
 	BatchCount       int    `json:"batchCount,omitempty"`
 	DomainProjectID  string `json:"domainProjectId,omitempty"`
@@ -155,6 +157,13 @@ func taskClientContext(raw string) *TaskClientContext {
 			ShotID          string `json:"shotId"`
 			WorkflowStepID  string `json:"workflowStepId"`
 			ArtifactType    string `json:"artifactType"`
+			Workbench       struct {
+				Batch struct {
+					ID    string `json:"id"`
+					Index int    `json:"index"`
+					Count int    `json:"count"`
+				} `json:"batch"`
+			} `json:"workbench"`
 		} `json:"metadata"`
 	}
 	if json.Unmarshal([]byte(raw), &input) != nil {
@@ -167,6 +176,13 @@ func taskClientContext(raw string) *TaskClientContext {
 		context.MessageID = metadata.MessageID
 		context.BatchIndex = metadata.BatchIndex
 		context.BatchCount = metadata.BatchCount
+		return context
+	}
+	// 工作台一次提交拆出的多个任务按批次 ID 在页面上归为一组；字段非法时按单任务展示。
+	if batch := metadata.Workbench.Batch; metadata.Source == "workbench" && workbench.ValidTaskBatch(batch.ID, batch.Index, batch.Count) {
+		context.BatchID = batch.ID
+		context.BatchIndex = batch.Index
+		context.BatchCount = batch.Count
 		return context
 	}
 	if metadata.ShotID != "" && metadata.WorkflowStepID != "" {
@@ -358,7 +374,34 @@ func publicWorkbenchInput(input map[string]any) map[string]any {
 		result["presetId"] = presetID
 	}
 	result["references"] = publicWorkbenchReferences(snapshot["references"], input)
+	if batch, ok := snapshot["batch"].(map[string]any); ok {
+		id := strings.TrimSpace(stringValue(batch["id"]))
+		index, indexOK := workbenchBatchInteger(batch["index"])
+		count, countOK := workbenchBatchInteger(batch["count"])
+		if indexOK && countOK && workbench.ValidTaskBatch(id, index, count) {
+			result["batch"] = map[string]any{"id": id, "index": index, "count": count}
+		}
+	}
 	return result
+}
+
+// 批次序号从 0 开始，不能复用 workbenchInteger（它要求 >= 1）。
+func workbenchBatchInteger(value any) (int, bool) {
+	switch number := value.(type) {
+	case float64:
+		parsed := int(number)
+		return parsed, float64(parsed) == number
+	case int:
+		return number, true
+	case int64:
+		parsed := int(number)
+		return parsed, int64(parsed) == number
+	case json.Number:
+		parsed, err := strconv.Atoi(number.String())
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
 }
 
 func publicWorkbenchParameters(kind string, snapshot, input map[string]any) map[string]any {

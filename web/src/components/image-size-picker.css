@@ -62,6 +62,13 @@
     border-radius: 4px;
     opacity: 0.6;
 }
+.image-size-ratio-hint {
+    margin-top: -4px;
+    font-size: var(--fs-label);
+    line-height: 1.2;
+    opacity: 0.58;
+    white-space: nowrap;
+}
 .image-size-output {
     padding: 8px 8px;
     border-radius: var(--r-md);
