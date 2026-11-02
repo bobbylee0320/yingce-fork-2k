@@ -19821,6 +19821,65 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     box-shadow: none !important;
 }
 
+.canvas-prompt-modal-resize-width,
+.canvas-prompt-modal-resize-height {
+    position: absolute;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: var(--r-full);
+    background: transparent;
+    padding: 0;
+    touch-action: none;
+    opacity: 0.38;
+    transition: opacity var(--motion-fast) ease-out, background-color var(--motion-fast) ease-out;
+}
+.canvas-prompt-modal-resize-width {
+    top: 50%;
+    right: 0;
+    width: 22px;
+    height: 88px;
+    cursor: ew-resize;
+    transform: translateY(-50%);
+}
+.canvas-prompt-modal-resize-height {
+    bottom: 0;
+    left: 50%;
+    width: 88px;
+    height: 22px;
+    cursor: ns-resize;
+    transform: translateX(-50%);
+}
+.canvas-prompt-modal-resize-width > span {
+    width: 3px;
+    height: var(--space-8);
+    border-radius: var(--r-full);
+    background: var(--prompt-resize-accent, var(--foreground));
+}
+.canvas-prompt-modal-resize-height > span {
+    width: var(--space-8);
+    height: 3px;
+    border-radius: var(--r-full);
+    background: var(--prompt-resize-accent, var(--foreground));
+}
+.canvas-prompt-modal-resize-width:hover,
+.canvas-prompt-modal-resize-width:active,
+.canvas-prompt-modal-resize-height:hover,
+.canvas-prompt-modal-resize-height:active,
+.canvas-prompt-modal-resize-width:focus-visible,
+.canvas-prompt-modal-resize-height:focus-visible {
+    opacity: 0.9;
+    outline: 2px solid var(--prompt-resize-accent, var(--ring));
+    outline-offset: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .canvas-prompt-modal-resize-width,
+    .canvas-prompt-modal-resize-height {
+        transition: none;
+    }
+}
+
 .ant-select.app-unified-select[data-input-modality="keyboard"]:not(.ant-select-open) {
     outline: 1px solid color-mix(in srgb, var(--ring) 30%, transparent) !important;
     outline-offset: 0;
