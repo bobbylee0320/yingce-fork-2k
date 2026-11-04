@@ -294,8 +294,10 @@ type GeneratedVideoResult = {
  * 节点仍保存稳定的资源文件地址，Blob 只作为本地缓存和后续字节处理的加速层。
  */
 async function cacheGeneratedRemoteVideo(result: GeneratedVideoResult & { storageKey: string }): Promise<UploadedFile> {
-    const blob = await getCachedResourceBlob(result.storageKey);
-    if (!blob) throw new Error("生成视频资源缓存失败，未标记为成功");
+    // The backend resource is already durable (local-first or OSS). Cache the
+    // full video in the background so a slow 60–100 MB download cannot block
+    // the canvas result from appearing.
+    void getCachedResourceBlob(result.storageKey).catch(() => undefined);
     const url = await resolveVideoMediaUrl(result.storageKey, result.dataUrl || "");
     if (!url) throw new Error("生成视频资源地址为空，未标记为成功");
     return {
@@ -304,8 +306,8 @@ async function cacheGeneratedRemoteVideo(result: GeneratedVideoResult & { storag
         width: result.width,
         height: result.height,
         durationMs: result.durationMs,
-        bytes: result.bytes || blob.size,
-        mimeType: result.mimeType || blob.type || "video/mp4",
+        bytes: result.bytes || 0,
+        mimeType: result.mimeType || "video/mp4",
     };
 }
 

@@ -36,6 +36,10 @@ func NotFound(message string) *AuthError {
 	return kernel.NotFound(message)
 }
 
+func ResourceExpired(message string) *AuthError {
+	return kernel.ResourceExpired(message)
+}
+
 func Unauthorized(message string) *AuthError {
 	return kernel.Unauthorized(message)
 }

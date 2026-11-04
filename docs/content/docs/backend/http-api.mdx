@@ -645,6 +645,7 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 | 401 | 401 | `unauthorized` | 未登录 |
 | 403 | 403 | `forbidden` | 无权限 |
 | 404 | 404 | `not_found` | 资源不存在 |
+| 41001 | 410 | `resource_expired` | 生成媒体的本地兜底与对象存储补传均已超过保留期限；前端应移除临时生成结果，保留的画布引用显示资源已过期 |
 | 409 | 409 | `conflict` | 冲突 |
 | 409 | 409 | `project_name_conflict` | `POST /projects` 同一用户下已有同名项目；客户端可有限更换名称重试 |
 | 409 | 409 | `skill_version_conflict` | `PUT /skills/:id/files` 的 `baseVersionId` 已不是当前版本；`details.currentVersionId` 为最新版本，客户端需重新加载后再编辑 |

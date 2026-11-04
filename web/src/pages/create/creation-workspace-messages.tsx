@@ -18,7 +18,7 @@ import { useCopyText } from "@/hooks/use-copy-text";
 import { type CreationReference, displayCreationPrompt } from "./creation-references";
 import { useUserStore } from "@/stores/use-user-store";
 import { type CreationAttachment, creationAttachmentKind, creationMediaAspectRatio, type CreationMode } from "./creation-assets";
-import { getResourceAccess, resolveResourceAccessURL, resolveResourceUrl, resourceIdFromStorageKey } from "@/services/api/resources";
+import { getResourceAccess, resolveResourceAccessURL, resolveResourceUrl, resourceIdFromStorageKey, ResourceExpiredError } from "@/services/api/resources";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useAssetStore, type Asset, type ImageAsset, type VideoAsset } from "@/stores/use-asset-store";
@@ -42,6 +42,7 @@ export function CreationMessageView({
     onEditUserMessage,
     onContinueCanvas,
     openingCanvas,
+    onResultExpired,
 }: {
     item: CreationMessage;
     shotNumber: number;
@@ -53,6 +54,7 @@ export function CreationMessageView({
     onEditUserMessage: (message: CreationMessage) => void;
     onContinueCanvas: (ids?: string[]) => void;
     openingCanvas: boolean;
+    onResultExpired?: (storageKey: string) => void;
 }) {
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
     if (item.role === "user") return <CreationUserMessage item={item} shotNumber={shotNumber} onEditUserMessage={onEditUserMessage} />;
@@ -135,6 +137,7 @@ export function CreationMessageView({
                         onCreateVariant={onCreateVariant}
                         onContinueCanvas={onContinueCanvas}
                         openingCanvas={openingCanvas}
+                        onResultExpired={(storageKey) => onResultExpired?.(storageKey)}
                     />
                 </GenerationToolCard>
             )}
@@ -285,6 +288,7 @@ export function MediaResult({
     onCreateVariant,
     onContinueCanvas,
     openingCanvas,
+    onResultExpired,
 }: {
     item: CreationMessage;
     onRetryFailure: () => void;
@@ -294,15 +298,22 @@ export function MediaResult({
     onCreateVariant: () => void;
     onContinueCanvas: (ids?: string[]) => void;
     openingCanvas: boolean;
+    onResultExpired?: (storageKey: string) => void;
 }) {
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const assets = useAssetStore((state) => state.assets);
     const storedResultUrls = item.resultUrls || [];
-    const resultStorageKeys = item.resultStorageKeys?.length ? item.resultStorageKeys : creationResultStorageKeys(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: storedResultUrls });
+    const resultStorageKeys = item.resultStorageKeys !== undefined ? item.resultStorageKeys : creationResultStorageKeys(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: storedResultUrls });
     // 展示地址按 storageKey 保存；effect 重跑（素材库更新、续签）时不回退到历史 hint。
     const [resolvedByKey, setResolvedByKey] = useState<Record<string, string>>({});
     const [failedByKey, setFailedByKey] = useState<Record<string, boolean>>({});
+    const [expiredByKey, setExpiredByKey] = useState<Record<string, boolean>>({});
+
+    const markExpired = (storageKey: string) => {
+        setExpiredByKey((current) => (current[storageKey] ? current : { ...current, [storageKey]: true }));
+        onResultExpired?.(storageKey);
+    };
 
     useEffect(() => {
         let active = true;
@@ -321,8 +332,12 @@ export function MediaResult({
                 const nextRefreshAt = Number.isFinite(refreshAt) ? refreshAt : expiresAt;
                 const delay = Number.isFinite(nextRefreshAt) ? Math.max(10_000, nextRefreshAt - Date.now()) : 4 * 60_000;
                 timers.push(setTimeout(() => void refreshRemote(index, storageKey), delay));
-            } catch {
+            } catch (error) {
                 if (!active) return;
+                if (error instanceof ResourceExpiredError) {
+                    markExpired(storageKey);
+                    return;
+                }
                 setFailedByKey((current) => (current[storageKey] ? current : { ...current, [storageKey]: true }));
                 timers.push(setTimeout(() => void refreshRemote(index, storageKey), 60_000));
             }
@@ -358,20 +373,52 @@ export function MediaResult({
     const [mediaAttempts, setMediaAttempts] = useState<Record<string, number>>({});
     const [naturalRatios, setNaturalRatios] = useState<Record<string, number>>({});
     const markResultMedia = (key: string, state: "loaded" | "error") => setMediaStates((current) => (current[key] === state ? current : { ...current, [key]: state }));
+    const handleResultMediaError = (key: string) => {
+        markResultMedia(key, "error");
+        if (!resourceIdFromStorageKey(key)) return;
+        const attempts = mediaAttempts[key] || 0;
+        if (attempts >= 1) return;
+        setMediaAttempts((current) => ({ ...current, [key]: attempts + 1 }));
+        void getResourceAccess(key, "display", "original", "", { forceRefresh: true })
+            .then((access) => {
+                setResolvedByKey((current) => ({ ...current, [key]: resolveResourceAccessURL(access.url) }));
+                setMediaStates((current) => {
+                    const next = { ...current };
+                    delete next[key];
+                    return next;
+                });
+            })
+            .catch((error) => {
+                if (error instanceof ResourceExpiredError) markExpired(key);
+            });
+    };
     const retryResultMedia = (key: string) => {
         setMediaStates(({ [key]: _failed, ...rest }) => rest);
         setMediaAttempts((current) => ({ ...current, [key]: (current[key] || 0) + 1 }));
         if (!resourceIdFromStorageKey(key)) return;
         void getResourceAccess(key, "display", "original", "", { forceRefresh: true })
             .then((access) => setResolvedByKey((current) => ({ ...current, [key]: resolveResourceAccessURL(access.url) })))
-            .catch(() => markResultMedia(key, "error"));
+            .catch((error) => {
+                if (error instanceof ResourceExpiredError) {
+                    markExpired(key);
+                    return;
+                }
+                markResultMedia(key, "error");
+            });
     };
+    const visibleResultPairs = resultStorageKeys
+        .map((storageKey, index) => ({ storageKey, url: storedResultUrls[index] || "" }))
+        .filter(({ storageKey }) => !expiredByKey[storageKey]);
+    const visibleResultStorageKeys = visibleResultPairs.map(({ storageKey }) => storageKey);
+    const visibleStoredResultUrls = visibleResultPairs.map(({ url }) => url);
     const fallbackRatio = creationAspectRatioValue(creationMediaAspectRatio(item.settings?.ratio, item.mode || "image"));
-    const { entries: resultEntries, resolving } = creationResultEntries({ storageKeys: resultStorageKeys, storedUrls: storedResultUrls, resolvedByKey, failedByKey, isVideo, isRemoteKey: (storageKey) => Boolean(resourceIdFromStorageKey(storageKey)) });
-    const alignedResultUrls = resultStorageKeys.length ? resultStorageKeys.map((storageKey) => resultEntries.find((entry) => entry.key === storageKey)?.url || "") : resultEntries.map((entry) => entry.url);
+    const { entries: resultEntries, resolving } = creationResultEntries({ storageKeys: visibleResultStorageKeys, storedUrls: visibleStoredResultUrls, resolvedByKey, failedByKey, isVideo, isRemoteKey: (storageKey) => Boolean(resourceIdFromStorageKey(storageKey)) });
+    const alignedResultUrls = visibleResultStorageKeys.length ? visibleResultStorageKeys.map((storageKey) => resultEntries.find((entry) => entry.key === storageKey)?.url || "") : resultEntries.map((entry) => entry.url);
     const displayResultUrls = resultEntries.map((entry) => entry.url);
-    const resultAssetIds = alignedResultUrls.length || resultStorageKeys.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: alignedResultUrls, resultStorageKeys }) : [];
-    const expectedResultCount = resultStorageKeys.length || alignedResultUrls.length;
+    const resultAssetIds = alignedResultUrls.length || visibleResultStorageKeys.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: alignedResultUrls, resultStorageKeys: visibleResultStorageKeys }) : [];
+    const expectedResultCount = visibleResultStorageKeys.length || alignedResultUrls.length;
+    const expiredResultCount = Object.values(expiredByKey).filter(Boolean).length;
+    const allResultsExpired = expiredResultCount > 0 && !expectedResultCount && !resolving;
     const canContinueWithResults = expectedResultCount > 0 && resultAssetIds.length === expectedResultCount;
     if (item.status === "pending" && item.generationSyncState)
         return (
@@ -414,7 +461,21 @@ export function MediaResult({
     const videoKey = resultEntries[0]?.key || resultStorageKeys[0] || "video";
     const videoState = displayResultUrls[0] ? mediaStates[videoKey] || "loading" : "loading";
     // 远端地址还在解析的结果位先按同样尺寸占位，不让结果区塌成一行操作按钮。
-    const pendingImageKeys = !isVideo && resolving ? resultStorageKeys.filter((storageKey) => !resultEntries.some((entry) => entry.key === storageKey)) : [];
+    const pendingImageKeys = !isVideo && resolving ? visibleResultStorageKeys.filter((storageKey) => !resultEntries.some((entry) => entry.key === storageKey)) : [];
+    if (allResultsExpired)
+        return (
+            <CreationMediaNotice
+                tone="warning"
+                icon={ImageOff}
+                title="生成结果已过期"
+                description="对象存储在保留期限内未完成同步，临时文件已自动清理。画布和素材库中的既有引用仍会保留。"
+                actions={
+                    <CreationNoticeButton primary icon={RotateCcw} onClick={onRetryFailure}>
+                        重新生成
+                    </CreationNoticeButton>
+                }
+            />
+        );
     return (
         <div className="creation-media-result">
             {isVideo ? (
@@ -431,7 +492,7 @@ export function MediaResult({
                     aria-label={videoState === "error" ? "视频加载失败，点击重新加载" : "预览生成视频"}
                 >
                     {displayResultUrls[0] ? (
-                        <video key={`${videoKey}:${mediaAttempts[videoKey] || 0}`} muted preload="metadata" src={displayResultUrls[0]} onLoadedMetadata={() => markResultMedia(videoKey, "loaded")} onError={() => markResultMedia(videoKey, "error")} />
+                        <video key={`${videoKey}:${mediaAttempts[videoKey] || 0}`} muted preload="metadata" src={displayResultUrls[0]} onLoadedMetadata={() => markResultMedia(videoKey, "loaded")} onError={() => handleResultMediaError(videoKey)} />
                     ) : null}
                     {videoState === "error" ? <CreationResultMediaError label="视频加载失败，点击重试" /> : null}
                     <span>
@@ -467,7 +528,7 @@ export function MediaResult({
                                     if (naturalWidth > 0 && naturalHeight > 0) setNaturalRatios((current) => (current[key] === naturalWidth / naturalHeight ? current : { ...current, [key]: naturalWidth / naturalHeight }));
                                     markResultMedia(key, "loaded");
                                 }}
-                                onError={() => markResultMedia(key, "error")}
+                                onError={() => handleResultMediaError(key)}
                             />
                             {mediaStates[key] === "error" ? <CreationResultMediaError label="图片加载失败，点击重试" /> : null}
                             <span>
@@ -481,7 +542,7 @@ export function MediaResult({
                 </div>
             )}
             <div className="creation-media-actions">
-                <span>{isVideo ? "视频结果" : `${displayResultUrls.length} 张图片`}</span>
+                <span>{isVideo ? "视频结果" : `${displayResultUrls.length} 张图片${expiredResultCount ? `，${expiredResultCount} 张已过期` : ""}`}</span>
                 <Button type="link" size="small" loading={openingCanvas} disabled={!canContinueWithResults} title={canContinueWithResults ? undefined : "素材保存完成后才能转入画布"} onClick={() => onContinueCanvas(resultAssetIds)}>
                     添加到画布
                 </Button>

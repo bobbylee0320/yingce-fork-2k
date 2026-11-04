@@ -15,6 +15,7 @@ const (
 	CodeBadGateway      = 502
 	CodeUnavailable     = 503
 	CodeTimeout         = 504
+	CodeResourceExpired = 41001
 
 	CodeQuotaExceeded          = 40301
 	CodeStorageReadOnly        = 40302
@@ -47,6 +48,7 @@ const (
 	ReasonDramaSegmentChanged ErrorReason = "drama_segment_changed"
 	ReasonRateLimited         ErrorReason = "rate_limited"
 	ReasonUnavailable         ErrorReason = "unavailable"
+	ReasonResourceExpired     ErrorReason = "resource_expired"
 	ReasonTimeout             ErrorReason = "timeout"
 	ReasonInternal            ErrorReason = "internal"
 	ReasonBadGateway          ErrorReason = "bad_gateway"
@@ -73,6 +75,8 @@ func ReasonForStatus(status int) ErrorReason {
 		return ReasonUnavailable
 	case CodeTimeout:
 		return ReasonTimeout
+	case CodeResourceExpired:
+		return ReasonResourceExpired
 	default:
 		if status >= 500 {
 			return ReasonInternal

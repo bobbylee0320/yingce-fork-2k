@@ -16,18 +16,18 @@ func (r *Repository) UpsertResourceOffloadJob(job *model.ResourceOffloadJob) err
 		Columns: []clause.Column{{Name: "resource_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"user_id", "task_id", "size", "local_object_key", "target_provider", "target_endpoint", "target_bucket",
-			"target_storage_setting_id", "target_object_key", "status", "attempts", "last_error_code", "last_error",
+			"target_storage_setting_id", "target_object_key", "status", "attempts", "last_error_code", "last_error", "expires_at", "expired_at",
 			"next_attempt_at", "lease_owner", "lease_expires_at", "local_playback_key", "local_delete_after", "local_deleted_at", "updated_at",
 		}),
 	}).Create(job).Error
 }
 
-func (r *Repository) ClaimNextResourceOffloadJob(owner string, leaseDuration time.Duration) (*model.ResourceOffloadJob, error) {
+func (r *Repository) ClaimNextResourceOffloadJob(owner string, leaseDuration time.Duration, legacyExpiryCutoff time.Time) (*model.ResourceOffloadJob, error) {
 	var job model.ResourceOffloadJob
 	now := time.Now()
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		available := "(status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))) AND next_attempt_at <= ?"
-		query := tx.Where(available, model.ResourceOffloadStatusPending, model.ResourceOffloadStatusProcessing, now, now).
+		available := "(status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))) AND (next_attempt_at <= ? OR expires_at <= ? OR (expires_at IS NULL AND created_at <= ?))"
+		query := tx.Where(available, model.ResourceOffloadStatusPending, model.ResourceOffloadStatusProcessing, now, now, now, legacyExpiryCutoff).
 			Order("next_attempt_at asc, created_at asc").Limit(1)
 		if r.Dialect() == "postgres" {
 			query = query.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"})
@@ -38,7 +38,7 @@ func (r *Repository) ClaimNextResourceOffloadJob(owner string, leaseDuration tim
 		}
 		claim := tx.Model(&model.ResourceOffloadJob{}).Where("id = ?", job.ID)
 		if r.Dialect() != "postgres" {
-			claim = claim.Where(available, model.ResourceOffloadStatusPending, model.ResourceOffloadStatusProcessing, now, now)
+			claim = claim.Where(available, model.ResourceOffloadStatusPending, model.ResourceOffloadStatusProcessing, now, now, now, legacyExpiryCutoff)
 		}
 		updated := claim.Updates(map[string]any{
 			"status":           model.ResourceOffloadStatusProcessing,
@@ -80,6 +80,27 @@ func (r *Repository) FinishResourceOffloadJob(id, owner string, status model.Res
 	return r.db.Model(&model.ResourceOffloadJob{}).Where("id = ? AND lease_owner = ?", id, owner).Updates(values).Error
 }
 
+// ExpireResourceOffloadJob marks a leased job as expired without retrying it.
+// The caller is responsible for removing the local bytes after the resource
+// row has been made unavailable.
+func (r *Repository) ExpireResourceOffloadJob(id, owner, reason string, expiredAt time.Time, updates map[string]any) error {
+	values := map[string]any{
+		"status": model.ResourceOffloadStatusExpired, "last_error_code": "offload_expired", "last_error": reason,
+		"expired_at": expiredAt, "lease_owner": "", "lease_expires_at": nil, "updated_at": expiredAt,
+	}
+	for key, value := range updates {
+		values[key] = value
+	}
+	return r.db.Model(&model.ResourceOffloadJob{}).Where("id = ? AND lease_owner = ?", id, owner).Updates(values).Error
+}
+
+func (r *Repository) MarkResourceOffloadResourceExpired(job *model.ResourceOffloadJob, reason string) (bool, error) {
+	result := r.db.Model(&model.Resource{}).
+		Where("id = ? AND user_id = ? AND provider = ? AND object_key = ? AND status = ?", job.ResourceID, job.UserID, "local", job.LocalObjectKey, model.ResourceStatusReady).
+		Updates(map[string]any{"status": model.ResourceStatusFailed, "error": reason, "updated_at": time.Now()})
+	return result.RowsAffected == 1, result.Error
+}
+
 // SwitchResourceToObjectStorage 只在资源仍是该任务写入的那份本地文件时切换存储位置。
 // 资源已删除、已被替换或已切换时返回 false，调用方负责清理刚上传的对象。
 func (r *Repository) SwitchResourceToObjectStorage(job *model.ResourceOffloadJob, etag string) (bool, error) {
@@ -100,16 +121,17 @@ func (r *Repository) LocalFallbackBytes() (int64, error) {
 	var total int64
 	err := r.db.Model(&model.ResourceOffloadJob{}).
 		Select("COALESCE(SUM(size), 0)").
-		Where("status IN ? OR (status = ? AND local_deleted_at IS NULL)",
+		Where("status IN ? OR (status IN ? AND local_deleted_at IS NULL)",
 			[]model.ResourceOffloadStatus{model.ResourceOffloadStatusPending, model.ResourceOffloadStatusProcessing, model.ResourceOffloadStatusFailed},
-			model.ResourceOffloadStatusDone).
+			[]model.ResourceOffloadStatus{model.ResourceOffloadStatusDone, model.ResourceOffloadStatusExpired},
+		).
 		Scan(&total).Error
 	return total, err
 }
 
 func (r *Repository) DueResourceOffloadCleanups(now time.Time, limit int) ([]model.ResourceOffloadJob, error) {
 	var jobs []model.ResourceOffloadJob
-	err := r.db.Where("status = ? AND local_deleted_at IS NULL AND local_delete_after <= ?", model.ResourceOffloadStatusDone, now).
+	err := r.db.Where("status IN ? AND local_deleted_at IS NULL AND local_delete_after <= ?", []model.ResourceOffloadStatus{model.ResourceOffloadStatusDone, model.ResourceOffloadStatusExpired}, now).
 		Order("local_delete_after asc").Limit(limit).Find(&jobs).Error
 	return jobs, err
 }

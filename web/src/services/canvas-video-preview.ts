@@ -6,7 +6,7 @@ import { uploadImage } from "@/services/image-storage";
 import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
 
 type VideoPreview = NonNullable<CanvasNodeMetadata["videoPreview"]>;
-type HydratedPoster = { poster: Blob; persisted: Promise<VideoPreview | null> };
+type HydratedPoster = { poster: Blob; width: number; height: number; durationMs?: number; hasAudio?: boolean; persisted: Promise<VideoPreview | null> };
 type CanvasVideoHydrationEntry = {
     promise: Promise<HydratedPoster | null>;
     controller: AbortController;
@@ -19,6 +19,10 @@ const canvasVideoHydrationBySource = new Map<string, CanvasVideoHydrationEntry>(
 export type HydratedCanvasVideoPreview = {
     /** 页面先用这个 object URL 渲染首帧，不等待 OSS 预览图上传。 */
     localUrl: string;
+    width: number;
+    height: number;
+    durationMs?: number;
+    hasAudio?: boolean;
     /** 持久化上传在首帧已经可见后后台完成；失败不影响本地首帧。 */
     persisted: Promise<VideoPreview | null>;
 };
@@ -61,7 +65,7 @@ export function hydrateCanvasVideoPreview(node: CanvasNodeData, signal?: AbortSi
         .then((result) => {
             if (!result) return null;
             const localUrl = URL.createObjectURL(result.poster);
-            return { localUrl, persisted: result.persisted };
+            return { localUrl, width: result.width, height: result.height, durationMs: result.durationMs, hasAudio: result.hasAudio, persisted: result.persisted };
         })
         .catch((error: unknown) => {
             if (error instanceof DOMException && error.name === "AbortError") throw error;
@@ -105,7 +109,7 @@ async function generateCanvasVideoPreview(node: CanvasNodeData, signal?: AbortSi
             console.warn("视频首帧持久化失败，保留本地首帧", { nodeId: node.id, error });
             return null;
         });
-    return { poster: captured.poster, persisted };
+    return { poster: captured.poster, width: captured.width, height: captured.height, durationMs: captured.durationMs, hasAudio: captured.hasAudio, persisted };
 }
 
 function waitForBrowserIdle(signal?: AbortSignal) {

@@ -15,6 +15,7 @@ const (
 	CodeBadGateway          = kernel.CodeBadGateway
 	CodeUnavailable         = kernel.CodeUnavailable
 	CodeTimeout             = kernel.CodeTimeout
+	CodeResourceExpired     = kernel.CodeResourceExpired
 	CodeQuotaExceeded       = kernel.CodeQuotaExceeded
 	CodeStorageReadOnly     = kernel.CodeStorageReadOnly
 	CodeIdempotencyConflict = kernel.CodeIdempotencyConflict
@@ -41,6 +42,7 @@ const (
 	ReasonTimeout             = kernel.ReasonTimeout
 	ReasonInternal            = kernel.ReasonInternal
 	ReasonBadGateway          = kernel.ReasonBadGateway
+	ReasonResourceExpired    = kernel.ReasonResourceExpired
 	ReasonUpstreamDNSFailed   = kernel.ReasonUpstreamDNSFailed
 )
 

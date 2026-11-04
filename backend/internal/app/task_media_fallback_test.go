@@ -128,6 +128,98 @@ func TestPlatformStorageUploadFailureFallsBackToLocalAndSkipsUploadWhileCircuitO
 	}
 }
 
+func TestGeneratedMediaLocalFirstSkipsSynchronousObjectStorageUpload(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	t.Setenv("CANVAS_GENERATED_MEDIA_LOCAL_FIRST", "true")
+	var uploads atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		uploads.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	s, db := newMediaRecoveryTestService(t)
+	seedPlatformOSS(t, s, server.URL)
+	task := seedMediaTask(t, db, providerConfig{})
+	started := time.Now()
+	if _, err := s.materializeTaskMedia(context.Background(), task, providerConfig{}, stagedImageCheckpoint(t, s, task)); err != nil {
+		t.Fatalf("local-first media persistence failed: %v", err)
+	}
+	resource, err := s.resourceForUploadKey(task.UserID, mediaUploadKey(task.ID, 0))
+	if err != nil || resource == nil || resource.Provider != "local" || resource.Status != model.ResourceStatusReady {
+		t.Fatalf("local-first resource = %+v, %v", resource, err)
+	}
+	var job model.ResourceOffloadJob
+	if err := db.First(&job, "resource_id = ?", resource.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if job.Status != model.ResourceOffloadStatusPending || job.ExpiresAt.Before(started.Add(4*time.Hour)) {
+		t.Fatalf("local-first offload job = %+v", job)
+	}
+	if uploads.Load() != 0 {
+		t.Fatalf("local-first path made synchronous uploads: %d", uploads.Load())
+	}
+}
+
+func TestExpiredOffloadMarksResourceUnavailableAndRemovesLocalBytes(t *testing.T) {
+	s, db := newMediaRecoveryTestService(t)
+	resource := &model.Resource{ID: "expired-resource", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "users/user-1/image/expired.png", MimeType: "image/png", Size: 4}
+	if err := s.repo.CreateResource(resource); err != nil {
+		t.Fatal(err)
+	}
+	localPath := filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey))
+	if err := os.MkdirAll(filepath.Dir(localPath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(localPath, []byte("test"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	job := &model.ResourceOffloadJob{
+		ID: "expired-job", UserID: resource.UserID, ResourceID: resource.ID, Size: resource.Size,
+		LocalObjectKey: resource.ObjectKey, TargetProvider: "s3", TargetEndpoint: "https://storage.invalid", TargetBucket: "bucket",
+		TargetObjectKey: "target/expired.png", Status: model.ResourceOffloadStatusProcessing,
+		ExpiresAt: time.Now().Add(-time.Minute), NextAttemptAt: time.Now(), LeaseOwner: "worker-1",
+		CreatedAt: time.Now().Add(-6 * time.Hour), UpdatedAt: time.Now(),
+	}
+	if err := db.Create(job).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.expireResourceOffloadJob(job, "worker-1")
+	var saved model.Resource
+	if err := db.First(&saved, "id = ?", resource.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if saved.Status != model.ResourceStatusFailed || saved.Error == "" {
+		t.Fatalf("expired resource = %+v", saved)
+	}
+	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
+		t.Fatalf("expired local file still exists, stat error=%v", err)
+	}
+	var savedJob model.ResourceOffloadJob
+	if err := db.First(&savedJob, "id = ?", job.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if savedJob.Status != model.ResourceOffloadStatusExpired || savedJob.LocalDeletedAt == nil {
+		t.Fatalf("expired job = %+v", savedJob)
+	}
+}
+
+func TestExpiredOffloadClaimPrecedesFutureRetry(t *testing.T) {
+	s, db := newMediaRecoveryTestService(t)
+	now := time.Now()
+	job := &model.ResourceOffloadJob{
+		ID: "expired-priority-job", UserID: "user-1", ResourceID: "resource-priority", Size: 1,
+		LocalObjectKey: "users/user-1/image/priority.png", TargetProvider: "aliyun", TargetObjectKey: "target/priority.png",
+		Status: model.ResourceOffloadStatusPending, NextAttemptAt: now.Add(2 * time.Hour), ExpiresAt: now.Add(-time.Minute), CreatedAt: now.Add(-time.Hour), UpdatedAt: now,
+	}
+	if err := db.Create(job).Error; err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := s.repo.ClaimNextResourceOffloadJob("worker-priority", resourceOffloadLease, now.Add(-generatedMediaLocalRetention))
+	if err != nil || claimed == nil || claimed.ID != job.ID || claimed.Status != model.ResourceOffloadStatusProcessing {
+		t.Fatalf("expired job claim = %#v, %v; want expired job claimed despite future retry", claimed, err)
+	}
+}
+
 func TestMediaStagingRemovesExpiredUnreferencedFiles(t *testing.T) {
 	s, db := newMediaRecoveryTestService(t)
 	dir := filepath.Join(s.dataDir, "media-staging")

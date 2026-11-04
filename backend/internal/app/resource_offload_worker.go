@@ -92,7 +92,8 @@ func (s *Service) startResourceOffloadWorker() {
 		ticker := time.NewTicker(resourceOffloadInterval)
 		defer ticker.Stop()
 		for {
-			s.drainResourceOffloadJobs(ctx, resourceOffloadBatch)
+			for ctx.Err() == nil && s.drainResourceOffloadJobs(ctx, resourceOffloadBatch) > 0 {
+			}
 			s.cleanupOffloadedLocalFiles()
 			select {
 			case <-ctx.Done():
@@ -103,24 +104,27 @@ func (s *Service) startResourceOffloadWorker() {
 	})
 }
 
-func (s *Service) drainResourceOffloadJobs(ctx context.Context, limit int) {
+func (s *Service) drainResourceOffloadJobs(ctx context.Context, limit int) int {
 	owner := s.workerID
 	if owner == "" {
 		owner = newID()
 	}
 	// 同一轮里某个存储位置写入失败后，不再对它发起新的上传，只顺延剩余任务。
 	blocked := map[string]bool{}
+	processed := 0
 	for index := 0; index < limit && ctx.Err() == nil; index++ {
-		job, err := s.repo.ClaimNextResourceOffloadJob(owner, resourceOffloadLease)
+		job, err := s.repo.ClaimNextResourceOffloadJob(owner, resourceOffloadLease, time.Now().Add(-generatedMediaLocalRetention))
 		if err != nil {
 			slog.Warn("resource offload claim failed", "error", err)
-			return
+			return processed
 		}
 		if job == nil {
-			return
+			return processed
 		}
+		processed++
 		s.processResourceOffloadJob(ctx, job, owner, blocked)
 	}
+	return processed
 }
 
 func offloadTargetKey(job *model.ResourceOffloadJob) string {
@@ -134,6 +138,16 @@ func (s *Service) retryResourceOffload(job *model.ResourceOffloadJob, owner, cod
 }
 
 func (s *Service) processResourceOffloadJob(ctx context.Context, job *model.ResourceOffloadJob, owner string, blocked map[string]bool) {
+	expiresAt := job.ExpiresAt
+	if expiresAt.IsZero() && !job.CreatedAt.IsZero() {
+		// Jobs created before the expiration column was introduced receive the
+		// same finite retention window instead of becoming immortal.
+		expiresAt = job.CreatedAt.Add(generatedMediaLocalRetention)
+	}
+	if !expiresAt.IsZero() && !time.Now().Before(expiresAt) {
+		s.expireResourceOffloadJob(job, owner)
+		return
+	}
 	resource, err := s.repo.Resource(job.ResourceID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		s.retryResourceOffload(job, owner, job.LastErrorCode, "读取资源失败："+err.Error())
@@ -219,6 +233,25 @@ func (s *Service) processResourceOffloadJob(ctx context.Context, job *model.Reso
 	s.logResourceOffload(job, resource, started, nil)
 }
 
+func (s *Service) expireResourceOffloadJob(job *model.ResourceOffloadJob, owner string) {
+	now := time.Now()
+	reason := "对象存储同步超过保留期限，资源已过期"
+	if _, err := s.repo.MarkResourceOffloadResourceExpired(job, reason); err != nil {
+		slog.Warn("resource offload expiry resource update failed", "jobId", job.ID, "error", err)
+		return
+	}
+	deleteErr := s.deleteLocalResourceObject(job.LocalObjectKey)
+	updates := map[string]any{"local_delete_after": &now}
+	if deleteErr == nil {
+		updates["local_deleted_at"] = &now
+	} else {
+		updates["last_error"] = "资源已过期，但本地文件清理失败：" + truncateRunes(deleteErr.Error(), 800)
+	}
+	if err := s.repo.ExpireResourceOffloadJob(job.ID, owner, reason, now, updates); err != nil {
+		slog.Warn("resource offload expiry update failed", "jobId", job.ID, "error", err)
+	}
+}
+
 // cancelResourceOffload 结束不再需要的补传。资源已删除时，删除可能已上传的目标对象；
 // 资源行仍引用目标对象时（例如之后的重试直接上传成功）绝不删除它。
 func (s *Service) cancelResourceOffload(job *model.ResourceOffloadJob, owner string, resource *model.Resource, reason string) {
@@ -260,6 +293,16 @@ func (s *Service) cleanupOffloadedLocalFiles() {
 		return
 	}
 	for _, job := range jobs {
+		if job.Status == model.ResourceOffloadStatusExpired {
+			if err := s.deleteLocalResourceObject(job.LocalObjectKey); err != nil {
+				slog.Warn("expired resource local cleanup failed", "jobId", job.ID, "error", err)
+				continue
+			}
+			if err := s.repo.MarkResourceOffloadLocalDeleted(job.ID); err != nil {
+				slog.Warn("expired resource cleanup mark failed", "jobId", job.ID, "error", err)
+			}
+			continue
+		}
 		referenced, err := s.repo.LocalObjectReferenced(job.LocalObjectKey)
 		if err != nil {
 			continue

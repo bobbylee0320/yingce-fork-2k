@@ -4,6 +4,8 @@ import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 export type CanvasVideoPreviewReference = {
     src: string;
     storageKey?: string;
+    width?: number;
+    height?: number;
 };
 
 /**
@@ -18,7 +20,7 @@ export function canvasNodeVideoPreviewReference(node: CanvasNodeData): CanvasVid
     const content = node.metadata?.content || "";
     const generatedPreview = node.metadata?.videoPreview;
     if (generatedPreview?.storageKey || (generatedPreview?.content && generatedPreview.content !== content)) {
-        return { src: generatedPreview.content || "", storageKey: generatedPreview.storageKey };
+        return { src: generatedPreview.content || "", storageKey: generatedPreview.storageKey, width: generatedPreview.width, height: generatedPreview.height };
     }
     const explicitPreview = node.metadata?.previewContent || "";
     if (explicitPreview && explicitPreview !== content) return { src: explicitPreview };

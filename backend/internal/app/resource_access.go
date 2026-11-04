@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -44,7 +45,11 @@ func (s *Service) ResourceAccessBatch(userID string, requests []ResourceAccessRe
 				err = NotFound("资源不存在或不可访问")
 			}
 			if err == nil {
-				item.Access, err = s.resolveResourceAccess(resource, options)
+				if expired := expiredResourceError(resource); expired != nil {
+					err = expired
+				} else {
+					item.Access, err = s.resolveResourceAccess(resource, options)
+				}
 			}
 		}
 		if err != nil {
@@ -99,6 +104,9 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 	if resource == nil || resource.UserID != userID {
 		return nil, Forbidden("资源不可访问")
 	}
+	if expired := expiredResourceError(resource); expired != nil {
+		return nil, expired
+	}
 	access, err := s.resolveResourceAccess(resource, options)
 	if err != nil {
 		return nil, err
@@ -117,6 +125,13 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 	}
 	delivery.Resource = delivery.Stream.Resource
 	return delivery, nil
+}
+
+func expiredResourceError(resource *model.Resource) *AppError {
+	if resource != nil && resource.Status == model.ResourceStatusFailed && strings.HasPrefix(resource.Error, "对象存储同步超过保留期限") {
+		return ResourceExpired("资源已过期，无法继续访问")
+	}
+	return nil
 }
 
 func (s *Service) signedResourceAccessURL(resource *model.Resource, variant assets.ResourceVariant, expires time.Time, public bool) (string, error) {

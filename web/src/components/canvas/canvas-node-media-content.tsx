@@ -19,7 +19,7 @@ import { bindCanvasVideoHoverPreview } from "@/lib/canvas/canvas-video-hover-pre
 import { resolveVideoMediaUrl } from "@/services/file-storage";
 import { hydrateCanvasVideoPreview } from "@/services/canvas-video-preview";
 import { type CanvasTheme } from "@/lib/canvas-theme";
-import { fitImageMaterialNodeSize, fitImageNodeSize } from "@/lib/canvas/canvas-node-size";
+import { fitImageMaterialNodeSize, fitImageNodeSize, fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { isCanvasImageActive, prepareCanvasImage, subscribeCanvasImageActivity } from "@/services/canvas-image-loader";
 import { peekCachedResourceObjectUrl } from "@/services/resource-blob-cache";
@@ -130,21 +130,7 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
                 setVideoSize({ width, height });
             }
             if (width <= 0 && height <= 0 && durationMs <= 0) return;
-            updateMediaNode?.(node.id, (current) => {
-                const metadata = current.metadata;
-                const nextMetadata = { ...metadata };
-                let changed = false;
-                if (width > 0 && height > 0 && (metadata?.naturalWidth !== width || metadata?.naturalHeight !== height)) {
-                    nextMetadata.naturalWidth = width;
-                    nextMetadata.naturalHeight = height;
-                    changed = true;
-                }
-                if (durationMs > 0 && (!metadata?.durationMs || metadata.durationMs <= 0)) {
-                    nextMetadata.durationMs = durationMs;
-                    changed = true;
-                }
-                return changed ? { ...current, metadata: nextMetadata } : current;
-            });
+            updateMediaNode?.(node.id, (current) => applyVideoMediaDimensions(current, width, height, durationMs));
         };
         video.addEventListener("loadedmetadata", handleLoadedMetadata);
         handleLoadedMetadata();
@@ -222,6 +208,42 @@ export function AudioNodeContent({ node, theme }: CanvasNodeContentProps) {
     return <CanvasAudioPlayer node={node} theme={theme} />;
 }
 
+function applyVideoMediaDimensions(node: CanvasNodeData, width: number, height: number, durationMs = 0, hasAudio?: boolean) {
+    const metadata = node.metadata;
+    const nextMetadata = { ...metadata };
+    let changed = false;
+    if (width > 0 && height > 0 && (metadata?.naturalWidth !== width || metadata?.naturalHeight !== height)) {
+        nextMetadata.naturalWidth = width;
+        nextMetadata.naturalHeight = height;
+        changed = true;
+    }
+    if (durationMs > 0 && (!metadata?.durationMs || metadata.durationMs <= 0)) {
+        nextMetadata.durationMs = durationMs;
+        changed = true;
+    }
+    if (typeof hasAudio === "boolean" && metadata?.hasAudio !== hasAudio) {
+        nextMetadata.hasAudio = hasAudio;
+        changed = true;
+    }
+    if (width > 0 && height > 0 && !metadata?.manualSize && !metadata?.freeResize && !metadata?.locked) {
+        const fitted = fitNodeSize(width, height, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
+        if (Math.abs(node.width - fitted.width) > 0.5 || Math.abs(node.height - fitted.height) > 0.5) {
+            changed = true;
+            return {
+                ...node,
+                width: fitted.width,
+                height: fitted.height,
+                position: {
+                    x: node.position.x + node.width / 2 - fitted.width / 2,
+                    y: node.position.y + node.height / 2 - fitted.height / 2,
+                },
+                metadata: nextMetadata,
+            };
+        }
+    }
+    return changed ? { ...node, metadata: nextMetadata } : node;
+}
+
 export function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeContentProps, "node" | "theme"> & { onPlay: () => void }) {
     const previewRef = useRef<HTMLDivElement>(null);
     const nearViewport = useNearViewport(previewRef);
@@ -229,8 +251,9 @@ export function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeCon
     const persistedPreviewSource = persistedPreview?.src || "";
     const persistedPreviewStorageKey = persistedPreview?.storageKey || "";
     const hasPersistedPreview = Boolean(persistedPreviewSource || persistedPreviewStorageKey);
-    const { updateMetadata } = useCanvasNodeActions();
+    const { updateMetadata, updateMediaNode } = useCanvasNodeActions();
     const updateMetadataRef = useRef(updateMetadata);
+    const updateMediaNodeRef = useRef(updateMediaNode);
     const [hydrating, setHydrating] = useState(false);
     const [localPreviewUrl, setLocalPreviewUrl] = useState("");
     const localPreviewUrlRef = useRef("");
@@ -245,7 +268,13 @@ export function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeCon
 
     useEffect(() => {
         updateMetadataRef.current = updateMetadata;
-    }, [updateMetadata]);
+        updateMediaNodeRef.current = updateMediaNode;
+    }, [updateMediaNode, updateMetadata]);
+
+    useEffect(() => {
+        if (!persistedPreview?.width || !persistedPreview.height) return;
+        updateMediaNodeRef.current?.(node.id, (current) => applyVideoMediaDimensions(current, persistedPreview.width!, persistedPreview.height!));
+    }, [node.id, persistedPreview?.height, persistedPreview?.width]);
 
     useEffect(
         () => () => {
@@ -280,6 +309,9 @@ export function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeCon
                 if (localPreviewUrlRef.current) URL.revokeObjectURL(localPreviewUrlRef.current);
                 localPreviewUrlRef.current = hydrated.localUrl;
                 setLocalPreviewUrl(hydrated.localUrl);
+                if (hydrated.width > 0 && hydrated.height > 0) {
+                    updateMediaNodeRef.current?.(node.id, (current) => applyVideoMediaDimensions(current, hydrated.width, hydrated.height, hydrated.durationMs, hydrated.hasAudio));
+                }
                 void hydrated.persisted.then((videoPreview) => {
                     if (!controller.signal.aborted && videoPreview) updateMetadataRef.current?.(node.id, { videoPreview });
                 });

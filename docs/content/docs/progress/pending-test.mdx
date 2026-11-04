@@ -4,6 +4,14 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 ---
 
 # 待测试
+## 生成媒体本地优先与对象存储异步补传
+- 已实现（后端开关）：设置 `CANVAS_GENERATED_MEDIA_LOCAL_FIRST=true` 后，生成图片/视频先写入 VPS 本地资源并立即完成任务，`resource_offload_jobs` 持久化补传到原对象存储；默认值为 `false`，生产 VPS 已按此链路启用。
+- 已实现（队列）：补传 Worker 连续清空可执行队列，支持租约恢复；新增固定 5 小时 `expires_at`，到期后资源标记不可用并清理本地媒体字节；资源访问返回机器原因 `resource_expired`。
+- 已验证：后端全量 `go test ./...`、前端 `bun run build`、过期资源专项测试通过；生产 VPS 两个历史视频任务均为 `succeeded/completed`，资源为 `ready/s3`，补传任务为 `done`，宽高元数据为 `1280×720`，公网画布返回 200。
+- [ ] 本地：开启开关生成图片和视频，任务成功后浏览器可从 VPS 读取，OSS 补传成功后本地文件延迟清理。
+- [ ] 故障：阻断 OSS，重启后端，补传任务可恢复；超过测试期限后资源访问返回 410/resource_expired，前端显示过期状态。
+- [ ] 真实对象存储：验证 4 MiB/10 MiB 上传吞吐、队列积压、磁盘水位和恢复后的批量补传。
+
 ## 后端依赖安全升级（Go 1.26、x/net、x/text）与首页创作提交锁
 - 已升级（后端）：`golang.org/x/net` v0.57.0 → v0.62.0、`golang.org/x/text` v0.40.0 → v0.43.0，消除 govulncheck 报告的代码可达漏洞（http2 的 GO-2026-6603、6611、6612、6617，precis 的 GO-2026-6629），连带 `x/crypto` v0.58.0、`x/sys` v0.49.0、`x/sync` v0.24.0。`x/net` 从 v0.60.0 起要求 Go 1.26，因此 `go.mod` 改为 `go 1.26.0` 并写入 `toolchain go1.26.10`（CI 的 setup-go 按 go 行安装 1.26.0，go 命令再按 toolchain 行自动切到 1.26.10，测试与漏洞扫描用的标准库与生产镜像一致）；后端镜像与开发镜像改用 `golang:1.26-alpine`，CI 的 golangci-lint 升到 v2.12.2。
 - 已修复（CI）：`TestCanvasAgentActivityIndexed/postgres/pi-history-indexes` 升级后在 CI 连续失败。原因是夹具先把 1000 条历史任务写成“预占”再打检查点，留下 1000 个死元组；同一测试库里其他测试包的事务还开着时 VACUUM 清不掉，规划器就不再使用“仅活跃记录”的部分索引。本地 PostgreSQL 16 在另一会话保持事务打开时可稳定复现。夹具改为直接写入已检查点的终态，不再依赖 VACUUM；EXPLAIN 时关闭顺序扫描，只比较索引路径。

@@ -457,6 +457,9 @@ func (s *Service) storeTaskMediaFile(task *model.Task, index int, path, mimeType
 		// settlement. The media can still be saved when ffprobe is unavailable;
 		// settlement then falls back to provider usage or moves the order to review.
 		durationMs = probeMediaDurationMs(path)
+		if kind == "video" {
+			width, height = probeMediaDimensions(path)
+		}
 	}
 	day, err := s.reserveGeneratedResourceQuota(task.UserID, info.Size())
 	if err != nil {
@@ -477,7 +480,7 @@ func (s *Service) storeTaskMediaFile(task *model.Task, index int, path, mimeType
 		if resource.UserID != task.UserID || resource.Size != info.Size() || resource.MimeType != mimeType {
 			return nil, nil, errors.New("恢复文件与原始资源不一致")
 		}
-		resource.DurationMs = durationMs
+		resource.Width, resource.Height, resource.DurationMs = width, height, durationMs
 		resource.ETag, err = writeObject(resource, "generated."+extensionFromMimeType(mimeType), file)
 		if err == nil {
 			resource.Status, resource.Error, resource.UpdatedAt = model.ResourceStatusReady, "", time.Now()
@@ -523,6 +526,33 @@ func probeMediaDurationMs(path string) int64 {
 		return 0
 	}
 	return int64(math.Ceil(seconds * 1000))
+}
+
+func probeMediaDimensions(path string) (int, int) {
+	if strings.TrimSpace(path) == "" {
+		return 0, 0
+	}
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		return 0, 0
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), mediaProbeTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0:s=x", path)
+	command.WaitDelay = 5 * time.Second
+	output, err := command.Output()
+	if err != nil {
+		return 0, 0
+	}
+	parts := strings.Split(strings.TrimSpace(string(output)), "x")
+	if len(parts) != 2 {
+		return 0, 0
+	}
+	width, widthErr := strconv.Atoi(strings.TrimSpace(parts[0]))
+	height, heightErr := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
+		return 0, 0
+	}
+	return width, height
 }
 
 // storeTaskMediaObjectContext 直传对象存储。是否改存本地由 taskMediaObjectWriter

@@ -292,8 +292,12 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 			var fallbackCause error
 			resource, fallbackCause, err = s.storeTaskMediaFile(task, index, path, item.MIMEType, checkpoint.Mode, resource)
 			if fallbackCause != nil {
-				// 直传失败已由本地兜底接住：分别记录失败的上传和成功的兜底保存。
-				s.logMediaStage(*task, stage, started, fallbackCause)
+				// local-first is an intentional success path. Do not expose it as a
+				// failed upload in task-stage telemetry; the durable offload job owns
+				// the later object-storage result.
+				if !errors.Is(fallbackCause, errGeneratedMediaAsyncOffload) {
+					s.logMediaStage(*task, stage, started, fallbackCause)
+				}
 				s.logMediaStage(*task, "local_fallback", started, nil)
 			} else {
 				s.logMediaStage(*task, stage, started, err)

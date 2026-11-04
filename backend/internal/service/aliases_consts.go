@@ -22,6 +22,7 @@ const (
 	CodeOK                             = app.CodeOK
 	CodeQuotaExceeded                  = app.CodeQuotaExceeded
 	CodeRateLimited                    = app.CodeRateLimited
+	CodeResourceExpired                = app.CodeResourceExpired
 	CodeTimeout                        = app.CodeTimeout
 	CodeTooManyRequests                = app.CodeTooManyRequests
 	CodeUnauthorized                   = app.CodeUnauthorized
@@ -80,6 +81,7 @@ const (
 	ReasonNotFound                     = app.ReasonNotFound
 	ReasonQuotaExceeded                = app.ReasonQuotaExceeded
 	ReasonRateLimited                  = app.ReasonRateLimited
+	ReasonResourceExpired              = app.ReasonResourceExpired
 	ReasonTimeout                      = app.ReasonTimeout
 	ReasonUnauthorized                 = app.ReasonUnauthorized
 	ReasonUnavailable                  = app.ReasonUnavailable

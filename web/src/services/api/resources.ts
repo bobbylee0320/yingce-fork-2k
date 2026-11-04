@@ -133,7 +133,14 @@ export type ResourceAccessFetchOptions = {
     forceRefresh?: boolean;
 };
 
-type ResourceAccessBatchItem = { resourceId: string; access?: ResourceAccess; error?: { msg?: string } };
+export class ResourceExpiredError extends Error {
+    constructor(message = "资源已过期") {
+        super(message);
+        this.name = "ResourceExpiredError";
+    }
+}
+
+type ResourceAccessBatchItem = { resourceId: string; access?: ResourceAccess; error?: { msg?: string; reason?: string; code?: number; status?: number } };
 type CachedResourceAccess = { value: ResourceAccess; expiresAt: number };
 type ResourceAccessRequestPayload = {
     resourceId: string;
@@ -527,6 +534,7 @@ function enqueueResourceAccess(entry: Omit<PendingResourceAccess, "resolve" | "r
 
 async function completeResourceAccessBatchEntry(entry: PendingResourceAccess, item: ResourceAccessBatchItem | undefined) {
     if (entry.generation !== accessGeneration || entry.scope !== getActiveUserScope()) throw resourceAccessAbortError();
+    if (item?.error?.reason === "resource_expired") throw new ResourceExpiredError(item.error.msg);
     if (!item?.access?.url) throw new Error(item?.error?.msg || "后端未返回资源访问地址");
     const value = item.access;
     const cachedEntry = { value, expiresAt: resourceAccessCacheExpiry(value) } satisfies CachedResourceAccess;
@@ -621,6 +629,7 @@ export async function getResourceAccess(storageKey: string | undefined, purpose:
                 payload: { resourceId: id, purpose, variant, ...(downloadName ? { downloadName } : {}) },
             });
         } catch (error) {
+            if (error instanceof ApiError && error.reason === "resource_expired") throw new ResourceExpiredError(error.message);
             if (error instanceof ApiError) throw new Error(error.message || "获取对象存储地址失败");
             throw error;
         } finally {

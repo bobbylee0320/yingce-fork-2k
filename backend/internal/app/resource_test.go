@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"yingce/backend/internal/assets"
+	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/outbound/outboundtest"
 	"yingce/backend/internal/repository"
@@ -972,6 +973,34 @@ func newResourceTestService(t *testing.T) *Service {
 		t.Fatal(err)
 	}
 	return &Service{repo: repository.New(db), dataDir: t.TempDir()}
+}
+
+func TestExpiredResourceAccessReturnsStableMachineReason(t *testing.T) {
+	svc := newResourceTestService(t)
+	resource := &model.Resource{ID: "expired-resource", UserID: "user-1", Kind: "image", Status: model.ResourceStatusFailed, Provider: "local", ObjectKey: "expired.png", MimeType: "image/png", Size: 1, Error: "对象存储同步超过保留期限，资源已过期"}
+	if err := svc.repo.CreateResource(resource); err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
+	if err == nil {
+		t.Fatal("expired resource access unexpectedly succeeded")
+	}
+	var appErr *AppError
+	if !errors.As(err, &appErr) || appErr.Status != http.StatusGone || appErr.Code != kernel.CodeResourceExpired || appErr.Reason != kernel.ReasonResourceExpired {
+		t.Fatalf("expired resource error = %#v, want stable 410/resource_expired", err)
+	}
+}
+
+func TestExpiredResourceAccessBatchReturnsStableMachineReason(t *testing.T) {
+	svc := newResourceTestService(t)
+	resource := &model.Resource{ID: "expired-batch-resource", UserID: "user-1", Kind: "image", Status: model.ResourceStatusFailed, Provider: "local", ObjectKey: "expired-batch.png", MimeType: "image/png", Size: 1, Error: "对象存储同步超过保留期限，资源已过期"}
+	if err := svc.repo.CreateResource(resource); err != nil {
+		t.Fatal(err)
+	}
+	results, err := svc.ResourceAccessBatch("user-1", []ResourceAccessRequest{{ResourceID: resource.ID, AccessOptions: ResourceAccessOptions{Purpose: assets.PurposeDisplay}}})
+	if err != nil || len(results) != 1 || results[0].Access != nil || results[0].Error == nil || results[0].Error.Code != kernel.CodeResourceExpired || results[0].Error.Reason != string(kernel.ReasonResourceExpired) {
+		t.Fatalf("expired batch access = %#v, %v; want stable 410/resource_expired", results, err)
+	}
 }
 
 func TestStoreResourceReusesReadyUploadIdentity(t *testing.T) {

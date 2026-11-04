@@ -34,12 +34,19 @@ const (
 	localFallbackBudgetBytes  int64 = 10 << 30
 	localFallbackMinFreeBytes int64 = 5 << 30
 	// 首次补传等待一分钟，给存储服务恢复时间。
-	resourceOffloadFirstDelay = time.Minute
+	resourceOffloadFirstDelay    = time.Minute
+	generatedMediaLocalRetention = 5 * time.Hour
 )
 
 var errOSSUploadRetry = errors.New("OSS 上传可重试")
 var errStorageCircuitOpen = errors.New("对象存储连续写入失败，已暂停直传")
 var errOSSUploadQueueTimeout = errors.New("等待对象存储上传名额超时")
+var errGeneratedMediaAsyncOffload = errors.New("生成媒体已保存到本地，等待对象存储异步同步")
+
+func generatedMediaLocalFirstEnabled() bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv("CANVAS_GENERATED_MEDIA_LOCAL_FIRST")))
+	return value == "1" || value == "true" || value == "yes" || value == "on"
+}
 
 type mediaOSSUploadError struct {
 	cause     error
@@ -197,7 +204,7 @@ func (s *Service) fallbackTaskMediaToLocal(task *model.Task, resource *model.Res
 		LocalObjectKey: localKey, TargetProvider: resource.Provider, TargetEndpoint: resource.Endpoint, TargetBucket: resource.Bucket,
 		TargetStorageSettingID: resource.StorageSettingID, TargetObjectKey: resource.ObjectKey,
 		Status: model.ResourceOffloadStatusPending, LastErrorCode: failure.Label(), LastError: truncateRunes(cause.Error(), 1000),
-		NextAttemptAt: now.Add(resourceOffloadFirstDelay), CreatedAt: now, UpdatedAt: now,
+		NextAttemptAt: now.Add(resourceOffloadFirstDelay), ExpiresAt: now.Add(generatedMediaLocalRetention), CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.repo.UpsertResourceOffloadJob(job); err != nil {
 		_ = os.Remove(localPath)
@@ -231,6 +238,12 @@ func (s *Service) taskMediaObjectWriter(task *model.Task, stagedPath string, fal
 			return "", nil
 		}
 		key := storageBreakerKey(resource)
+		if generatedMediaLocalFirstEnabled() {
+			if refusal != nil {
+				return failWith(errGeneratedMediaAsyncOffload, false)
+			}
+			return failWith(errGeneratedMediaAsyncOffload, true)
+		}
 		if refusal == nil && mediaStorageBreaker.isOpen(key) {
 			return failWith(errStorageCircuitOpen, true)
 		}

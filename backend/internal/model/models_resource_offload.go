@@ -10,6 +10,7 @@ const (
 	// done 表示资源已切换到对象存储；本地文件在 LocalDeleteAfter 之后清理。
 	ResourceOffloadStatusDone      ResourceOffloadStatus = "done"
 	ResourceOffloadStatusCancelled ResourceOffloadStatus = "cancelled"
+	ResourceOffloadStatusExpired   ResourceOffloadStatus = "expired"
 	// failed 只用于无法自动恢复的情况（例如本地文件丢失），需要人工处理。
 	ResourceOffloadStatusFailed ResourceOffloadStatus = "failed"
 )
@@ -34,8 +35,12 @@ type ResourceOffloadJob struct {
 	LastErrorCode          string                `json:"lastErrorCode" gorm:"size:80"`
 	LastError              string                `json:"lastError" gorm:"type:text"`
 	NextAttemptAt          time.Time             `json:"nextAttemptAt" gorm:"index:idx_resource_offload_jobs_due,priority:2"`
-	LeaseOwner             string                `json:"-" gorm:"size:120"`
-	LeaseExpiresAt         *time.Time            `json:"-"`
+	// ExpiresAt is fixed when the local copy becomes ready. Retries must not
+	// extend the local retention window indefinitely.
+	ExpiresAt      time.Time  `json:"expiresAt" gorm:"index"`
+	ExpiredAt      *time.Time `json:"expiredAt,omitempty"`
+	LeaseOwner     string     `json:"-" gorm:"size:120"`
+	LeaseExpiresAt *time.Time `json:"-"`
 	// 切换到对象存储时记下的本地播放副本，和原文件一起延迟清理。
 	LocalPlaybackKey string     `json:"-"`
 	LocalDeleteAfter *time.Time `json:"localDeleteAfter,omitempty" gorm:"index"`

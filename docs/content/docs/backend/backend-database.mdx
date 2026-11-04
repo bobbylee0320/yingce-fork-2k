@@ -5,6 +5,10 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 生成媒体异步补传过期（Schema 78）
+
+版本 78 `resource_offload_expiration` 为 `resource_offload_jobs` 增加固定的 `expires_at`、`expired_at`。启用 `CANVAS_GENERATED_MEDIA_LOCAL_FIRST=true` 时，生成媒体先以 VPS 本地 ready 资源返回，补传任务在本地 ready 后 5 小时到期；到期后资源标记不可用并清理本地媒体字节，保留资源与补传墓碑供前端返回 `resource_expired` 和管理员追踪。重试不能延长 `expires_at`；默认开关为关闭，未启用生产。
+
 ## Agent 记忆文件列补齐（Schema 77）
 
 版本 77 `agent_memory_document_columns` 只做补列：确保 `agent_memory_documents.next_entry_seq` 与 `agent_memory_document_revisions.call_id` 存在，并把空值回填为 `0` / 空串。开发期的早期构建执行 v76 时这两列还没加入模型，v76 已记为完成、校验和不能再改，缺列会让创建 Agent 轮次时读取记忆文件失败（`no column named next_entry_seq`）。新库由 v76 一次建全，v77 是空操作；不改写既有记忆内容。

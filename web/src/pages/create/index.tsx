@@ -8,7 +8,7 @@ import { useNavigate } from "react-router";
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
 import { imageParameterRequest, normalizeImageParameters } from "@/lib/image-parameters";
-import { creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
+import { creationResultAssetIds, creationResultStorageKeys } from "@/lib/canvas/canvas-asset-handoff";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { continueCreationConversationOnCanvas } from "@/services/creation-canvas-conversation";
 import { useExternalAssetSources } from "@/hooks/use-external-asset-sources";
@@ -1419,6 +1419,20 @@ export default function CreatePage() {
                         onCreateVariant={() => createVariant(item, index)}
                         onContinueCanvas={(ids) => void continueOnCanvas(ids)}
                         openingCanvas={openingCanvas}
+                        onResultExpired={(storageKey) => {
+                            void updateConversationMessage(activeConversation.id, item.id, (current) => {
+                                const keys = current.resultStorageKeys ?? creationResultStorageKeys(assets, { messageId: current.id, taskIds: current.taskIds || [], resultUrls: current.resultUrls || [] });
+                                const index = keys.indexOf(storageKey);
+                                const nextKeys = keys.filter((key) => key !== storageKey);
+                                const nextUrls = index >= 0 ? (current.resultUrls || []).filter((_, urlIndex) => urlIndex !== index) : current.resultUrls;
+                                return {
+                                    ...current,
+                                    resultStorageKeys: nextKeys,
+                                    ...(nextUrls?.length ? { resultUrls: nextUrls } : { resultUrls: undefined }),
+                                    content: nextKeys.length ? `${nextKeys.length} 个生成结果可用，部分结果已过期` : "生成结果已过期",
+                                };
+                            });
+                        }}
                         onEditUserMessage={(message) => {
                             if (busy || referenceReplacementBusy) {
                                 toast.warning("正在准备提交或替换参考内容，请稍后复用");

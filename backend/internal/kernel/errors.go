@@ -60,6 +60,13 @@ func NotFound(message string) *AppError {
 	return NewAppError(404, message)
 }
 
+func ResourceExpired(message string) *AppError {
+	err := NewAppError(410, message)
+	err.Code = CodeResourceExpired
+	err.Reason = ReasonResourceExpired
+	return err
+}
+
 func Unauthorized(message string) *AppError {
 	return NewAppError(401, message)
 }

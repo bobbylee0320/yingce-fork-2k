@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ImgHTMLAttributes, type ReactNode } from "react";
 
-import { getResourceAccess, resolveResourceAccessURL, resourceIdFromStorageKey, type ResourceAccessVariant } from "@/services/api/resources";
+import { getResourceAccess, resolveResourceAccessURL, resourceIdFromStorageKey, ResourceExpiredError, type ResourceAccessVariant } from "@/services/api/resources";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { resolveImageUrl } from "@/services/image-storage";
 import { prepareCanvasImage } from "@/services/canvas-image-loader";
@@ -9,6 +9,7 @@ type CachedResourceImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src">
     storageKey?: string;
     src?: string;
     fallback?: ReactNode;
+    expiredFallback?: ReactNode;
     loadingFallback?: ReactNode;
     eager?: boolean;
     variant?: ResourceAccessVariant;
@@ -19,7 +20,7 @@ type CachedResourceImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src">
  * Blob 缓存仍可用于导出、抽帧等字节处理，但不作为媒体展示 src，避免把
  * `blob:http(s)://...` 泄露到节点、素材库和浏览器媒体链路中。
  */
-export function CachedResourceImage({ storageKey, src = "", fallback = null, loadingFallback = fallback, eager = false, variant = "original", onError, ...props }: CachedResourceImageProps) {
+export function CachedResourceImage({ storageKey, src = "", fallback = null, expiredFallback = fallback, loadingFallback = fallback, eager = false, variant = "original", onError, ...props }: CachedResourceImageProps) {
     const resourceId = resourceIdFromStorageKey(storageKey);
     const remoteResource = Boolean(resourceId);
     const localImageResource = Boolean(storageKey && storageKey.startsWith("image:"));
@@ -31,6 +32,7 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
     const displayedRef = useRef(displayed);
     displayedRef.current = displayed;
     const [failedIdentity, setFailedIdentity] = useState("");
+    const [expiredIdentity, setExpiredIdentity] = useState("");
     const cachedSrc = displayed?.identity === identity ? displayed.src : "";
 
     useEffect(() => {
@@ -95,8 +97,10 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
                 setFailedIdentity("");
             }
         };
-        void load().catch(() => {
-            if (isCurrent() && displayedRef.current?.identity !== identity) setFailedIdentity(identity);
+        void load().catch((error) => {
+            if (!isCurrent() || displayedRef.current?.identity === identity) return;
+            if (error instanceof ResourceExpiredError) setExpiredIdentity(identity);
+            else setFailedIdentity(identity);
         });
         return () => {
             cancelled = true;
@@ -129,6 +133,7 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
         onError?.(e);
     };
 
+    if (expiredIdentity === identity && expiredFallback) return <>{expiredFallback}</>;
     if (failedIdentity === identity && fallback) return <>{fallback}</>;
     if (!remoteResource) return <img {...props} src={cachedSrc || undefined} onError={handleImgError} />;
     return (
