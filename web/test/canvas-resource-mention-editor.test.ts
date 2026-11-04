@@ -149,7 +149,8 @@ describe("canvas resource mention editor", () => {
         expect(component).toContain('chip.style.setProperty("--canvas-skill-mention-color", skillMentionColor(reference))');
         expect(chat).toContain('sendOnEnter={canSubmit ? "both" : false}');
         expect(chat).toContain("agent-composer-resize-handle");
-        expect(chat).toContain("点击发送；Enter 或 ⌘/Ctrl+Enter 发送");
+        expect(chat).toContain("Enter");
+        expect(chat).toContain("插话");
         expect(css).toContain(".agent-composer-prompt-scroll");
         expect(css).not.toContain(".agent-tool-row:hover");
     });
