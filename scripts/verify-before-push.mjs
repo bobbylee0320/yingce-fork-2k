@@ -133,8 +133,8 @@ if (wantBackend) {
         name: "backend:gofmt",
         cwd: BACKEND,
         cmd: "gofmt",
-        args: ["-l", ...lines(git(["ls-files", "--", "backend"]))
-            .filter((file) => file.endsWith(".go"))
+        args: ["-l", ...changed
+            .filter((file) => file.startsWith("backend/") && file.endsWith(".go"))
             .map((file) => path.relative(BACKEND, path.join(ROOT, file)))],
         weight: 5,
         check: (output) => (output.trim() ? `以下文件需要 gofmt -w：\n${output.trim()}` : ""),
