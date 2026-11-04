@@ -356,7 +356,7 @@ describe("passive video previews", () => {
         expect(metadata.hasAudio).toBe(false);
         expect(collectImageStorageKeys(metadata)).toContain("image:user:1");
         expect(canvasNodeVideoPreviewUrl(video)).toBe("blob:poster");
-        expect(canvasNodeVideoPreviewReference(video)).toEqual({ src: "blob:poster", storageKey: "image:user:1" });
+        expect(canvasNodeVideoPreviewReference(video)).toEqual({ src: "blob:poster", storageKey: "image:user:1", width: 400, height: 225 });
     });
 
     test("keeps the poster storage key so passive previews resolve a fresh OSS URL", () => {
@@ -375,6 +375,8 @@ describe("passive video previews", () => {
         expect(canvasNodeVideoPreviewReference(video)).toEqual({
             src: "/api/resources/poster-1/file",
             storageKey: "resource:poster-1",
+            width: 400,
+            height: 225,
         });
     });
 

@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-const source = readFileSync(new URL("../src/components/canvas/canvas-node-media-content.tsx", import.meta.url), "utf8").replace(/\s+/g, " ");
+const moduleSource = readFileSync(new URL("../src/components/canvas/canvas-node-media-content.tsx", import.meta.url), "utf8");
+const source = moduleSource.replace(/\s+/g, " ");
 const start = source.indexOf("export function VideoNodeContent(");
 const videoNode = source.slice(start, source.indexOf("export function inferVideoHasAudio", start));
 
@@ -22,6 +23,6 @@ test("续签地址不把播放器淡出回静态预览，只在换媒体或地�
 test("视频元数据加载会补齐缺失时长且保留已有时长", () => {
     expect(videoNode).toContain("const durationMs = Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : 0;");
     expect(videoNode).toContain("if (width <= 0 && height <= 0 && durationMs <= 0) return;");
-    expect(videoNode).toContain("if (durationMs > 0 && (!metadata?.durationMs || metadata.durationMs <= 0))");
-    expect(videoNode).toContain("nextMetadata.durationMs = durationMs;");
+    expect(moduleSource).toContain("if (durationMs > 0 && (!metadata?.durationMs || metadata.durationMs <= 0))");
+    expect(moduleSource).toContain("nextMetadata.durationMs = durationMs;");
 });
