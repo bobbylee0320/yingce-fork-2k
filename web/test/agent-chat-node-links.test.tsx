@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AgentChatMessage, rewriteAgentNodeLinks, type CloudAgentChatMessage } from "@/components/canvas/canvas-cloud-agent-chat-ui";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -47,24 +49,34 @@ test("leaves fenced code blocks untouched", () => {
 });
 
 function renderAgentNodeLink() {
-    return renderToStaticMarkup(
-        <AgentChatMessage
-            item={assistantMessage("新节点 ID：video-1790385749473-q4157")}
-            theme={canvasThemes.dark}
-            references={[videoReference]}
-            onFocusNode={() => {}}
-        />,
+    // Keep React Markdown rendering isolated from module mocks in other Bun test files.
+    const result = spawnSync(
+        process.execPath,
+        [
+            "-e",
+            `
+        import React from "react";
+        import { renderToStaticMarkup } from "react-dom/server";
+        import { AgentChatMessage } from "./src/components/canvas/canvas-cloud-agent-chat-ui.tsx";
+        import { canvasThemes } from "./src/lib/canvas-theme.ts";
+        const reference = { id: "video-1790385749473-q4157", nodeId: "video-1790385749473-q4157", kind: "video", label: "片头镜头", title: "片头镜头", sourceType: "video", previewUrl: "data:image/png;base64,preview" };
+        const html = renderToStaticMarkup(React.createElement(AgentChatMessage, { item: { id: "assistant-1", role: "assistant", text: "新节点 ID：video-1790385749473-q4157" }, theme: canvasThemes.dark, references: [reference], onFocusNode: () => {} }));
+        console.log(html);
+    `,
+        ],
+        { cwd: fileURLToPath(new URL("..", import.meta.url)), encoding: "utf8", timeout: 10000 },
     );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('class="agent-message-node-link"');
+    expect(result.stdout).toContain('data-agent-node-id="video-1790385749473-q4157"');
+    expect(result.stdout).toContain("视频节点");
+    expect(result.stdout).toContain("片头镜头");
+    return result.stdout;
 }
 
-test("keeps the canvas node ID on an agent node link", () => {
-    expect(renderAgentNodeLink()).toContain('data-agent-node-id="video-1790385749473-q4157"');
-});
-
-test("renders the agent node type and title", () => {
-    const html = renderAgentNodeLink();
-    expect(html).toContain("视频节点");
-    expect(html).toContain("片头镜头");
+test("renders an agent node link card with its target and label", () => {
+    renderAgentNodeLink();
 });
 
 test("hides the raw canvas ID from visible agent message text", () => {
