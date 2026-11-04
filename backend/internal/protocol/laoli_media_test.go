@@ -33,9 +33,9 @@ func TestLaoliOpenAIImageGenerationEditAndAsyncMapping(t *testing.T) {
 		Model:      "gpt-image-2.5",
 		Prompt:     "A lighthouse",
 		ImageParameters: map[string]any{
-			"size": "2048x2048",
+			"size":            "2048x2048",
 			"imageResolution": "2k",
-			"count": 1,
+			"count":           1,
 		},
 	}
 	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: request})
@@ -115,9 +115,9 @@ func TestLaoliOpenAIAsyncImageParametersMapCountAndResolution(t *testing.T) {
 		Model:      "gpt-image-2.5-sr-flare",
 		Prompt:     "A red lighthouse",
 		ImageParameters: map[string]any{
-			"size":           "2048x2048",
+			"size":            "2048x2048",
 			"imageResolution": "4k",
-			"count":          1,
+			"count":           1,
 		},
 	}})
 	if err != nil {
