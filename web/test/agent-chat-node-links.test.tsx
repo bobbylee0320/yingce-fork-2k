@@ -85,20 +85,28 @@ test("hides the raw canvas ID from visible agent message text", () => {
 });
 
 test("renders the image-to-previs user request with the existing canvas node card", () => {
-    const imageReference = { ...videoReference, kind: "image" as const, sourceType: "image" as const, label: "道姑", title: "道姑" };
-    const html = renderToStaticMarkup(
-        <AgentChatMessage
-            item={{ id: "user-previs", role: "user", text: "根据此图生成 3D 预演台", canvasReferenceNodeId: imageReference.nodeId }}
-            theme={canvasThemes.dark}
-            references={[imageReference]}
-            onFocusNode={() => {}}
-        />,
+    const result = spawnSync(
+        process.execPath,
+        [
+            "-e",
+            `
+        import React from "react";
+        import { renderToStaticMarkup } from "react-dom/server";
+        import { AgentChatMessage } from "./src/components/canvas/canvas-cloud-agent-chat-ui.tsx";
+        import { canvasThemes } from "./src/lib/canvas-theme.ts";
+        const reference = { id: "video-1790385749473-q4157", nodeId: "video-1790385749473-q4157", kind: "image", label: "道姑", title: "道姑", sourceType: "image", previewUrl: "data:image/png;base64,preview" };
+        const html = renderToStaticMarkup(React.createElement(AgentChatMessage, { item: { id: "user-previs", role: "user", text: "根据此图生成 3D 预演台", canvasReferenceNodeId: reference.nodeId }, theme: canvasThemes.dark, references: [reference], onFocusNode: () => {} }));
+        console.log(html);
+    `,
+        ],
+        { cwd: fileURLToPath(new URL("..", import.meta.url)), encoding: "utf8", timeout: 10000 },
     );
 
-    expect(html).toContain('class="agent-message-node-link"');
-    expect(html).toContain('class="agent-message-node-link-preview"');
-    expect(html).toContain("道姑");
-    expect(html).toContain("3D 预演台");
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('class="agent-message-node-link"');
+    expect(result.stdout).toContain('class="agent-message-node-link-preview"');
+    expect(result.stdout).toContain("道姑");
+    expect(result.stdout).toContain("3D 预演台");
 });
 
 test("labels character cards by resource kind instead of the underlying text type", () => {
