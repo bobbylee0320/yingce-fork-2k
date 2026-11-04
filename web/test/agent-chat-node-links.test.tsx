@@ -46,7 +46,7 @@ test("leaves fenced code blocks untouched", () => {
     expect(rewritten).toContain("[视频节点 · 片头镜头](#agent-node:video-1790385749473-q4157)");
 });
 
-test("renders an agent node link as a titled inline node card", () => {
+const renderedAgentNodeLink = (() => {
     const html = renderToStaticMarkup(
         <AgentChatMessage
             item={assistantMessage("新节点 ID：video-1790385749473-q4157")}
@@ -55,22 +55,24 @@ test("renders an agent node link as a titled inline node card", () => {
             onFocusNode={() => {}}
         />,
     );
-    const visibleText = html.replace(/<[^>]+>/gu, "");
-    const missing = [
-        'class="agent-message-node-link"',
-        'data-agent-node-id="video-1790385749473-q4157"',
-        "视频节点",
-        "片头镜头",
-    ].filter((expected) => !html.includes(expected));
-    if (missing.length || visibleText.includes("video-1790385749473-q4157")) {
-        throw new Error(`Missing ${missing.join(", ")}; rendered markup: ${html}`);
-    }
+    return { html, visibleText: html.replace(/<[^>]+>/gu, "") };
+})();
 
-    expect(html).toContain('class="agent-message-node-link"');
-    expect(html).toContain('data-agent-node-id="video-1790385749473-q4157"');
-    expect(html).toContain("视频节点");
-    expect(html).toContain("片头镜头");
-    expect(visibleText).not.toContain("video-1790385749473-q4157");
+test("renders an agent node link card", () => {
+    expect(renderedAgentNodeLink.html).toContain('class="agent-message-node-link"');
+});
+
+test("keeps the exact canvas node ID on the rendered agent link", () => {
+    expect(renderedAgentNodeLink.html).toContain('data-agent-node-id="video-1790385749473-q4157"');
+});
+
+test("labels the rendered agent link with its node type and title", () => {
+    expect(renderedAgentNodeLink.html).toContain("视频节点");
+    expect(renderedAgentNodeLink.html).toContain("片头镜头");
+});
+
+test("does not expose the raw node ID in visible agent message text", () => {
+    expect(renderedAgentNodeLink.visibleText).not.toContain("video-1790385749473-q4157");
 });
 
 test("renders the image-to-previs user request with the existing canvas node card", () => {
