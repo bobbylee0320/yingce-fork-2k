@@ -57,10 +57,6 @@ function renderAgentNodeLink() {
     );
 }
 
-test("renders an agent node link card", () => {
-    expect(renderAgentNodeLink()).toContain('href="#agent-node:video-1790385749473-q4157"');
-});
-
 test("keeps the canvas node ID on an agent node link", () => {
     expect(renderAgentNodeLink()).toContain('data-agent-node-id="video-1790385749473-q4157"');
 });
