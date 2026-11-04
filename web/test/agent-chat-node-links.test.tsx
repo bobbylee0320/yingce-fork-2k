@@ -58,7 +58,7 @@ function renderAgentNodeLink() {
 }
 
 test("renders an agent node link card", () => {
-    expect(renderAgentNodeLink()).toMatch(/class="[^"]*\bagent-message-node-link\b[^"]*"/u);
+    expect(renderAgentNodeLink()).toMatch(/<a\b[^>]*data-agent-node-id="video-1790385749473-q4157"/u);
 });
 
 test("keeps the canvas node ID on an agent node link", () => {
