@@ -46,37 +46,33 @@ test("leaves fenced code blocks untouched", () => {
     expect(rewritten).toContain("[视频节点 · 片头镜头](#agent-node:video-1790385749473-q4157)");
 });
 
-test("renders an agent node link as a titled inline node card", () => {
-    let html: string;
-    try {
-        html = renderToStaticMarkup(
-            <AgentChatMessage
-                item={assistantMessage("新节点 ID：video-1790385749473-q4157")}
-                theme={canvasThemes.dark}
-                references={[videoReference]}
-                onFocusNode={() => {}}
-            />,
-        );
-    } catch (error) {
-        console.error("Agent node link SSR render failed:", error);
-        throw error;
-    }
-    const visibleText = html.replace(/<[^>]+>/gu, "");
+function renderAgentNodeLink() {
+    return renderToStaticMarkup(
+        <AgentChatMessage
+            item={assistantMessage("新节点 ID：video-1790385749473-q4157")}
+            theme={canvasThemes.dark}
+            references={[videoReference]}
+            onFocusNode={() => {}}
+        />,
+    );
+}
 
-    const missing = [
-        'class="agent-message-node-link"',
-        'data-agent-node-id="video-1790385749473-q4157"',
-        "视频节点",
-        "片头镜头",
-    ].filter((expected) => !html.includes(expected));
-    if (missing.length || visibleText.includes("video-1790385749473-q4157")) {
-        console.error("Agent node link SSR assertion mismatch:", { missing, leaksRawNodeId: visibleText.includes("video-1790385749473-q4157"), html });
-    }
+test("renders an agent node link card", () => {
+    expect(renderAgentNodeLink()).toContain('class="agent-message-node-link"');
+});
 
-    expect(html).toContain('class="agent-message-node-link"');
-    expect(html).toContain('data-agent-node-id="video-1790385749473-q4157"');
+test("keeps the canvas node ID on an agent node link", () => {
+    expect(renderAgentNodeLink()).toContain('data-agent-node-id="video-1790385749473-q4157"');
+});
+
+test("renders the agent node type and title", () => {
+    const html = renderAgentNodeLink();
     expect(html).toContain("视频节点");
     expect(html).toContain("片头镜头");
+});
+
+test("hides the raw canvas ID from visible agent message text", () => {
+    const visibleText = renderAgentNodeLink().replace(/<[^>]+>/gu, "");
     expect(visibleText).not.toContain("video-1790385749473-q4157");
 });
 
