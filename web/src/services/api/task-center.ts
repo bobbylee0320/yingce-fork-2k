@@ -133,16 +133,19 @@ export function createGenerationTask(input: CreateTaskInput) {
     const metadata = input.input?.metadata as Record<string, unknown> | undefined;
     const clientOperationId = typeof metadata?.clientOperationId === "string" && metadata.clientOperationId ? metadata.clientOperationId : crypto.randomUUID();
     const request = { ...input, input: { ...input.input, metadata: { ...metadata, clientOperationId } } };
-    return http.post<GenerationTask>("/tasks", request).catch((error) => {
-        if (error instanceof ApiError && error.retryable) throw new TaskSubmissionUncertainError(clientOperationId);
-        throw error;
-    }).then((task) => {
-        recordDiagnosticEvent({ level: "info", category: "task", message: "任务已创建", taskId: task.id, projectId: task.projectId });
-        notifyCanvasTaskCreated(task);
-        // 创建任务时积分已被预占，不能等任务结束后才刷新可用余额。
-        window.dispatchEvent(new CustomEvent("wallet:updated"));
-        return task;
-    });
+    return http
+        .post<GenerationTask>("/tasks", request)
+        .catch((error) => {
+            if (error instanceof ApiError && error.retryable) throw new TaskSubmissionUncertainError(clientOperationId);
+            throw error;
+        })
+        .then((task) => {
+            recordDiagnosticEvent({ level: "info", category: "task", message: "任务已创建", taskId: task.id, projectId: task.projectId });
+            notifyCanvasTaskCreated(task);
+            // 创建任务时积分已被预占，不能等任务结束后才刷新可用余额。
+            window.dispatchEvent(new CustomEvent("wallet:updated"));
+            return task;
+        });
 }
 
 export class TaskSubmissionUncertainError extends Error {
@@ -165,12 +168,16 @@ export async function resolveGenerationTaskSubmissions(operationIds: string[], s
         if (!task.inputJson) return task;
         const metadata = (JSON.parse(task.inputJson) as { metadata?: Record<string, unknown> }).metadata;
         if (!metadata) return task;
-        return { ...task, clientOperationId: typeof metadata.clientOperationId === "string" ? metadata.clientOperationId : undefined, clientContext: {
-            conversationId: typeof metadata.conversationId === "string" ? metadata.conversationId : undefined,
-            messageId: typeof metadata.messageId === "string" ? metadata.messageId : undefined,
-            batchIndex: typeof metadata.batchIndex === "number" ? metadata.batchIndex : undefined,
-            batchCount: typeof metadata.batchCount === "number" ? metadata.batchCount : undefined,
-        } };
+        return {
+            ...task,
+            clientOperationId: typeof metadata.clientOperationId === "string" ? metadata.clientOperationId : undefined,
+            clientContext: {
+                conversationId: typeof metadata.conversationId === "string" ? metadata.conversationId : undefined,
+                messageId: typeof metadata.messageId === "string" ? metadata.messageId : undefined,
+                batchIndex: typeof metadata.batchIndex === "number" ? metadata.batchIndex : undefined,
+                batchCount: typeof metadata.batchCount === "number" ? metadata.batchCount : undefined,
+            },
+        };
     });
 }
 
@@ -191,11 +198,11 @@ type GenerationTaskListDependencies = {
 const defaultGenerationTaskListDependencies: GenerationTaskListDependencies = {
     listBackendPage: async (page, signal) => ({
         tasks: await http.get<GenerationTask[]>("/tasks", {
-                params: { pageSize: Math.min(page.limit, 100), projectId: page.projectId, activeOnly: page.activeOnly || undefined },
-                signal,
-                // 列表是只读轮询，后端卡住时按超时失败交给页面提示，不能让加载态一直挂着。
-                timeout: 30_000,
-            }),
+            params: { pageSize: Math.min(page.limit, 100), projectId: page.projectId, activeOnly: page.activeOnly || undefined },
+            signal,
+            // 列表是只读轮询，后端卡住时按超时失败交给页面提示，不能让加载态一直挂着。
+            timeout: 30_000,
+        }),
     }),
 };
 
@@ -477,8 +484,8 @@ function terminalTaskError(task: GenerationTask) {
 }
 
 export type WaitForGenerationTaskOptions = {
-	onConnectionChange?: (state: "connected" | "reconnecting") => void;
-	textEventsSource?: "task" | "agent";
+    onConnectionChange?: (state: "connected" | "reconnecting") => void;
+    textEventsSource?: "task" | "agent";
     signal?: AbortSignal;
     intervalMs?: number;
     timeoutMs?: number;

@@ -152,7 +152,6 @@ describe("audio canvas interaction", () => {
         expect(canvasAudioPlayerSource).toContain("onClick={(event) => {");
         expect(canvasAudioPlayerSource).toContain("togglePlayback();");
     });
-
 });
 
 describe("video canvas controls", () => {
@@ -197,7 +196,7 @@ describe("video canvas controls", () => {
         expect(playerCSS).toContain("--media-slider-width: var(--video-volume-slider-width)");
         expect(playerCSS).toContain('.canvas-video-player[data-no-audio="true"] .vds-volume .vds-mute-button');
         expect(playerCSS).toContain("cursor: not-allowed;");
-        expect(playerCSS).toContain("data-player-variant=\"compact\"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen)");
+        expect(playerCSS).toContain('data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen)');
         expect(playerCSS).toContain("height: var(--canvas-video-control-size);");
         expect(playerCSS).toContain("min-height: var(--canvas-video-control-size);");
         expect(playerCSS).toContain("padding: 0 0 0 calc(var(--canvas-video-control-size)");
@@ -261,13 +260,14 @@ describe("video canvas controls", () => {
     test("probes remote MP4 ranges when browser audio APIs are unavailable", async () => {
         const originalFetch = globalThis.fetch;
         const movie = isoBmffMovie(["vide"]);
-        globalThis.fetch = (async () => new Response(movie, {
-            status: 206,
-            headers: {
-                "content-range": `bytes 0-${movie.byteLength - 1}/${movie.byteLength}`,
-                "content-length": String(movie.byteLength),
-            },
-        })) as typeof fetch;
+        globalThis.fetch = (async () =>
+            new Response(movie, {
+                status: 206,
+                headers: {
+                    "content-range": `bytes 0-${movie.byteLength - 1}/${movie.byteLength}`,
+                    "content-length": String(movie.byteLength),
+                },
+            })) as typeof fetch;
         try {
             expect(await detectVideoAudioTrackFromUrl(`https://media.example/silent-${movie.byteLength}.mp4`)).toBe(false);
         } finally {
@@ -337,7 +337,7 @@ describe("passive video previews", () => {
         expect(canvasMentionSource).toContain("onloadedmetadata = () => primeVideoPreviewFrame(media)");
         expect(canvasMentionSource).toContain("onLoadedMetadata={(event) => primeVideoPreviewFrame(event.currentTarget)}");
         expect(canvasMentionSource).toContain("video.currentTime = Math.min(0.001, video.duration)");
-        expect(canvasMentionSource).toContain("reference.kind === \"video\" && reference.previewUrl");
+        expect(canvasMentionSource).toContain('reference.kind === "video" && reference.previewUrl');
     });
 
     test("persists uploaded posters in video node metadata and prefers them over legacy previews", () => {
