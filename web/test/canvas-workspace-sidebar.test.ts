@@ -43,7 +43,8 @@ test("image style and presets remain visible without the prompt template picker"
     expect(source).toContain("<CanvasNineGridPicker");
     expect(source).toContain('dense appearance="quiet"');
     expect(source).toContain('const showPromptTemplates = !simpleMode && mode !== "image"');
-    expect(source).toContain("{showPromptTemplates ? <CanvasPresetPicker");
+    expect(source).toContain("{showPromptTemplates ? (");
+    expect(source).toContain("<CanvasPresetPicker");
     expect(source).toContain("if (showPromptTemplates &&");
     expect(source).not.toContain('aria-label="生成工具"');
     expect(component("canvas-choose-image-style-picker.tsx")).toContain('resolvedLabel || "风格"');
