@@ -56,6 +56,15 @@ test("renders an agent node link as a titled inline node card", () => {
         />,
     );
     const visibleText = html.replace(/<[^>]+>/gu, "");
+    const missing = [
+        'class="agent-message-node-link"',
+        'data-agent-node-id="video-1790385749473-q4157"',
+        "视频节点",
+        "片头镜头",
+    ].filter((expected) => !html.includes(expected));
+    if (missing.length || visibleText.includes("video-1790385749473-q4157")) {
+        throw new Error(`Missing ${missing.join(", ")}; rendered markup: ${html}`);
+    }
 
     expect(html).toContain('class="agent-message-node-link"');
     expect(html).toContain('data-agent-node-id="video-1790385749473-q4157"');
